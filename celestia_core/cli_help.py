@@ -17,6 +17,7 @@ def print_help(*, for_tray: bool = False) -> None:
         "",
         "Chat",
         "  <message>          Talk to Celestia (any text not matching a command below)",
+        "  newchat            Clear in-session chat history (-i only)",
         "",
         "Security (shared with tray + voice)",
         "  arm                Full PC control (PowerShell, any app, URLs)",
@@ -25,7 +26,7 @@ def print_help(*, for_tray: bool = False) -> None:
         "",
         "  scope              Show mode, workspaces, app allowlist",
         "  scope safe         PC control off — chat/voice/vision only",
-        "  scope scoped       Allowlisted apps (notepad, calc, …) + file_read in workspaces",
+        "  scope scoped       Allowlisted apps + read/write files in workspaces",
         "  scope armed        Same as: arm",
         "  scope add <path>   Allow reading/opening files under this folder",
         "  scope remove <path>  Remove folder from runtime workspace list",
@@ -34,7 +35,13 @@ def print_help(*, for_tray: bool = False) -> None:
         "  open <name>        Launch app if mode allows (e.g. open notepad, open calc)",
         "",
         "Files",
-        "  read <path>        Read a text file (scoped: workspace only; armed: most paths)",
+        "  read <path>        Read a text file (path only — no | pipe)",
+        "  write <path>       Write file (paste lines; or write path|content)",
+        "  write path|text    One-line write (pipe separates path and content)",
+        "",
+        "Clipboard",
+        "  clip / clipboard   Read clipboard text",
+        "  clip set <text>    Copy text to clipboard (confirm if replacing)",
         "",
         "Memory",
         "  memory             List stored facts",
@@ -69,22 +76,24 @@ def print_help(*, for_tray: bool = False) -> None:
         "Other",
         "  help               This list",
         "  tray               Start tray + hotkeys in another window",
+        "  settings           Open settings UI (--settings from CLI)",
+        "  logs               Tool audit tail (--logs N from CLI)",
         "  (empty line)       Quit interactive mode",
         "",
     ]
 
     if for_tray:
         lines += [
-            "Tray (separate window)",
+            "Tray (separate window: run_celestia.py --tray)",
             f"  Menu: Security — cycles safe -> scoped -> armed (tooltip on icon shows mode)",
-            f"  Menu: Chat — multi-turn chat in the tray console (not one message only)",
+            "  Menu: Chat — opens a NEW console window for you> prompts",
             "  Menu: Voice (PTT)  One voice question per use",
             f"  Hotkey voice: {ptt}",
         ]
         if vision:
             dm = get("vision.default_mode", "region")
             lines.append(f"  Hotkey screen: {vhot} (uses config default: {dm})")
-            lines.append("  Menu: Screen ask — region capture + default question")
+            lines.append("  Menu: Screen (region / fullscreen / active window)")
         lines.append("  Note: Windows often hides tray icon colors — read the tooltip or menu label.")
         lines.append("")
 

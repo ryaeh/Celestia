@@ -6,7 +6,8 @@ from typing import Any
 from celestia_core.config import get
 from celestia_core import security
 from skills.memory import store as memory
-from skills.files.tools import FILE_TOOL_SCHEMAS, file_read
+from skills.clipboard.tools import CLIPBOARD_TOOL_SCHEMAS, clipboard_read, clipboard_write
+from skills.files.tools import FILE_TOOL_SCHEMAS, file_read, file_write
 from skills.pc_control.tools import (
     MEMORY_TOOL_SCHEMAS,
     PC_TOOL_SCHEMAS,
@@ -30,11 +31,24 @@ def tool_schemas(user_message: str = "") -> list:
 
     load_config()
     msg = (user_message or "").lower()
+    mode = security.get_mode()
+
+    if mode == "safe":
+        pc = [
+            t
+            for t in PC_TOOL_SCHEMAS
+            if t["function"]["name"] in security.PC_TOOLS_ALWAYS_OK
+        ]
+        tools = list(pc)
+        if get("memory.enabled", True):
+            tools += MEMORY_TOOL_SCHEMAS
+        return tools
+
     pc = list(PC_TOOL_SCHEMAS)
     if not any(t in msg for t in _OPEN_TRIGGERS):
         pc = [t for t in pc if t["function"]["name"] not in ("open_path", "open_url")]
 
-    tools = list(pc) + list(FILE_TOOL_SCHEMAS)
+    tools = list(pc) + list(FILE_TOOL_SCHEMAS) + list(CLIPBOARD_TOOL_SCHEMAS)
     if get("memory.enabled", True):
         tools += MEMORY_TOOL_SCHEMAS
     return tools
@@ -50,6 +64,37 @@ def execute_tool(
     try:
         if name == "file_read":
             result = file_read(arguments["path"])
+            security.audit_tool(name, arguments, result, source=source)
+            return result
+
+        if name == "file_write":
+            result = file_write(
+                arguments["path"],
+                arguments.get("content", ""),
+                confirm_overwrite=bool(arguments.get("confirm_overwrite")),
+            )
+            security.audit_tool(name, arguments, result, source=source)
+            return result
+
+        if name == "clipboard_read":
+            result = clipboard_read()
+            security.audit_tool(name, arguments, result, source=source)
+            return result
+
+        if name == "clipboard_write":
+            result = clipboard_write(
+                arguments.get("text", ""),
+                confirm_write=bool(arguments.get("confirm_write")),
+            )
+            security.audit_tool(name, arguments, result, source=source)
+            return result
+
+        if name == "memory_edit":
+            result = memory.edit_json(
+                arguments["memory_id"],
+                arguments["new_text"],
+                user_id,
+            )
             security.audit_tool(name, arguments, result, source=source)
             return result
 

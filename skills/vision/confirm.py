@@ -70,6 +70,8 @@ def confirm_send(image_path: Path, mode: str) -> bool:
         "Do you want me to send this screenshot for analysis?",
     )
     mode_confirm = _confirm_mode()
+    if get("vision.allow_voice_confirm", False) and mode_confirm == "text":
+        mode_confirm = "voice_or_text"
     print(f"[vision] {prompt}")
     print(f"[vision] Preview: {image_path}")
 

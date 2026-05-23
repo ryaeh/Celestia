@@ -179,7 +179,7 @@ def resolve_launchable_exe(name: str) -> tuple[Path | None, str | None]:
     if key not in _app_allowlist() and key not in _NOTEPAD_NAMES:
         return None, (
             f"Blocked: '{name}' is not on app_allowlist. "
-            "Add to security.app_allowlist in config.yaml."
+            "Add to app_allowlist in security.policy.yaml."
         )
     exe = _resolve_app_nickname(name)
     if not exe or not exe.is_file():
@@ -250,6 +250,35 @@ def check_open_path(path: str) -> str | None:
     return f"Blocked: path not found: {resolved}"
 
 
+def check_file_write(path: str) -> str | None:
+    """Scoped: workspace files only. Armed: any non-protected path."""
+    from celestia_core.security import get_mode
+
+    load_config()
+    plat = _plat()
+    mode = get_mode()
+    if mode == "safe":
+        return "Blocked: file_write requires scoped or armed mode."
+
+    resolved = plat.normalize(path)
+    if not resolved:
+        return f"Blocked: invalid path: {path}"
+    if resolved.exists() and resolved.is_dir():
+        return f"Blocked: path is a directory: {resolved}"
+    if plat.is_protected(resolved):
+        return f"Blocked: cannot write protected path: {resolved}"
+    parent = resolved.parent
+    if parent and plat.is_protected(parent) and not _is_under_workspace(resolved):
+        return f"Blocked: cannot write under protected path: {resolved}"
+
+    if mode == "scoped" and not _is_under_workspace(resolved):
+        return (
+            f"Blocked: file outside workspaces: {resolved}. "
+            "Use scope add <folder> or arm for full access."
+        )
+    return None
+
+
 def check_file_read(path: str) -> str | None:
     """Scoped: workspace files only. Armed: any non-protected file."""
     from celestia_core.security import get_mode
@@ -276,6 +305,45 @@ def check_file_read(path: str) -> str | None:
     return None
 
 
+def _url_host(url: str) -> str:
+    from urllib.parse import urlparse
+
+    u = url.strip()
+    if not u.lower().startswith(("http://", "https://")):
+        u = "https://" + u
+    try:
+        return (urlparse(u).hostname or "").lower()
+    except Exception:
+        return ""
+
+
+def check_open_url(url: str) -> str | None:
+    """Scoped: allow only hosts in security.url_allowlist (empty list = block all)."""
+    from celestia_core.security import get_mode
+    from celestia_core.url_policy import host_matches_allowlist
+
+    load_config()
+    mode = get_mode()
+    if mode != "scoped":
+        return None
+
+    allowlist = [str(x) for x in (get("security.url_allowlist") or []) if x]
+    if not allowlist:
+        return (
+            "Blocked in scoped mode: URLs need armed mode, or add hosts to "
+            "url_allowlist in security.policy.yaml."
+        )
+
+    host = _url_host(url)
+    if not host:
+        return f"Blocked: invalid URL: {url}"
+
+    if host_matches_allowlist(host, allowlist):
+        return None
+
+    return f"Blocked: URL host '{host}' not in url_allowlist (security.policy.yaml)."
+
+
 def format_status() -> str:
     from celestia_core.security import get_mode
 
@@ -292,5 +360,30 @@ def format_status() -> str:
     lines.append("Allowed executables (auto-resolved):")
     for a in sorted(_allowed_executables()):
         lines.append(f"  - {a}")
+    urls = get("security.url_allowlist") or []
+    if urls:
+        lines.append("URL allowlist (scoped): " + ", ".join(str(u) for u in urls))
+    else:
+        lines.append("URL allowlist (scoped): (empty — all URLs blocked until armed)")
     lines.append("Protected: Windows, Program Files, ProgramData, …")
     return "\n".join(lines)
+
+
+def print_pick_workspace_hint() -> None:
+    """CLI wizard: paths to paste into config.yaml."""
+    print("=== Celestia workspace picker ===\n")
+    print("Add folders under security.workspaces in config.yaml, for example:\n")
+    print("security:")
+    print("  workspaces:")
+    for p in list_workspaces():
+        print(f'    - "{p}"')
+    print("\nSuggested folders (create if missing):")
+    for candidate in (
+        ROOT,
+        Path.home() / "Projects",
+        Path.home() / "Documents" / "Celestia",
+        Path.home() / "Documents",
+    ):
+        mark = "exists" if candidate.is_dir() else "missing"
+        print(f'  - "{candidate}"  ({mark})')
+    print("\nRuntime add without editing config:  scope add C:\\Your\\Folder")

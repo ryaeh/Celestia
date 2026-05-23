@@ -204,6 +204,13 @@ def update_by_id(memory_id: str, new_text: str) -> str:
     return f"Updated memory: {new_text[:80]}"
 
 
+def edit_json(memory_id: str, new_text: str, user_id: str) -> str:
+    try:
+        return update_by_id(memory_id.strip(), new_text)
+    except Exception as e:
+        return f"Memory edit failed: {e}"
+
+
 def format_list(user_id: str) -> str:
     entries = get_all_entries(user_id, limit=50)
     if not entries:

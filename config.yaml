@@ -1,5 +1,4 @@
-# Default template. Copy to config.yaml to start, or edit config.yaml directly.
-# Secrets: .env only (HF_TOKEN). config.yaml is safe to commit if you keep secrets out.
+# Celestia — copy from config.example.yaml to customize.
 
 app:
   display_name: Celestia
@@ -7,8 +6,8 @@ app:
   log_dir: logs
 
 chat:
-  session_enabled: true
-  session_max_messages: 60
+  session_enabled: true    # -i mode: remember earlier messages in this session
+  session_max_messages: 60 # trim older turns (keeps system prompts at start)
 
 personality:
   active: default
@@ -17,20 +16,21 @@ personality:
 llm:
   provider: ollama
   host: http://127.0.0.1:11434
-  chat_model: llama3.2:3b
+  chat_model: qwen2.5:7b
   vision_model: llama3.2-vision:11b
-  vision_text_model: qwen2.5vl:7b
   vision_fast_model: moondream
+  vision_text_model: qwen2.5vl:7b
   embed_model: nomic-embed-text
 
 memory:
   enabled: true
-  inject: smart
+  inject: smart          # smart | always | off — when to auto-load memories into chat
   session_consolidate: true
-  session_consolidate_every: 4
-  session_consolidate_on_end: true
-  session_consolidate_verbose: true
+  session_consolidate_every: 4      # every N chat turns, summarize → long-term memory
+  session_consolidate_on_end: true  # also run on newchat / quit
+  session_consolidate_verbose: true # print [memory] saved: ... with reasoning
   session_consolidate_max_facts: 3
+  provider: mem0
   vector_store: chroma
   chroma:
     path: data/chroma
@@ -39,6 +39,7 @@ memory:
     port: 6333
 
 voice:
+  always_speak: false
   push_to_talk_hotkey: ctrl+alt+v
   stt:
     enabled: true
@@ -49,12 +50,17 @@ voice:
   tts:
     provider: orpheus
     voice: tara
+    emotion_tags: true
     orpheus:
       backend: local
       model_gguf: models/Orpheus-3b-FT-Q8_0.gguf
       n_gpu_layers: -1
       n_ctx: 8192
+      max_tokens: 4096
       idle_shutdown_minutes: 5
+      mode: on_demand
+      api_url: http://127.0.0.1:1234/v1/completions
+      llama_server_bin: ""
     edge:
       voice: en-US-GuyNeural
 
@@ -72,17 +78,21 @@ vision:
   force_text_mode: false
   confirm_before_send: true
   confirm_mode: text
-  allow_voice_confirm: false   # when true, prefer voice yes/no before text confirm
+  tts_confirm_prompt: "Do you want me to send this screenshot for analysis?"
+  allow_voice_confirm: false
+  temp_dir: temp/vision
+  delete_after_minutes: 15
+  audit_log: logs/vision_audit.jsonl
 
 pc_control:
   require_confirm_destructive: true
-  app_aliases: {}              # e.g. notepad: "C:\\Program Files\\Notepad++\\notepad++.exe"
+  app_aliases: {}
 
 security:
   mode: safe
   default_armed: false
   shared_armed_state: true
-  # Allowlists & workspaces live in security.policy.yaml (copy from security.policy.example.yaml)
+  # Allowlists & workspaces: security.policy.yaml (integrity-checked with config)
   file_read_max_bytes: 262144
   file_write_max_bytes: 524288
   audit_tools: true
@@ -90,7 +100,8 @@ security:
   integrity_check: true
   integrity_store: data/config.trust
 
-# After editing config: run_celestia.py --trust-config
+resources:
+  cuda_visible_devices: "0"
 
 ui:
   tray: true

@@ -1,0 +1,28 @@
+# Security policy — allowlists and workspaces (integrity-checked with config.yaml)
+#
+# Copy to security.policy.yaml and run: python run_celestia.py --trust-config
+#
+# Malware with your user account can still edit local files; integrity_check only
+# warns when these files change unexpectedly. Mode (safe/scoped/armed) stays in config.yaml.
+
+workspaces: []
+# Paths Celestia may read/write in scoped mode — add with: scope add C:\Projects
+
+app_allowlist:
+  - notepad
+  - notepad.exe
+  - not defteri
+  - calc
+  - calculator
+  - mspaint
+  - paint
+  - snippingtool
+
+allowed_executables: []
+
+# URL hosts in scoped mode. Use a short label OR full host:
+#   github      → allows https://github.com (and www.github.com)
+#   github.com  → same
+# If you list github.com AND github.io, "open github" asks which one.
+url_allowlist:
+  - github

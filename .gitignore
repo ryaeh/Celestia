@@ -1,7 +1,6 @@
 # --- Secrets & local config ---
 .env
 !.env.example
-config.yaml
 
 # --- Python ---
 venv/

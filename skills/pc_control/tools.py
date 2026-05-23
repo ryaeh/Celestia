@@ -142,6 +142,21 @@ MEMORY_TOOL_SCHEMAS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "memory_edit",
+            "description": "Update an existing memory by id (from memory_list).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "memory_id": {"type": "string"},
+                    "new_text": {"type": "string", "description": "Replacement fact text"},
+                },
+                "required": ["memory_id", "new_text"],
+            },
+        },
+    },
 ]
 
 

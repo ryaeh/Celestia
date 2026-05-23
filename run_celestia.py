@@ -61,6 +61,11 @@ def main() -> int:
         help="System tray + hotkeys (see config)",
     )
     parser.add_argument(
+        "--tray-chat",
+        action="store_true",
+        help="Tray chat console only (opened automatically from tray menu)",
+    )
+    parser.add_argument(
         "--forget-memory",
         action="store_true",
         help="Delete all stored memories (Chroma) for this user",
@@ -89,10 +94,49 @@ def main() -> int:
         action="store_true",
         help="Record config.yaml hash (integrity baseline)",
     )
+    parser.add_argument(
+        "--pick-workspace",
+        action="store_true",
+        help="Print suggested security.workspaces paths for config.yaml",
+    )
+    parser.add_argument(
+        "--settings",
+        action="store_true",
+        help="Open minimal settings window (mode, workspaces, audit log)",
+    )
+    parser.add_argument(
+        "--logs",
+        type=int,
+        nargs="?",
+        const=20,
+        metavar="N",
+        help="Show last N lines of tool audit log (default 20)",
+    )
     args = parser.parse_args()
 
     if args.trust_config:
         print(security.trust_config())
+        return 0
+
+    if args.pick_workspace:
+        from celestia_core.scope import print_pick_workspace_hint
+
+        print_pick_workspace_hint()
+        return 0
+
+    if args.settings:
+        from ui.settings_app import run_settings
+
+        run_settings()
+        return 0
+
+    if args.logs is not None:
+        from ui.settings_app import _tail_jsonl
+        from celestia_core.config import ROOT
+
+        rel = get("security.audit_log", "logs/tool_audit.jsonl")
+        path = Path(rel) if Path(rel).is_absolute() else ROOT / rel
+        print(_tail_jsonl(path, int(args.logs)))
         return 0
 
     if args.arm:
@@ -115,11 +159,45 @@ def main() -> int:
     speak = args.speak or get("voice.always_speak", False)
     tag = _prompt_tag()
 
+    chat_history: list | None = None
+    chat_turns = 0
+    consolidate_from = 0
+
+    def _try_consolidate(*, end: bool = False) -> None:
+        nonlocal chat_history, consolidate_from
+        if not chat_history or not get("memory.session_consolidate", True):
+            return
+        if end and not get("memory.session_consolidate_on_end", True):
+            return
+        if not end:
+            every = int(get("memory.session_consolidate_every", 4))
+            if chat_turns < every or chat_turns % every != 0:
+                return
+        from skills.memory.session_consolidate import consolidate_session_messages
+
+        uid = get("app.user_id", "atlas_user")
+        consolidate_from, stored = consolidate_session_messages(
+            chat_history,
+            uid,
+            start_index=consolidate_from,
+        )
+        if stored and get("memory.session_consolidate_verbose", True):
+            for line in stored:
+                print(f"[memory] saved: {line}")
+
     def handle(text: str, *, source: str = "cli") -> None:
+        nonlocal chat_history
         text = text.strip()
         if not text:
             return
-        print(f"{tag}>", run_turn(text, speak=speak, source=source))
+        use_session = get("chat.session_enabled", True)
+        if use_session:
+            reply, chat_history = run_turn(
+                text, speak=speak, source=source, history=chat_history
+            )
+        else:
+            reply, _ = run_turn(text, speak=speak, source=source)
+        print(f"{tag}>", reply)
 
     if args.screen is not None:
         if not get("vision.enabled", True):
@@ -133,6 +211,12 @@ def main() -> int:
             mode=args.screen_mode,
             speak=speak or True,
         )
+        return 0
+
+    if args.tray_chat:
+        from ui.tray import run_tray_chat_console
+
+        run_tray_chat_console(speak=speak or get("voice.always_speak", False))
         return 0
 
     if args.tray:
@@ -154,7 +238,8 @@ def main() -> int:
                 if not text:
                     continue
                 print(f"[you] {text}")
-                print(f"{tag}>", run_turn(text, speak=speak or True, source="cli"))
+                reply, _ = run_turn(text, speak=speak or True, source="cli")
+                print(f"{tag}>", reply)
         except KeyboardInterrupt:
             print()
         return 0
@@ -173,11 +258,17 @@ def main() -> int:
     if args.interactive:
         name = get("app.display_name", "Celestia")
         print(f"{name} interactive — mode: {security.armed_status_label()} (shared with tray)")
-        print("  Type help for all commands. Empty line to quit.")
+        sess = "on" if get("chat.session_enabled", True) else "off"
+        cons = "on" if get("memory.session_consolidate", True) else "off"
+        print(
+            f"  Chat session: {sess} (newchat = clear). "
+            f"Auto memory from chat: {cons}. Empty line to quit."
+        )
         try:
             while True:
                 line = input("you> ").strip()
                 if not line:
+                    _try_consolidate(end=True)
                     break
                 low = line.lower()
                 if low == "arm":
@@ -248,6 +339,13 @@ def main() -> int:
                     )
                     print("[tray] Started in a new window (icon near the clock). This chat stays open.")
                     continue
+                if low in ("newchat", "new chat", "clear chat"):
+                    _try_consolidate(end=True)
+                    chat_history = None
+                    consolidate_from = 0
+                    chat_turns = 0
+                    print("[chat] New conversation — previous messages forgotten.")
+                    continue
                 if low == "help":
                     print_help(for_tray=False)
                     continue
@@ -255,29 +353,79 @@ def main() -> int:
                     from skills.files.tools import file_read
 
                     fpath = line[5:].strip()
+                    if "|" in fpath:
+                        extra = fpath.split("|", 1)[1]
+                        fpath = fpath.split("|", 1)[0].strip()
+                        print(
+                            f"[hint] read uses path only (ignored '|{extra}'). "
+                            "For write: write path|content"
+                        )
                     blocked = security.gate_pc_tool("file_read", {"path": fpath})
                     if blocked:
                         print(blocked)
                     else:
                         print(file_read(fpath))
                     continue
-                m_open = _OPEN_LINE.match(line)
-                if m_open:
-                    from skills.pc_control.tools import execute_pc
+                if low.startswith("write ") and len(line) > 6:
+                    from skills.files.tools import file_write
 
-                    target = m_open.group(1).strip()
-                    blocked = security.gate_pc_tool("open_path", {"path": target})
+                    rest = line[6:].strip()
+                    if "|" in rest:
+                        fpath, _, content = rest.partition("|")
+                        fpath, content = fpath.strip(), content
+                        confirm = False
+                    else:
+                        fpath = rest
+                        print("Paste content; empty line alone to finish:")
+                        chunks = []
+                        while True:
+                            sub = input()
+                            if sub == "" and chunks:
+                                break
+                            if sub == "" and not chunks:
+                                continue
+                            chunks.append(sub)
+                        content = "\n".join(chunks)
+                        confirm = (
+                            input("Overwrite if exists? (yes/no): ").strip().lower() == "yes"
+                        )
+                    blocked = security.gate_pc_tool(
+                        "file_write", {"path": fpath, "content": content}
+                    )
                     if blocked:
                         print(blocked)
-                        continue
-                    print(execute_pc("open_path", {"path": target}))
+                    else:
+                        print(file_write(fpath, content, confirm_overwrite=confirm))
+                    continue
+                if low in ("clip", "clipboard"):
+                    from skills.clipboard.tools import clipboard_read
+
+                    print(clipboard_read())
+                    continue
+                if low.startswith("clip set ") or low.startswith("clipboard set "):
+                    from skills.clipboard.tools import clipboard_write
+
+                    text = line[9:].strip() if low.startswith("clip set ") else line[14:].strip()
+                    confirm = (
+                        input("Confirm replace clipboard? (yes/no): ").strip().lower() == "yes"
+                    )
+                    blocked = security.gate_pc_tool(
+                        "clipboard_write", {"text": text, "confirm_write": confirm}
+                    )
+                    print(blocked or clipboard_write(text, confirm_write=confirm))
+                    continue
+                from celestia_core.open_dispatch import dispatch_open_line
+
+                opened = dispatch_open_line(line)
+                if opened is not None:
+                    print(opened)
                     continue
                 if low == "listen" and get("voice.stt.enabled", True):
                     from skills.stt import record_and_transcribe
 
                     text = record_and_transcribe()
                     print(f"[you] {text}")
-                    print(f"{tag}>", run_turn(text, speak=speak, source="repl"))
+                    handle(text, source="repl")
                 elif low == "screen" or low.startswith("screen "):
                     from skills.vision.flow import parse_screen_command, run_screen_ask
 
@@ -291,7 +439,10 @@ def main() -> int:
                     print(run_screen_ask(q, mode=mode, speak=speak))
                 else:
                     handle(line, source="repl")
+                    chat_turns += 1
+                    _try_consolidate()
         except (KeyboardInterrupt, EOFError):
+            _try_consolidate(end=True)
             print()
         return 0
 

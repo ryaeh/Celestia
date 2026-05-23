@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import re
+import subprocess
+import sys
 import threading
+from pathlib import Path
 
 from celestia_core.agent import run_turn
 from celestia_core.cli_help import print_help
@@ -72,23 +75,23 @@ class CelestiaTray:
             text = record_and_transcribe(seconds=self.record_seconds)
             if text:
                 print(f"[you] {text}")
-                print(f"{self._prompt_tag()}>", run_turn(text, speak=self.speak, source="tray"))
+                reply, _ = run_turn(text, speak=self.speak, source="tray")
+                print(f"{self._prompt_tag()}>", reply)
         except Exception as e:
             print(f"[ptt] error: {e}")
         finally:
             self._busy.release()
 
-    def _on_screen_ask(self):
+    def _on_screen_ask(self, mode: str | None = None):
         if not self._busy.acquire(blocking=False):
             print("[tray] busy — wait for current task")
             return
         try:
             from skills.vision.flow import run_screen_ask
 
-            default = get("vision.default_mode", "region")
-            print(f"[vision] mode: {default} (or type: screen fullscreen / screen window)")
+            use_mode = mode or get("vision.default_mode", "region")
             q = "Read every line of text in this image exactly."
-            run_screen_ask(q, mode=default, speak=self.speak)
+            run_screen_ask(q, mode=use_mode, speak=self.speak)
         except Exception as e:
             print(f"[vision] error: {e}")
         finally:
@@ -171,16 +174,38 @@ class CelestiaTray:
             blocked = security.gate_pc_tool("file_read", {"path": fpath})
             print(blocked or file_read(fpath))
             return True
-        m_open = _OPEN_LINE.match(line)
-        if m_open:
-            from skills.pc_control.tools import execute_pc
+        if low.startswith("write ") and len(line) > 6:
+            from skills.files.tools import file_write
 
-            target = m_open.group(1).strip()
-            blocked = security.gate_pc_tool("open_path", {"path": target})
-            print(blocked or execute_pc("open_path", {"path": target}))
+            rest = line[6:].strip()
+            if "|" in rest:
+                fpath, _, content = rest.partition("|")
+                confirm = True
+            else:
+                print("[tray] use: write path|content on one line")
+                return True
+            blocked = security.gate_pc_tool(
+                "file_write", {"path": fpath.strip(), "content": content}
+            )
+            print(
+                blocked
+                or file_write(fpath.strip(), content, confirm_overwrite=confirm)
+            )
+            return True
+        if low in ("clip", "clipboard"):
+            from skills.clipboard.tools import clipboard_read
+
+            print(clipboard_read())
+            return True
+        from celestia_core.open_dispatch import dispatch_open_line
+
+        opened = dispatch_open_line(line)
+        if opened is not None:
+            print(opened)
             return True
 
-        print(f"{tag}>", run_turn(line, speak=self.speak, source="tray"))
+        reply, _ = run_turn(line, speak=self.speak, source="tray")
+        print(f"{tag}>", reply)
         return True
 
     def _chat_loop(self):
@@ -258,14 +283,38 @@ class CelestiaTray:
         def on_voice(_icon, _item):
             threading.Thread(target=self._on_voice_ptt, daemon=True).start()
 
-        def on_screen(_icon, _item):
-            threading.Thread(target=self._on_screen_ask, daemon=True).start()
+        def on_screen_region(_icon, _item):
+            threading.Thread(
+                target=lambda: self._on_screen_ask("region"), daemon=True
+            ).start()
+
+        def on_screen_full(_icon, _item):
+            threading.Thread(
+                target=lambda: self._on_screen_ask("fullscreen"), daemon=True
+            ).start()
+
+        def on_screen_window(_icon, _item):
+            threading.Thread(
+                target=lambda: self._on_screen_ask("active_window"), daemon=True
+            ).start()
 
         def on_cycle(icon, _item):
             self._cycle_mode(icon)
 
         def on_chat(_icon, _item):
-            threading.Thread(target=self._chat_loop, daemon=True).start()
+            root = Path(__file__).resolve().parents[1]
+            script = root / "run_celestia.py"
+            flags = (
+                subprocess.CREATE_NEW_CONSOLE
+                if sys.platform == "win32" and hasattr(subprocess, "CREATE_NEW_CONSOLE")
+                else 0
+            )
+            subprocess.Popen(
+                [sys.executable, str(script), "--tray-chat"],
+                cwd=str(root),
+                creationflags=flags,
+            )
+            print("[tray] Chat window opened (type there — not in this console).")
 
         def on_help(_icon, _item):
             print_help(for_tray=True)
@@ -281,7 +330,13 @@ class CelestiaTray:
             pystray.MenuItem("Voice (PTT)", on_voice),
         ]
         if get("vision.enabled", False):
-            items.append(pystray.MenuItem("Screen ask", on_screen))
+            items.extend(
+                [
+                    pystray.MenuItem("Screen (region)", on_screen_region),
+                    pystray.MenuItem("Screen (fullscreen)", on_screen_full),
+                    pystray.MenuItem("Screen (active window)", on_screen_window),
+                ]
+            )
         items.append(pystray.MenuItem("Quit", on_quit))
 
         icon = pystray.Icon(
@@ -291,9 +346,14 @@ class CelestiaTray:
             pystray.Menu(*items),
         )
         self._start_hotkey_listeners()
-        print(f"[tray] {self._name} — mode {mode}. Tooltip on icon shows mode. Menu: Chat = multi-turn.")
-        print("[tray] Type help in Chat or see -i interactive mode.")
+        print(f"[tray] {self._name} — mode {mode}. Right-click icon near the clock.")
+        print("[tray] Chat opens a NEW window. Screen: three menu items or Ctrl+Shift+S.")
         icon.run()
+
+
+def run_tray_chat_console(*, speak: bool = False) -> None:
+    """Foreground chat console (used by --tray-chat in its own window)."""
+    CelestiaTray(speak=speak)._chat_loop()
 
 
 def run_tray(*, speak: bool = True, record_seconds: float = 5.0) -> None:

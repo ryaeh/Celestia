@@ -1,0 +1,18 @@
+# Security policy — allowlists (see security.policy.example.yaml)
+workspaces: []
+
+app_allowlist:
+  - notepad
+  - notepad.exe
+  - not defteri
+  - notdefteri
+  - calc
+  - calculator
+  - mspaint
+  - paint
+  - snippingtool
+
+allowed_executables: []
+
+url_allowlist:
+  - github
