@@ -1,0 +1,14 @@
+# Atlas Phase 0 — memory vector DB only.
+# Optional services (n8n, livekit): see docker-compose.extra.yml
+
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
+volumes:
+  qdrant_data:

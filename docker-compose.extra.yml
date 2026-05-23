@@ -1,0 +1,26 @@
+# Optional — enable when you need workflows / realtime (Phase 3+)
+# Usage: docker compose -f docker-compose.yml -f docker-compose.extra.yml up -d
+
+services:
+  livekit:
+    image: livekit/livekit-server:latest
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+    command: --dev
+    restart: unless-stopped
+
+  n8n:
+    image: n8nio/n8n:latest
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=atlas123
+    restart: unless-stopped
+
+volumes:
+  n8n_data:

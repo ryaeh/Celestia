@@ -1,0 +1,46 @@
+# --- Secrets & local config ---
+.env
+!.env.example
+config.yaml
+
+# --- Python ---
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Runtime data (Celestia) ---
+data/
+logs/
+outputs/
+temp/
+*.wav
+*.log
+
+# --- ML models (never commit) ---
+models/
+*.gguf
+
+# --- Orpheus-FastAPI (source yes, runtime no) ---
+Orpheus-FastAPI/.env
+Orpheus-FastAPI/models/
+Orpheus-FastAPI/outputs/
+Orpheus-FastAPI/__pycache__/
+Orpheus-FastAPI/.venv/
+Orpheus-FastAPI/venv/
+
+# --- OS / editor ---
+Thumbs.db
+Desktop.ini
+.DS_Store
+.vscode/
+.idea/
+.cursor/
+
+# --- Misc ---
+.exe/
+legacy/

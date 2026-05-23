@@ -1,0 +1,95 @@
+# Copy to config.yaml — secrets go in .env (HF_TOKEN), not here.
+
+app:
+  display_name: Celestia
+  user_id: atlas_user
+  log_dir: logs
+
+personality:
+  active: default
+  dir: personalities
+
+llm:
+  provider: ollama
+  host: http://127.0.0.1:11434
+  chat_model: llama3.2:3b
+  vision_model: llama3.2-vision:11b
+  vision_text_model: qwen2.5vl:7b
+  vision_fast_model: moondream
+  embed_model: nomic-embed-text
+
+memory:
+  enabled: true
+  inject: smart
+  vector_store: chroma
+  chroma:
+    path: data/chroma
+  qdrant:
+    host: localhost
+    port: 6333
+
+voice:
+  push_to_talk_hotkey: ctrl+alt+v
+  stt:
+    enabled: true
+    model: large-v3
+    device: cuda
+    compute_type: float16
+    idle_unload_minutes: 10
+  tts:
+    provider: orpheus
+    voice: tara
+    orpheus:
+      backend: local
+      model_gguf: models/Orpheus-3b-FT-Q8_0.gguf
+      n_gpu_layers: -1
+      n_ctx: 8192
+      idle_shutdown_minutes: 5
+    edge:
+      voice: en-US-GuyNeural
+
+vision:
+  enabled: true
+  hotkey: ctrl+shift+s
+  default_mode: region
+  max_edge_px: 2048
+  max_tokens: 4096
+  transcribe_tokens: 4096
+  temperature: 0.0
+  text_model: qwen2.5vl:7b
+  two_pass_text: true
+  preprocess_text: true
+  force_text_mode: false
+  confirm_before_send: true
+  confirm_mode: text
+  allow_voice_confirm: false
+
+pc_control:
+  require_confirm_destructive: true
+  app_aliases: {}              # e.g. notepad: "C:\\Program Files\\Notepad++\\notepad++.exe"
+
+security:
+  mode: safe
+  default_armed: false
+  shared_armed_state: true
+  workspaces: []
+  app_allowlist:
+    - notepad
+    - not defteri
+    - calc
+    - mspaint
+    - snippingtool
+  allowed_executables: []
+  file_read_max_bytes: 262144
+  audit_tools: true
+  audit_log: logs/tool_audit.jsonl
+  integrity_check: true
+  integrity_store: data/config.trust
+
+# After editing config: run_celestia.py --trust-config
+
+ui:
+  tray: true
+
+docker:
+  qdrant_port: 6333
