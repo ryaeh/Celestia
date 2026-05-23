@@ -12,29 +12,39 @@ Celestia is a local AI desktop companion (primarily Windows-targeted) built in P
 |---------|---------|---------------|
 | **Ollama** | LLM inference (chat + embeddings) | `ollama serve` (background) |
 
-Ollama must be running before any Celestia commands. Required models: `llama3.2:3b` and `nomic-embed-text` (pull with `ollama pull <model>`).
+Ollama must be running before any Celestia commands. Pull models from `config.example.yaml` (e.g. `qwen2.5:7b`, `nomic-embed-text`).
 
 ### Running the application
 
 - **Preflight check:** `python3 run_celestia.py --check`
 - **Single message:** `python3 run_celestia.py "your message"`
 - **Interactive REPL:** `python3 run_celestia.py -i`
-- See `docs/SETUP.md` for all CLI flags.
+- **Desktop shell:** `python3 run_celestia.py --shell` (needs Node + Rust; see [shell/README.md](shell/README.md))
+- CLI flags and setup: [docs/getting-started.md](docs/getting-started.md), [docs/guide/commands.md](docs/guide/commands.md)
 
 ### Configuration
 
-The app reads `config.yaml` (gitignored). If absent it falls back to `config.example.yaml`. For headless/cloud environments, create `config.yaml` from the example and set:
-- `voice.stt.enabled: false` (no microphone available)
-- `voice.tts.provider: edge` (no GPU/GGUF for Orpheus)
-- `vision.enabled: false` (no display for screen capture)
-- `ui.tray: false` (no GUI)
+- **`config.yaml`** — mode, models, voice, vision (repo may include an example; copy from `config.example.yaml` if missing).
+- **`security.policy.yaml`** — app/URL allowlists and workspaces (see `security.policy.example.yaml`).
+- **`.env`** — secrets (gitignored); copy from `.env.example`.
+
+For headless/cloud environments, set in `config.yaml`:
+
+- `voice.stt.enabled: false`
+- `voice.tts.provider: edge`
+- `vision.enabled: false`
+- `ui.tray: false`
 
 ### Gotchas
 
-- **No formal linter or test framework** is configured in this repo. Use `python3 -m py_compile <file>` for syntax checking. The `.gitignore` mentions ruff/mypy/pytest caches but no configs exist.
-- The `config.yaml` file is gitignored — it must be created locally each session if needed.
-- The `data/` and `logs/` directories are gitignored and created at runtime.
-- `llama-cpp-python` is installed without CUDA in cloud environments (CPU-only). Orpheus TTS requires GPU; use `edge` TTS provider instead.
-- The spaCy warning (`Failed to load spaCy lemma model`) is harmless — optional for mem0 NLP features.
-- PC control features (open apps, PowerShell) are Windows-specific and won't work on Linux.
-- Memory (ChromaDB) works on disk with no external service; Qdrant is optional (Docker).
+- **No formal test suite** yet. Use `python3 -m py_compile <file>` for syntax checks.
+- **`data/` and `logs/`** are gitignored and created at runtime.
+- **Orpheus TTS** needs GPU locally; cloud uses `edge` TTS.
+- **PC control** (open app, PowerShell) is Windows-specific in practice.
+- **Memory default:** Chroma on disk — no Docker. Optional Qdrant: [docs/optional-docker/README.md](docs/optional-docker/README.md).
+- After editing `config.yaml` or `security.policy.yaml`, run `python3 run_celestia.py --trust-config`.
+- **Desktop shell:** `shell/` is Tauri + React. Local API in `celestia_core/shell_server.py` on `127.0.0.1`. Dev: `--shell-server` then `cd shell && npm run tauri dev`. No secrets in the frontend bundle.
+
+### Backlog / issues
+
+Planned work: [docs/project/backlog.md](docs/project/backlog.md). Linear team **Celestia** mirrors backlog (labels: `short-term`, `long-term`, `optimization`).

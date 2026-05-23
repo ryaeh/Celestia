@@ -1,5 +1,5 @@
-# Atlas Phase 0 — memory vector DB only.
-# Optional services (n8n, livekit): see docker-compose.extra.yml
+# Optional — Qdrant vector DB for memory.backend: qdrant
+# See README.md. Extra services: docker-compose.extra.yml
 
 services:
   qdrant:

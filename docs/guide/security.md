@@ -20,6 +20,8 @@ disarm       # same as safe
 
 Tray **Security** cycles modes. With `shared_armed_state: true`, `-i`, tray, and voice see the same mode via `data/security_state.json`.
 
+**Tray cap:** `security.tray_max_mode` in `config.yaml` (e.g. `scoped`) limits how high tray, voice PTT, and screen hotkeys can set the mode. CLI and `run_celestia.py -i` are not capped — use that for `arm` when you need full PC control.
+
 ## Scoped: what’s blocked
 
 We block the scary stuff even if the model asks nicely:
@@ -81,4 +83,6 @@ Running `notepad.exe` from System32 is fine — it’s on the allowlist. Using N
 
 ## Not built yet
 
-`file_write`, clipboard, activity UI in a proper app, optional PIN before arm — [backlog](../project/backlog.md).
+Full **activity log UI**, optional **PIN before arm**, and other polish — [backlog](../project/backlog.md).
+
+**Already shipped:** `file_write`, clipboard, `security.policy.yaml` allowlists, smart URL opens, session chat (`-i`), session memory consolidate, settings UI spike.

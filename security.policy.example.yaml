@@ -17,6 +17,15 @@ app_allowlist:
   - mspaint
   - paint
   - snippingtool
+  - explorer
+  - msedge
+  - edge
+  - chrome
+  - firefox
+  - wordpad
+  - magnify
+  - taskmgr
+  # Add nicknames here; built-ins resolve via System32 / WindowsApps (see scope.py)
 
 allowed_executables: []
 

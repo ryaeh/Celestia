@@ -85,9 +85,13 @@ CLI utilities:
 
 ```powershell
 .\venv\Scripts\python.exe run_celestia.py --pick-workspace
-.\venv\Scripts\python.exe run_celestia.py --settings
+.\venv\Scripts\python.exe run_celestia.py --settings    # Tauri shell (ui.shell_settings: true)
+.\venv\Scripts\python.exe run_celestia.py --shell       # Home + live status
+.\venv\Scripts\python.exe run_celestia.py --shell-server
 .\venv\Scripts\python.exe run_celestia.py --logs 30
 ```
+
+Set `ui.shell_settings: false` in `config.yaml` to use the legacy tk settings window instead.
 
 ## Tray window
 

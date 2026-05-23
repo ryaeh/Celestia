@@ -15,7 +15,7 @@ High-level delivery phases. **Planned work and ideas** live in [backlog.md](back
 | **3a — Scoped** | Workspaces, app allowlist, protected paths, `open` gating |
 | **3b read** | `file_read`, REPL `read`, direct `open <app>` |
 | **3b write** | `file_write`, REPL `write`, overwrite confirm |
-| **3c** | Clipboard read/write (scoped), URL allowlist, `--pick-workspace` |
+| **3c** | Clipboard read/write (scoped), URL allowlist + smart opens, `security.policy.yaml`, `--pick-workspace` |
 | **3 polish** | `memory_edit`, tray screen menu, voice confirm option, performance doc |
 | **4 spike** | tk settings UI, `--logs`, n8n webhook on mode change |
 

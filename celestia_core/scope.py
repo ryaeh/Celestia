@@ -17,12 +17,30 @@ _BUILTIN_EXE: dict[str, list[str]] = {
     "calculator": ["calc.exe"],
     "mspaint": ["mspaint.exe"],
     "paint": ["mspaint.exe"],
-    "snippingtool": ["SnippingTool.exe"],
+    "snippingtool": ["SnippingTool.exe", "ScreenClippingHost.exe"],
     "magnify": ["magnify.exe"],
     "control": ["control.exe"],
     "controlpanel": ["control.exe"],
     "write": ["write.exe"],
     "wordpad": ["write.exe"],
+    "explorer": ["explorer.exe"],
+    "fileexplorer": ["explorer.exe"],
+    "msedge": ["msedge.exe"],
+    "edge": ["msedge.exe"],
+    "chrome": ["chrome.exe"],
+    "firefox": ["firefox.exe"],
+    "taskmgr": ["Taskmgr.exe"],
+    "taskmanager": ["Taskmgr.exe"],
+}
+
+# Program Files paths when exe is not in System32 / WindowsApps
+_INSTALLED_REL: dict[str, list[str]] = {
+    "msedge": ["Microsoft/Edge/Application/msedge.exe"],
+    "edge": ["Microsoft/Edge/Application/msedge.exe"],
+    "chrome": [
+        "Google/Chrome/Application/chrome.exe",
+    ],
+    "firefox": ["Mozilla Firefox/firefox.exe"],
 }
 
 _extra_workspaces_path = ROOT / "data" / "scope_workspaces.json"
@@ -131,6 +149,13 @@ def _app_allowlist() -> set[str]:
     return {a.lower().strip() for a in apps}
 
 
+def _find_app_exe(key: str, names: list[str]) -> Path | None:
+    plat = _plat()
+    rel = _INSTALLED_REL.get(key, [])
+    finder = getattr(plat, "find_installed_exe", plat.find_builtin_exe)
+    return finder(names, rel)
+
+
 def _resolve_app_nickname(name: str) -> Path | None:
     plat = _plat()
     key = name.lower().strip().removesuffix(".exe")
@@ -144,13 +169,13 @@ def _resolve_app_nickname(name: str) -> Path | None:
         exe = plat.default_notepad_exe()
         return exe if exe.is_file() else None
     if key in _BUILTIN_EXE:
-        return plat.find_builtin_exe(_BUILTIN_EXE[key])
+        return _find_app_exe(key, _BUILTIN_EXE[key])
     if key in _app_allowlist():
         if name.lower().endswith(".exe"):
             p = plat.normalize(name)
             return p if p and p.is_file() else None
         if key in _BUILTIN_EXE:
-            return plat.find_builtin_exe(_BUILTIN_EXE[key])
+            return _find_app_exe(key, _BUILTIN_EXE[key])
     return None
 
 
@@ -165,9 +190,9 @@ def _allowed_executables() -> set[str]:
         exe = _resolve_app_nickname(app)
         if exe and exe.is_file():
             out.add(str(exe).lower())
-    for names in _BUILTIN_EXE.values():
-        exe = plat.find_builtin_exe(names)
-        if exe:
+    for key in _BUILTIN_EXE:
+        exe = _resolve_app_nickname(key)
+        if exe and exe.is_file():
             out.add(str(exe).lower())
     return out
 

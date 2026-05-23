@@ -20,6 +20,7 @@ def print_help(*, for_tray: bool = False) -> None:
         "  newchat            Clear in-session chat history (-i only)",
         "",
         "Security (shared with tray + voice)",
+        "  (tray_max_mode in config.yaml caps tray/voice only — use -i for arm)",
         "  arm                Full PC control (PowerShell, any app, URLs)",
         "  disarm             Same as: scope safe",
         "  status             Mode, memory inject, personality",

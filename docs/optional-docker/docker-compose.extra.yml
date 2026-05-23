@@ -1,5 +1,6 @@
-# Optional — enable when you need workflows / realtime (Phase 3+)
-# Usage: docker compose -f docker-compose.yml -f docker-compose.extra.yml up -d
+# Optional — n8n + LiveKit (Phase 3+ experiments)
+# Usage (from this directory):
+#   docker compose -f docker-compose.yml -f docker-compose.extra.yml up -d
 
 services:
   livekit:

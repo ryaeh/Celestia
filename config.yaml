@@ -92,6 +92,7 @@ security:
   mode: safe
   default_armed: false
   shared_armed_state: true
+  tray_max_mode: scoped   # tray/voice/screen cannot go above this (CLI/repl unaffected)
   # Allowlists & workspaces: security.policy.yaml (integrity-checked with config)
   file_read_max_bytes: 262144
   file_write_max_bytes: 524288

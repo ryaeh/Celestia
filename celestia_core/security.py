@@ -13,6 +13,9 @@ from celestia_core.config import ROOT, get, load_config
 
 Mode = Literal["safe", "scoped", "armed"]
 
+_MODE_RANK: dict[str, int] = {"safe": 0, "scoped": 1, "armed": 2}
+_TRAY_SOURCES = frozenset({"tray", "voice", "screen"})
+
 PC_TOOLS_ALWAYS_OK = frozenset({"get_system_status", "list_processes"})
 PC_TOOLS_SCOPED_BLOCK = frozenset({"run_powershell"})
 PC_TOOLS_SCOPE_CHECK = frozenset({"open_path", "file_read", "file_write"})
@@ -64,6 +67,51 @@ def _default_mode() -> Mode:
     return "safe"
 
 
+def _mode_rank(mode: str) -> int:
+    return _MODE_RANK.get(mode.lower(), 0)
+
+
+def get_tray_max_mode() -> Mode | None:
+    """Max mode tray/voice/screen may set; None = no cap."""
+    raw = get("security.tray_max_mode")
+    if raw is None or str(raw).strip() == "":
+        return None
+    m = str(raw).lower().strip()
+    if m in _MODE_RANK:
+        return m  # type: ignore
+    return None
+
+
+def effective_mode_for(mode: str, source: str | None) -> tuple[Mode, str | None]:
+    """Apply tray_max_mode cap for tray-like sources. Returns (mode, warning)."""
+    m = mode.lower()
+    if m not in _MODE_RANK:
+        raise ValueError(f"Invalid mode: {mode}")
+    cap = get_tray_max_mode()
+    if cap is None or (source or "") not in _TRAY_SOURCES:
+        return m, None  # type: ignore
+    if _mode_rank(m) > _mode_rank(cap):
+        return cap, (
+            f"[security] Tray/voice capped at {cap.upper()} "
+            f"(security.tray_max_mode in config.yaml)"
+        )
+    return m, None  # type: ignore
+
+
+def next_mode_cycled(current: str, *, max_mode: Mode | None = None) -> Mode:
+    """Next mode in safe → scoped → armed cycle, optionally capped."""
+    order: tuple[Mode, ...] = ("safe", "scoped", "armed")
+    if max_mode is not None:
+        order = tuple(m for m in order if _mode_rank(m) <= _mode_rank(max_mode))
+        if not order:
+            order = ("safe",)
+    cur = current.lower()
+    if cur not in order:
+        cur = order[0]
+    idx = order.index(cur)  # type: ignore[arg-type]
+    return order[(idx + 1) % len(order)]
+
+
 def get_mode() -> Mode:
     global _session_mode
     if _use_shared_state():
@@ -80,48 +128,49 @@ def get_mode() -> Mode:
     return _default_mode()
 
 
-def set_mode(mode: str) -> None:
+def set_mode(mode: str, *, source: str | None = None) -> str | None:
+    """Set security mode. Returns optional warning when capped for tray/voice."""
     global _session_mode
-    m = mode.lower()
-    if m not in ("safe", "scoped", "armed"):
-        raise ValueError(f"Invalid mode: {mode}")
-    mode = m  # type: ignore
+    effective, warn = effective_mode_for(mode, source)
     if _use_shared_state():
-        _write_state({"mode": mode, "armed": mode == "armed"})
+        _write_state({"mode": effective, "armed": effective == "armed"})
         _session_mode = None
     else:
-        _session_mode = mode  # type: ignore
+        _session_mode = effective
     try:
         from skills.integrations.n8n import notify_security_mode
 
-        notify_security_mode(mode)
+        notify_security_mode(effective, source=source)
     except Exception:
         pass
+    return warn
 
 
 def is_armed() -> bool:
     return get_mode() == "armed"
 
 
-def set_armed(value: bool, *, persist: bool | None = None) -> None:
-    set_mode("armed" if value else "safe")
+def set_armed(value: bool, *, persist: bool | None = None, source: str | None = None) -> None:
+    set_mode("armed" if value else "safe", source=source)
 
 
-def toggle_armed() -> bool:
+def toggle_armed(*, source: str | None = None) -> bool:
     if get_mode() == "armed":
-        set_mode("safe")
+        set_mode("safe", source=source)
         return False
-    set_mode("armed")
+    set_mode("armed", source=source)
     return True
 
 
 def armed_status_label() -> str:
     m = get_mode()
+    cap = get_tray_max_mode()
+    suffix = f", tray max {cap}" if cap else ""
     if m == "armed":
-        return "ARMED"
+        return f"ARMED{suffix}"
     if m == "scoped":
-        return "scoped (allowlist)"
-    return "safe"
+        return f"scoped (allowlist){suffix}"
+    return f"safe{suffix}"
 
 
 def preflight_reply_from_blocked(blocked: str) -> str:

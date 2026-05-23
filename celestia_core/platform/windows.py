@@ -74,3 +74,31 @@ def find_builtin_exe(names: list[str]) -> Path | None:
             except OSError:
                 continue
     return None
+
+
+def _install_roots() -> list[Path]:
+    roots: list[Path] = []
+    for env in ("ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"):
+        val = os.environ.get(env, "")
+        if val:
+            roots.append(Path(val))
+    return roots
+
+
+def find_installed_exe(
+    names: list[str],
+    relative_paths: list[str] | None = None,
+) -> Path | None:
+    """System32/WindowsApps first, then Program Files style paths (Edge, Chrome, …)."""
+    hit = find_builtin_exe(names)
+    if hit:
+        return hit
+    for rel in relative_paths or []:
+        for root in _install_roots():
+            p = root / rel
+            try:
+                if p.is_file():
+                    return p.resolve()
+            except OSError:
+                continue
+    return None

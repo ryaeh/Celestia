@@ -102,7 +102,17 @@ def main() -> int:
     parser.add_argument(
         "--settings",
         action="store_true",
-        help="Open minimal settings window (mode, workspaces, audit log)",
+        help="Open settings window (Tauri shell or tk fallback)",
+    )
+    parser.add_argument(
+        "--shell",
+        action="store_true",
+        help="Desktop shell — Tauri window + localhost Python API",
+    )
+    parser.add_argument(
+        "--shell-server",
+        action="store_true",
+        help="Shell API only on 127.0.0.1 (for: cd shell && npm run tauri dev)",
     )
     parser.add_argument(
         "--logs",
@@ -125,9 +135,24 @@ def main() -> int:
         return 0
 
     if args.settings:
+        if get("ui.shell_settings", True):
+            from celestia_core.shell_launch import launch_shell
+
+            return launch_shell(route="settings")
         from ui.settings_app import run_settings
 
         run_settings()
+        return 0
+
+    if args.shell:
+        from celestia_core.shell_launch import launch_shell
+
+        return launch_shell(route="home")
+
+    if args.shell_server:
+        from celestia_core.shell_server import default_port, run_server_forever
+
+        run_server_forever(default_port())
         return 0
 
     if args.logs is not None:

@@ -47,6 +47,34 @@ When you change `config.yaml` on purpose, run `--trust-config` again so you don'
 .\venv\Scripts\python.exe run_celestia.py --screen "..." --screen-mode active_window
 ```
 
+## Optional: desktop shell (Tauri)
+
+The native window (`--shell`) needs **Node.js 20+**, **Rust** ([rustup.rs](https://rustup.rs/)), and **WebView2** (usually already on Windows 10/11).
+
+One-time setup:
+
+```powershell
+cd C:\celestia\shell
+npm install
+```
+
+Run the shell (starts the Python API on `127.0.0.1:8765` and opens the window):
+
+```powershell
+cd C:\celestia
+.\venv\Scripts\python.exe run_celestia.py --shell
+```
+
+Development (hot reload — start the API in one terminal first):
+
+```powershell
+.\venv\Scripts\python.exe run_celestia.py --shell-server
+cd shell
+npm run tauri dev
+```
+
+See [shell/README.md](../shell/README.md) for details.
+
 In `-i`, type `help` for commands, or read [guide/commands.md](guide/commands.md).
 
 **Security quick reference:**

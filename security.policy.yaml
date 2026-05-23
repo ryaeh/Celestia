@@ -11,6 +11,14 @@ app_allowlist:
   - mspaint
   - paint
   - snippingtool
+  - explorer
+  - msedge
+  - edge
+  - chrome
+  - firefox
+  - wordpad
+  - magnify
+  - taskmgr
 
 allowed_executables: []
 

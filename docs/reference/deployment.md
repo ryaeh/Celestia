@@ -2,7 +2,9 @@
 
 **Need:** Ollama + `run_celestia.py` (everything else is inside that process).
 
-**Don’t need:** Docker for memory, LM Studio, separate whisper/orpheus/mem0 servers, Orpheus-FastAPI running as HTTP.
+**Don’t need:** Docker for memory (Chroma is default), LM Studio, separate whisper/orpheus/mem0 servers, Orpheus-FastAPI running as HTTP.
+
+**Optional Docker:** Qdrant / n8n / LiveKit — see [optional-docker/README.md](../optional-docker/README.md).
 
 **Nice to have on disk:**
 

@@ -47,3 +47,10 @@ def find_builtin_exe(names: list[str]) -> Path | None:
         if p.is_file():
             return p
     return None
+
+
+def find_installed_exe(
+    names: list[str],
+    relative_paths: list[str] | None = None,
+) -> Path | None:
+    return find_builtin_exe(names)

@@ -1,149 +1,121 @@
 # Backlog — planned and to-be-added
 
-Features **not shipped yet**, or only sketched in code/config. Use this doc to track ideas; [roadmap.md](roadmap.md) stays the phase timeline.
+Features **not shipped yet**. Shipped work is listed in [shipped-audit.md](shipped-audit.md). Phase timeline: [roadmap.md](roadmap.md). Linear views: [linear-views.md](linear-views.md).
 
-**Status legend:** `planned` · `exploring` · `deferred`
+**Horizon:** `short` · `long` · `opt` (maps to Linear labels `short-term`, `long-term`, `optimization`)
 
----
-
-## Custom (user ideas)
-
-Add rows here when you have new features beyond the phases below.
-
-| Item | Status | Notes |
-|------|--------|-------|
-| **Session chat memory (tray/voice)** | planned | Tray multi-turn chat: same history as `-i` |
-| **Quiet UI — drop console system messages** | planned | After Phase 4 UI: stop printing `[memory] saved: …`, vision pass spam (`pass 1/2`, capture mode), security mode lines, tray status noise; emotion/expression chatter (`<laugh>`, tag hints) only in UI or optional `verbose` / Activity panel — REPL stays clean, chat feels like a person not a log |
+**Status:** `planned` · `exploring` · `deferred`
 
 ---
 
-## Near term (Phase 3)
+## Custom
 
-| Item | Status | Notes |
-|------|--------|-------|
-| **Tool risk classes** | exploring | Tag tools low/medium/high; scoped allows low+medium without arm |
-| **tray_max_mode** | exploring | e.g. tray voice never exceeds `scoped` unless config allows |
+| Item | Horizon | Status | Done when |
+|------|---------|--------|-----------|
+| **Tray/voice in-app session chat** | short | planned | Tray or Phase 4 UI keeps multi-turn history like `-i` without a separate console window; voice uses same session store. |
+| **Quiet UI — drop console system messages** | opt | planned | No `[memory] saved`, vision pass spam, or mode lines in default REPL/chat; optional `verbose` or Activity panel only. |
 
 ---
 
-## Security and audit (polish)
+## Near term (Phase 3 polish)
 
-| Item | Status | Notes |
-|------|--------|-------|
-| **Activity log UI (full)** | planned | Phase 4 — richer than settings spike |
-| **PIN / type ARM to arm** | deferred | Optional gate before armed mode |
-| **Per-source mode caps** | exploring | Different max mode for tray vs CLI |
+| Item | Horizon | Status | Done when |
+|------|---------|--------|-----------|
+| **Tool risk classes** | short | exploring | Tools tagged low/medium/high; scoped allows low+medium without `arm`; documented in [security.md](../guide/security.md). |
+
+---
+
+## Security and audit
+
+| Item | Horizon | Status | Done when |
+|------|---------|--------|-----------|
+| **Activity log UI (full)** | long | planned | UI shows tool audit + security events; filterable; replaces reading raw JSONL. |
+| **PIN / type ARM to arm** | long | deferred | Optional confirm before armed; configurable in `config.yaml`. |
+| **Per-source mode caps** | short | exploring | e.g. tray max `scoped`, CLI max `armed` via config. |
 
 ---
 
 ## Phase 4 — Product UI
 
-| Item | Status | Notes |
-|------|--------|-------|
-| **Desktop shell (Tauri)** | planned | Replace minimal tk settings |
-| **Vision confirm in UI** | planned | Replace or supplement tk preview |
-| **Activity / status panel** | planned | Absorb today's console `[vision]`, `[memory]`, `[security]` lines — optional "developer verbose" toggle |
-| **Quiet default output** | planned | Same as Custom row: no system messages in chat stream; memory save + expression tags invisible unless verbose |
-| **Autostart / installer** | deferred | Windows service or login startup |
-| **Per-user personality files** | deferred | `personalities/users/<id>.yaml` |
+| Item | Horizon | Status | Done when |
+|------|---------|--------|-----------|
+| **Desktop shell (Tauri)** | long | exploring | v1: `--shell`, Settings, `/status` API; Chat/Personality/Activity later. tk optional via `ui.shell_settings: false`. |
+| **Vision confirm in UI** | long | planned | Screenshot preview + confirm in shell; tk dialog optional fallback. |
+| **Activity / status panel** | opt | planned | `[vision]`, `[memory]`, `[security]` in panel; REPL quiet by default. |
+| **Quiet default output** | opt | planned | Chat stream has no system tags unless verbose; overlaps Activity panel. |
+| **Autostart / installer** | long | deferred | Login or service install documented and opt-in. |
+| **Per-user personality files** | long | deferred | `personalities/users/<id>.yaml` load by `app.user_id`. |
 
 ---
 
-## Ideas (worth a look later)
+## Ideas (later)
 
-Not committed — good fits for Celestia beyond current phases.
-
-| Item | Notes |
-|------|--------|
-| **Wake word / always-listening** | Optional "Celestia" hotword; heavy on GPU and privacy — off by default |
-| **Proactive nudges** | "You asked me to remind you…" from memory or calendar; needs rules so she's not annoying |
-| **Focus / do-not-disturb** | Suppress TTS and popups while gaming or in a call |
-| **Conversation threads** | Named chats (work / personal) with separate memory inject scope |
-| **Skill packs** | Drop-in folders: `skills/github/`, `skills/spotify/` with their own allowlists |
-| **Undo last PC action** | One-step rollback where possible (close app we opened, not delete file) |
-| **Screenshot history** | Local ring buffer of recent captures for re-ask without re-crop |
-| **Model routing** | Fast model for chit-chat, bigger model when tools or vision needed |
-| **Offline-only mode** | Hard block outbound URLs/tools; badge in tray |
-| **Export / import memory** | Backup `data/chroma` + personality as a zip for new machine |
-| **Plugin MCP tools** | Let power users attach MCP servers under scoped rules |
-| **Windows notification read** | Read toast text in scoped mode (privacy confirm) |
-| **Routine macros** | "Start work mode" → scoped + open projects folder + briefing — user-defined |
+| Item | Horizon | Notes / done when |
+|------|---------|-------------------|
+| **Wake word / always-listening** | long | Hotword optional; off by default; GPU/privacy called out in guide. |
+| **Proactive nudges** | long | Memory/calendar reminders with rate limits. |
+| **Focus / do-not-disturb** | opt | Suppress TTS/popups during gaming or calls. |
+| **Conversation threads** | long | Named chats; separate memory inject scope. |
+| **Skill packs** | long | `skills/<pack>/` drop-in + optional allowlist file. |
+| **Undo last PC action** | short | Close last opened app where possible; no file undelete. |
+| **Screenshot history** | opt | Ring buffer for re-ask without re-crop. |
+| **Model routing** | opt | Small model for chat, large for tools/vision; config-driven. |
+| **Offline-only mode** | long | Hard block outbound tools; tray badge. |
+| **Export / import memory** | long | Zip `data/chroma` + personalities for new machine. |
+| **Plugin MCP tools** | long | Attach MCP servers under scoped rules. |
+| **Windows notification read** | long | Toast text in scoped with confirm. |
+| **Routine macros** | long | User-defined “work mode” macro (mode + folders + briefing). |
 
 ---
 
 ## Integrations
 
-| Item | Status | Notes |
-|------|--------|-------|
-| **VirusTotal check skill** | exploring | See research below — file hash lookup + URL/domain scan via VT API v3; natural phrases: “check X file on VirusTotal”, “is Y site flagged?” |
-| **Morning briefing skill** | deferred | Calendar, weather, todos — needs trusted sources |
-| **Qdrant option** | exploring | Config stub exists; Chroma is default |
+| Item | Horizon | Status | Done when |
+|------|---------|--------|-----------|
+| **VirusTotal check skill** | short | exploring | `virustotal_check_file` / URL; hash-first; confirm before upload; key in `.env`. Research below. |
+| **Morning briefing skill** | long | deferred | Calendar/weather/todos from trusted APIs; scoped/armed gates. |
+| **Qdrant option** | long | exploring | `memory.vector_store: qdrant` works with [optional-docker](../optional-docker/README.md). |
 
-### VirusTotal integration (research — not implemented)
+### VirusTotal (research)
 
-**Verdict: feasible** for personal use as an optional skill + tool(s), with clear limits.
-
-| Capability | API (v3) | Celestia fit |
-|------------|----------|----------------|
-| **File already known to VT** | `GET /files/{sha256}` (or MD5/SHA1) | Compute hash locally, no upload — fast, lower privacy risk |
-| **Unknown file** | `POST /files` (upload) | Works, but **uploads enter VT’s dataset** unless Premium **Private Scanning** — must **confirm** before upload |
-| **Website / URL** | `POST /urls` → poll `GET /analyses/{id}` or `GET /urls/{url_id}` | Async (seconds–minutes); AI summarizes `last_analysis_stats` (malicious / suspicious / harmless counts) |
-| **Domain only** | `GET /domains/{domain}` | “Check example.com” without full URL path |
-
-**Requirements:** free [VirusTotal API key](https://www.virustotal.com/gui/join-us) in `.env` (e.g. `VIRUSTOTAL_API_KEY`), never committed. HTTP client only (`requests` / `httpx`).
-
-**Public API limits (important):** ~**500 requests/day**, **4/minute** ([public vs premium](https://docs.virustotal.com/reference/public-vs-premium-api)). Fine for occasional “check this file/site”; not for scanning folders or monitoring. Premium removes caps and adds private file scan.
-
-**Terms / usage:** Public API is for **non-commercial** use and has rules about automated workflows — treat as **personal assistant**, not a product backend. Heavy or commercial use needs Premium.
-
-**Security / scoped mode ideas (when built):**
-
-- Tool only in **scoped** or **armed**, with explicit user intent (no background scanning).
-- **Hash lookup first**; upload only after confirm (“This file isn’t in VT yet — upload for scan?”).
-- URL checks: normalize URL; optional tie-in with `url_allowlist` is separate (VT check is user-requested, not auto on every open).
-- Never log API key; audit log records hash/URL checked, not file bytes.
-
-**Simpler fallback (no API):** open `https://www.virustotal.com/gui/file/{sha256}` or URL report in browser — zero quota, user reads the page; weaker for “tell me if it flags” in chat.
-
-**Suggested tools (future):** `virustotal_check_file`, `virustotal_check_url` (or one tool with `kind`); agent summarizes engines flagged vs clean.
+Feasible via API v3: `GET /files/{hash}`, `POST /urls`, ~500 req/day public limit. Personal use only; confirm before file upload (shared dataset). See prior research in git history or Linear **CC-32**.
 
 ---
 
-## Platform — Linux (summer target)
+## Platform — Linux (summer)
 
-| Item | Status | Notes |
-|------|--------|-------|
-| **platform/linux.py** | planned | Path rules, protected prefixes, XDG workspaces |
-| **Tray / hotkeys on Linux** | planned | X11/Wayland; portal or pynput |
-| **open_path via xdg-open** | planned | Same allowlist model as Windows |
+| Item | Horizon | Status | Done when |
+|------|---------|--------|-----------|
+| **platform/linux.py** | long | planned | Path rules, XDG workspaces, protected prefixes. |
+| **Tray / hotkeys on Linux** | long | planned | X11/Wayland tray; hotkeys via portal or pynput. |
+| **open_path via xdg-open** | long | planned | Same allowlist model as Windows. |
 
 ---
 
 ## Vision and voice
 
-| Item | Status | Notes |
-|------|--------|-------|
-| **Gaming / low-VRAM profile UI preset** | exploring | See [reference/performance.md](../reference/performance.md) |
+| Item | Horizon | Status | Done when |
+|------|---------|--------|-----------|
+| **Gaming / low-VRAM profile preset** | opt | exploring | One config preset documented in [performance.md](../reference/performance.md). |
 
 ---
 
 ## PC control and files
 
-| Item | Status | Notes |
-|------|--------|-------|
-| **Recursive directory listing (scoped)** | exploring | List dir under workspace only |
-| **Rename / move in workspace** | deferred | Higher risk; confirm heavily |
-| **More built-in apps in allowlist** | exploring | snippingtool, etc. — config-driven |
+| Item | Horizon | Status | Done when |
+|------|---------|--------|-----------|
+| **Recursive directory listing (scoped)** | short | exploring | `list_dir` recursive only under workspace roots. |
+| **Rename / move in workspace** | long | deferred | Scoped rename/move with confirm; audit logged. |
 
 ---
 
 ## Developer / ops
 
-| Item | Status | Notes |
-|------|--------|-------|
-| **Automated test suite** | deferred | Today: [testing/checklist.md](../testing/checklist.md) manual only |
-| **CI on Windows** | deferred | Lint + smoke tests |
-| **Config migration tool** | deferred | atlas → celestia keys if needed |
+| Item | Horizon | Status | Done when |
+|------|---------|--------|-----------|
+| **Automated test suite** | long | deferred | pytest smoke for scope, url_policy, open_dispatch. |
+| **CI on Windows** | long | deferred | GitHub Actions lint + smoke on push. |
+| **Config migration tool** | long | deferred | atlas → celestia key migration if still needed. |
 
 ---
 
@@ -151,14 +123,14 @@ Not committed — good fits for Celestia beyond current phases.
 
 | Item | Reason |
 |------|--------|
-| Run Celestia as Administrator by default | Expands blast radius; use normal user + UAC |
-| Skip vision confirm by default | Privacy and mistake prevention |
+| Run Celestia as Administrator by default | Blast radius; normal user + UAC |
+| Skip vision confirm by default | Privacy and mistakes |
 | Docker required for memory | Chroma local is the design |
 
 ---
 
-## How to add an idea
+## How to maintain
 
-1. Add a row to the best section above with `planned` or `exploring`.  
-2. If it changes phase boundaries, note it in [roadmap.md](roadmap.md).  
-3. When shipped, **remove** from this file and document behavior in the [user guide](../README.md#user-guide).
+1. Add a row with **Horizon** + **Status** + **Done when**.  
+2. Create/update Linear issue on team **Celestia** with matching label.  
+3. When shipped: **Done** in Linear, remove row here, note in [shipped-audit.md](shipped-audit.md) and [guide/](../guide/).

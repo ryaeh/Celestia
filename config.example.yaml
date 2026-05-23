@@ -82,6 +82,7 @@ security:
   mode: safe
   default_armed: false
   shared_armed_state: true
+  # tray_max_mode: scoped   # optional: cap tray/voice/screen (safe | scoped | armed)
   # Allowlists & workspaces live in security.policy.yaml (copy from security.policy.example.yaml)
   file_read_max_bytes: 262144
   file_write_max_bytes: 524288
@@ -94,11 +95,15 @@ security:
 
 ui:
   tray: true
+  shell_port: 8765
+  shell_settings: true   # --settings opens Tauri shell; false = tk window
+  # shell_chat_store: data/shell_chat/sessions.json
 
 automation:
   n8n_enabled: false
   n8n_url: http://localhost:5678
   n8n_webhook_path: /webhook/celestia
 
+# Only used when memory.vector_store is qdrant; start Qdrant via docs/optional-docker/
 docker:
   qdrant_port: 6333

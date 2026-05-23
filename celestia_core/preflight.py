@@ -46,7 +46,10 @@ def check_memory() -> tuple[bool, str]:
             return True, f"Memory: Qdrant at {host}:{port}"
         return False, f"Qdrant returned {r.status_code}"
     except requests.RequestException as e:
-        return False, f"Qdrant not reachable — docker compose up -d qdrant ({e})"
+        return False, (
+            f"Qdrant not reachable at {host}:{port} ({e}). "
+            "If using Qdrant: cd docs/optional-docker && docker compose up -d qdrant"
+        )
 
 
 def check_voice() -> tuple[bool, str]:

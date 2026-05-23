@@ -40,11 +40,6 @@ def _mode_title(mode: str) -> str:
     return {"armed": "ARMED", "scoped": "Scoped", "safe": "Safe"}.get(mode, mode)
 
 
-def _next_mode(mode: str) -> str:
-    order = ("safe", "scoped", "armed")
-    return order[(order.index(mode) + 1) % len(order)]
-
-
 def _icon_colors(mode: str) -> tuple[tuple[int, int, int], tuple[int, int, int]]:
     if mode == "armed":
         return (140, 40, 40), (255, 100, 100)
@@ -97,12 +92,25 @@ class CelestiaTray:
         finally:
             self._busy.release()
 
+    def _apply_mode(self, mode: str, icon=None) -> None:
+        warn = security.set_mode(mode, source="tray")
+        if warn:
+            print(warn)
+        effective = security.get_mode()
+        if icon is not None:
+            icon.icon = self._icon_image(effective)
+            icon.title = f"{self._name} — {_mode_title(effective)}"
+        letter = {"safe": "S", "scoped": "C", "armed": "A"}.get(effective, "?")
+        print(
+            f"[security] mode: {effective} "
+            f"(tooltip + menu; icon letter: {letter})"
+        )
+
     def _cycle_mode(self, icon) -> None:
-        nxt = _next_mode(security.get_mode())
-        security.set_mode(nxt)
-        icon.icon = self._icon_image(nxt)
-        icon.title = f"{self._name} — {_mode_title(nxt)}"
-        print(f"[security] mode: {nxt} (tooltip + menu show this; icon letter: {nxt[0].upper()})")
+        nxt = security.next_mode_cycled(
+            security.get_mode(), max_mode=security.get_tray_max_mode()
+        )
+        self._apply_mode(nxt, icon)
 
     def _icon_image(self, mode: str):
         from PIL import Image, ImageDraw, ImageFont
@@ -131,12 +139,10 @@ class CelestiaTray:
             print_help(for_tray=True)
             return True
         if low == "arm":
-            security.set_mode("armed")
-            print("[security] ARMED")
+            self._apply_mode("armed")
             return True
         if low in ("disarm", "safe"):
-            security.set_mode("safe")
-            print("[security] safe")
+            self._apply_mode("safe")
             return True
         if low == "scope" or low.startswith("scope "):
             from celestia_core.scope import add_workspace, format_status, remove_workspace
@@ -145,8 +151,7 @@ class CelestiaTray:
             if len(parts) == 1:
                 print(format_status())
             elif parts[1] in ("safe", "scoped", "armed"):
-                security.set_mode(parts[1])
-                print(f"[security] mode: {parts[1]}")
+                self._apply_mode(parts[1])
             elif parts[1] == "add" and len(parts) > 2:
                 print(add_workspace(parts[2]))
             elif parts[1] == "remove" and len(parts) > 2:
@@ -278,7 +283,7 @@ class CelestiaTray:
         import pystray
 
         mode = security.get_mode()
-        nxt = _next_mode(mode)
+        nxt = security.next_mode_cycled(mode, max_mode=security.get_tray_max_mode())
 
         def on_voice(_icon, _item):
             threading.Thread(target=self._on_voice_ptt, daemon=True).start()
