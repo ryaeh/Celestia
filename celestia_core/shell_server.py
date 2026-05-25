@@ -132,6 +132,12 @@ class PrefPatch(BaseModel):
     value: Any
 
 
+class VisionAnalyzeBody(BaseModel):
+    capture_id: str
+    question: str = "Describe this screenshot."
+    session_id: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Shared helpers (unchanged from original)
 # ---------------------------------------------------------------------------
@@ -179,6 +185,7 @@ def build_status() -> dict[str, Any]:
         "tray_max_mode": security.get_tray_max_mode(),
         "personality": get("personality.active", "default"),
         "ollama_ok": ollama_ok,
+        "vision_enabled": bool(get("vision.enabled", False)),
         "checks": [{"ok": ok, "message": msg} for ok, msg in checks],
     }
 
@@ -226,6 +233,55 @@ def patch_pref(body: PrefPatch):
     if not msg.startswith("ok"):
         return JSONResponse(status_code=400, content={"error": msg})
     return {"ok": True, "key": body.key, "value": body.value}
+
+
+@app.post("/vision/capture")
+def post_vision_capture():
+    """Take a full-screen screenshot, store in ring buffer, return base64."""
+    if not get("vision.enabled", False):
+        return JSONResponse(status_code=400, content={"error": "Vision is disabled in config.yaml"})
+    try:
+        from skills.vision.capture import capture_fullscreen
+        from skills.vision.history import push
+        import base64
+        from PIL import Image
+
+        path = capture_fullscreen()
+        entry_id = push(path)
+        b64 = base64.b64encode(path.read_bytes()).decode()
+        with Image.open(path) as img:
+            w, h = img.size
+        return {"id": entry_id, "base64": b64, "width": w, "height": h}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/vision/analyze")
+def post_vision_analyze(body: VisionAnalyzeBody):
+    """Run vision analysis on a captured screenshot and persist to chat session."""
+    if not get("vision.enabled", False):
+        return JSONResponse(status_code=400, content={"error": "Vision is disabled in config.yaml"})
+    from skills.vision.history import get_path
+    path = get_path(body.capture_id)
+    if path is None:
+        return JSONResponse(status_code=404, content={"error": "Capture not found"})
+    try:
+        from skills.vision.analyze import analyze_image
+        from celestia_core.shell_chat import append_raw_turn
+
+        answer = analyze_image(path, body.question)
+        user_msg = f"[screenshot] {body.question}"
+        result = append_raw_turn(user_msg, answer, session_id=body.session_id)
+        return result
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/vision/history")
+def get_vision_history(n: int = 20):
+    """Return the most-recent n screenshots from the ring buffer."""
+    from skills.vision.history import list_entries
+    return {"entries": list_entries(n)}
 
 
 @app.get("/workspaces")

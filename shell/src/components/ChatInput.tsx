@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Mic, MicOff, ArrowUp } from "lucide-react";
+import { Mic, MicOff, ArrowUp, Camera } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ChatInputProps = {
@@ -12,6 +12,8 @@ type ChatInputProps = {
   onPttStart?: () => void;
   onPttStop?: () => void;
   onPttCancel?: () => void;
+  visionEnabled?: boolean;
+  onVisionCapture?: () => void;
 };
 
 export default function ChatInput({
@@ -22,6 +24,8 @@ export default function ChatInput({
   pttListening = false,
   onPttStart,
   onPttStop,
+  visionEnabled = false,
+  onVisionCapture,
 }: ChatInputProps) {
   const locked = disabled || busy;
 
@@ -88,6 +92,20 @@ export default function ChatInput({
             }
           </Button>
         )}
+        {visionEnabled && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="chat-ptt h-8 w-8 shrink-0"
+            disabled={locked || pttListening}
+            aria-label="Capture screenshot"
+            title="Capture screenshot"
+            onClick={() => onVisionCapture?.()}
+          >
+            <Camera size={16} />
+          </Button>
+        )}
         <Button
           type="submit"
           variant="ghost"
@@ -100,8 +118,9 @@ export default function ChatInput({
         </Button>
       </form>
       <p className="chat-disclaimer">
-        Click <span className="chat-ptt-hint">mic</span> to start talking, click again to send.
-        Hotkey: <code>ctrl+alt+shift+v</code> (hold). Celestia may make mistakes.
+        Click <span className="chat-ptt-hint">mic</span> to start, click again to send.
+        {visionEnabled && <> · <span className="chat-ptt-hint">Camera</span> to capture screen.</>}
+        {" "}Celestia may make mistakes.
       </p>
     </div>
   );

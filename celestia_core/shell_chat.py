@@ -502,6 +502,43 @@ def send_message_stream(
     }
 
 
+def append_raw_turn(
+    user_text: str,
+    assistant_text: str,
+    *,
+    session_id: str | None = None,
+) -> dict[str, Any]:
+    """Append a user+assistant pair to a session without LLM inference.
+
+    Used by the vision confirm flow (CC-49) to persist screenshot Q&A.
+    """
+    with _store_lock():
+        active_id, sessions = _read_store()
+        active_id, sessions = _ensure_default_session(sessions, active_id)
+        sid = session_id or active_id
+        assert sid is not None
+        state = sessions.setdefault(
+            sid,
+            {
+                "title": "New chat",
+                "updated_at": time.time(),
+                "history": None,
+                "consolidate_from": 0,
+                "turn_count": 0,
+            },
+        )
+        history = list(state.get("history") or [])
+        history.append({"role": "user", "content": user_text})
+        history.append({"role": "assistant", "content": assistant_text})
+        state["history"] = history
+        state["updated_at"] = time.time()
+        if state.get("title") in (None, "", "New chat"):
+            state["title"] = _title_from_message(user_text)
+        _write_store(active_id, sessions)
+        messages = _ui_messages(history)
+    return {"session_id": sid, "messages": messages}
+
+
 def clear_session(session_id: str | None = None) -> str:
     """Start a fresh session. Returns new session id."""
     with _store_lock():

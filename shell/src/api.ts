@@ -85,6 +85,7 @@ export type Status = {
   tray_max_mode: string | null;
   personality: string;
   ollama_ok: boolean;
+  vision_enabled?: boolean;
   checks: { ok: boolean; message: string }[];
 };
 
@@ -137,6 +138,56 @@ export async function removeWorkspace(path: string): Promise<{ message: string; 
   });
   if (!r.ok) throw new Error(`workspaces/remove ${r.status}`);
   return r.json();
+}
+
+// ---------------------------------------------------------------------------
+// Vision (CC-49 / CC-68)
+// ---------------------------------------------------------------------------
+
+export type VisionCapture = {
+  id: string;
+  base64: string;
+  width: number;
+  height: number;
+};
+
+export type VisionHistoryEntry = {
+  id: string;
+  ts: string;
+  base64: string;
+};
+
+export async function visionCapture(): Promise<VisionCapture> {
+  const r = await apiFetch("/vision/capture", { method: "POST" });
+  if (!r.ok) {
+    const d = await r.json().catch(() => ({}));
+    throw new Error((d as { error?: string }).error ?? `vision/capture ${r.status}`);
+  }
+  return r.json();
+}
+
+export async function visionAnalyze(
+  captureId: string,
+  question: string,
+  sessionId: string,
+): Promise<{ session_id: string; messages: ChatMessage[] }> {
+  const r = await apiFetch("/vision/analyze", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ capture_id: captureId, question, session_id: sessionId }),
+  });
+  if (!r.ok) {
+    const d = await r.json().catch(() => ({}));
+    throw new Error((d as { error?: string }).error ?? `vision/analyze ${r.status}`);
+  }
+  return r.json();
+}
+
+export async function fetchVisionHistory(n = 20): Promise<VisionHistoryEntry[]> {
+  const r = await apiFetch(`/vision/history?n=${n}`);
+  if (!r.ok) throw new Error(`vision/history ${r.status}`);
+  const d = await r.json();
+  return d.entries ?? [];
 }
 
 // ---------------------------------------------------------------------------

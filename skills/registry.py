@@ -14,6 +14,7 @@ from skills.pc_control.tools import (
     execute_pc,
 )
 from skills.web.tools import WEB_TOOL_SCHEMAS, fetch_page, web_search
+from skills.briefing.tools import BRIEFING_TOOL_SCHEMA, morning_briefing
 
 _OPEN_TRIGGERS = (
     "open ",
@@ -43,9 +44,10 @@ def tool_schemas(user_message: str = "") -> list:
         tools = list(pc)
         if get("memory.enabled", True):
             tools += MEMORY_TOOL_SCHEMAS
-        # Web search is read-only and doesn't require PC access — enable in safe mode too.
+        # Web search and briefing are read-only — safe in all modes.
         if get("skills.web.enabled", True):
             tools += WEB_TOOL_SCHEMAS
+        tools += BRIEFING_TOOL_SCHEMA
         return tools
 
     pc = list(PC_TOOL_SCHEMAS)
@@ -57,6 +59,7 @@ def tool_schemas(user_message: str = "") -> list:
         tools += MEMORY_TOOL_SCHEMAS
     if get("skills.web.enabled", True):
         tools += WEB_TOOL_SCHEMAS
+    tools += BRIEFING_TOOL_SCHEMA
     return tools
 
 
@@ -140,6 +143,11 @@ def execute_tool(
                 arguments["url"],
                 max_chars=int(arguments.get("max_chars", 3000)),
             )
+            security.audit_tool(name, arguments, result, source=source)
+            return result
+
+        if name == "morning_briefing":
+            result = morning_briefing(city=arguments.get("city", ""))
             security.audit_tool(name, arguments, result, source=source)
             return result
 

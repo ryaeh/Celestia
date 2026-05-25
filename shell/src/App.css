@@ -894,6 +894,74 @@ body {
 .info-value { color: var(--text-muted); line-height: 1.55; }
 .info-value code { font-size: 0.78rem; }
 
+/* ── Vision confirm flow (CC-49) ────────────────────────────────────────── */
+
+.vision-preview-wrap { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.vision-bubble { max-width: 80%; }
+
+.vision-img-wrap {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-light);
+  background: var(--bg-panel);
+}
+
+.vision-img {
+  display: block;
+  max-width: 100%;
+  max-height: 280px;
+  width: auto;
+  height: auto;
+  border-radius: 7px;
+}
+
+.vision-img-label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  font-size: 0.7rem;
+  padding: 0.2rem 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.vision-confirm-bubble { max-width: 75%; }
+
+/* CC-68 screenshot history grid (Settings) */
+.vision-history-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0.5rem;
+}
+.vision-thumb-wrap {
+  position: relative;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border-light);
+  background: var(--bg-panel);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.vision-thumb-wrap:hover { border-color: var(--accent-bright); }
+.vision-thumb { display: block; width: 100%; height: 80px; object-fit: cover; }
+.vision-thumb-ts {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  font-size: 0.65rem;
+  text-align: center;
+  padding: 0.15rem;
+}
+
 /* ── Runtime pref controls ──────────────────────────────────────────────── */
 
 .pref-grid { display: flex; flex-direction: column; gap: 0.85rem; }

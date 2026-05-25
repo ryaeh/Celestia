@@ -4,12 +4,14 @@ import {
   fetchAuditTail,
   fetchPrefs,
   fetchStatus,
+  fetchVisionHistory,
   fetchWorkspaces,
   removeWorkspace,
   setMode,
   setPref,
   type AuditEntry,
   type Status,
+  type VisionHistoryEntry,
 } from "../api";
 import type { Route } from "../App";
 import { Button } from "@/components/ui/button";
@@ -245,6 +247,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
   const [workspaces, setWorkspaces] = useState<string[]>([]);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [prefs, setPrefs] = useState<Record<string, unknown>>({});
+  const [visionHistory, setVisionHistory] = useState<VisionHistoryEntry[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -258,16 +261,18 @@ export default function Settings({ onNavigate }: SettingsProps) {
   const refresh = useCallback(async () => {
     try {
       setError(null);
-      const [s, ws, log, p] = await Promise.all([
+      const [s, ws, log, p, vh] = await Promise.all([
         fetchStatus(),
         fetchWorkspaces(),
         fetchAuditTail(50),
         fetchPrefs().catch(() => ({ prefs: {}, saved: {} })),
+        fetchVisionHistory(10).catch(() => []),
       ]);
       setStatus(s);
       setWorkspaces(ws);
       setAudit(log);
       setPrefs(p.prefs);
+      setVisionHistory(vh);
     } catch (e) {
       setError(String(e));
     }
@@ -553,26 +558,44 @@ export default function Settings({ onNavigate }: SettingsProps) {
           </p>
         </Section>
 
-        {/* ── Vision / Screenshot (CC-68) ──────────────────────────────── */}
+        {/* ── Vision / Screenshot (CC-49 / CC-68) ─────────────────────── */}
         <Section
           icon={<Camera size={16} />}
           title="Vision & Screenshots"
-          subtitle="Screenshot history ring buffer — CC-68"
+          subtitle="Screenshot history ring buffer — last 10 captures"
           expanded={openSection === "vision"}
           onToggle={() => toggle("vision")}
           badge={
-            <Badge variant="secondary" className="text-[0.68rem] bg-[var(--bg-panel)] border-[var(--border-light)]">
-              Soon
-            </Badge>
+            status?.vision_enabled
+              ? <Badge variant="secondary" className="text-[var(--safe)] border-[var(--safe)]/30 bg-[var(--safe)]/10 text-[0.68rem]">On</Badge>
+              : <Badge variant="secondary" className="text-[0.68rem] bg-[var(--bg-panel)] border-[var(--border-light)]">Off</Badge>
           }
         >
-          <p className="text-sm text-[var(--text-muted)] mt-2">
-            CC-68 implements a local ring buffer of recent screenshots so you can re-ask about a capture
-            without taking a new one. Hotkey triggers (e.g. <code>Ctrl+Alt+Shift+S</code>) and viewing
-            recent crops will appear here once implemented.
-          </p>
-          <p className="text-[0.72rem] text-[var(--text-muted)] mt-2 opacity-70">
-            Current vision hotkey: configured in <code>config.yaml</code> › <code>vision.hotkey</code>.
+          {!status?.vision_enabled ? (
+            <p className="text-sm text-[var(--text-muted)] mt-2">
+              Vision is disabled. Set <code>vision.enabled: true</code> in <code>config.yaml</code> and ensure an Ollama vision model is installed (e.g. <code>llama3.2-vision:11b</code>).
+            </p>
+          ) : visionHistory.length === 0 ? (
+            <p className="text-sm text-[var(--text-muted)] mt-2">
+              No screenshots yet. Click the <Camera size={12} style={{ display: "inline" }} /> camera button in the chat input to capture a screenshot.
+            </p>
+          ) : (
+            <div className="vision-history-grid mt-3">
+              {visionHistory.map((e) => (
+                <div key={e.id} className="vision-thumb-wrap">
+                  <img
+                    src={`data:image/png;base64,${e.base64}`}
+                    alt={`Screenshot ${e.ts}`}
+                    className="vision-thumb"
+                    title={e.ts}
+                  />
+                  <span className="vision-thumb-ts">{e.ts.slice(11, 16)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="text-[0.72rem] text-[var(--text-muted)] mt-3 opacity-70">
+            Captures stored in <code>data/vision_history/</code>. Max 20 entries. Vision hotkey: <code>{String(status?.vision_enabled ? "ctrl+shift+s (config)" : "–")}</code>.
           </p>
         </Section>
 

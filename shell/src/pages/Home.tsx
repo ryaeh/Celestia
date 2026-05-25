@@ -7,12 +7,16 @@ import {
   pttStart,
   pttStop,
   streamChatMessage,
+  visionCapture,
+  visionAnalyze,
   type ChatMessage,
   type Status,
+  type VisionCapture,
 } from "../api";
 import StatusHeader from "../components/StatusHeader";
 import ChatInput from "../components/ChatInput";
 import Avatar from "../components/Avatar";
+import VisionPreview from "../components/VisionPreview";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -32,6 +36,8 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
   const [streamingTokens, setStreamingTokens] = useState(false);
   const [pttListening, setPttListening] = useState(false);
   const [threadAnim, setThreadAnim] = useState(0);
+  const [visionPending, setVisionPending] = useState<VisionCapture | null>(null);
+  const [visionBusy, setVisionBusy] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const pttLocal = useRef(false);
   const pttEnding = useRef(false);
@@ -120,6 +126,41 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
     }
   }
 
+  async function onVisionCapture() {
+    if (chatBusy || pttListening) return;
+    setChatBusy(true);
+    setError(null);
+    try {
+      const cap = await visionCapture();
+      setVisionPending(cap);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setChatBusy(false);
+    }
+  }
+
+  async function onVisionConfirm(question: string) {
+    if (!visionPending) return;
+    setVisionBusy(true);
+    setError(null);
+    try {
+      const result = await visionAnalyze(visionPending.id, question, sessionId);
+      setMessages(result.messages);
+      onSidebarRefresh?.();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setVisionBusy(false);
+      setVisionPending(null);
+    }
+  }
+
+  function onVisionCancel() {
+    setVisionPending(null);
+    setVisionBusy(false);
+  }
+
   async function onSend(text: string) {
     setChatBusy(true);
     setStreamingTokens(false);
@@ -171,7 +212,8 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
   }
 
   const name = status?.display_name ?? "Celestia";
-  const showWelcome = messages.length === 0 && !chatBusy && !sessionLoading && !pttListening;
+  const visionEnabled = status?.vision_enabled ?? false;
+  const showWelcome = messages.length === 0 && !chatBusy && !sessionLoading && !pttListening && !visionPending;
   const welcomeText = !statusReady
     ? "Connecting…"
     : `Hi — I'm ${name}. Ask me anything; your chats appear in the sidebar.`;
@@ -233,7 +275,18 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
                 </article>
               )}
 
-              {chatBusy && !pttListening && !streamingTokens && (
+              {visionPending && (
+                <VisionPreview
+                  captureId={visionPending.id}
+                  base64={visionPending.base64}
+                  agentName={name}
+                  busy={visionBusy}
+                  onConfirm={onVisionConfirm}
+                  onCancel={onVisionCancel}
+                />
+              )}
+
+              {chatBusy && !pttListening && !streamingTokens && !visionPending && (
                 <article className="chat-bubble">
                   <Avatar name={name} size="sm" />
                   <div className="chat-bubble-body">
@@ -252,12 +305,14 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
 
       <ChatInput
         onSend={onSend}
-        disabled={!!error && messages.length === 0 && !sessionLoading}
+        disabled={(!!error && messages.length === 0 && !sessionLoading) || !!visionPending}
         busy={chatBusy}
         pttListening={pttListening}
         onPttStart={onPttStart}
         onPttStop={() => onPttEnd(false)}
         onPttCancel={() => onPttEnd(true)}
+        visionEnabled={visionEnabled}
+        onVisionCapture={onVisionCapture}
       />
     </div>
   );
