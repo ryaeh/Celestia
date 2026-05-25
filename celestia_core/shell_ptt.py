@@ -137,9 +137,10 @@ def ptt_finish(*, session_id: str | None = None) -> dict[str, Any]:
         # CC-115: use pipelined streaming TTS when voice output is enabled.
         # This lets Celestia start speaking after the first sentence rather
         # than waiting for the full LLM response to complete.
+        # CC-98: voice_mode=True injects the 2-sentence reply cap.
         if get("voice.always_speak", False) or get("voice.tts.streaming", True):
             return _send_with_streaming_tts(text, session_id=session_id)
-        return send_message(text, session_id=session_id, source="voice")
+        return send_message(text, session_id=session_id, source="voice", voice_mode=True)
     except Exception as e:
         err = str(e)
         _set_phase("idle", error=err)
@@ -166,7 +167,7 @@ def _send_with_streaming_tts(
     final: dict[str, Any] = {}
 
     def _token_iter():
-        for event in send_message_stream(text, session_id=session_id, source="voice"):
+        for event in send_message_stream(text, session_id=session_id, source="voice", voice_mode=True):
             if "token" in event:
                 yield event["token"]
             else:

@@ -109,7 +109,8 @@ def _preprocess_audio(audio: "np.ndarray", sample_rate: int) -> "np.ndarray":  #
 def transcribe_file(path: str) -> str:
     _touch()
     model = _load()
-    segments, _ = model.transcribe(path)
+    vad = get("voice.stt.vad_filter", True)
+    segments, _ = model.transcribe(path, vad_filter=bool(vad))
     text = " ".join(s.text.strip() for s in segments).strip()
     _touch()
     return text
@@ -122,11 +123,19 @@ def record_ptt_until(
     sample_rate: int = 16000,
     min_seconds: float = 0.35,
 ) -> str:
-    """Record from the mic until stop_event is set or max_seconds elapses."""
+    """Record from the mic until stop_event is set or max_seconds elapses.
+
+    CC-97: also auto-stops after voice.stt.silence_stop_seconds of silence
+    once at least 1 s of audio has been recorded, so the user doesn't need
+    to hold PTT for the full max_seconds after finishing speaking.
+    """
     import queue
 
     import numpy as np
     import sounddevice as sd
+
+    silence_stop = float(get("voice.stt.silence_stop_seconds", 1.5))
+    gate_threshold = float(get("voice.stt.noise_gate_threshold", 0.005))
 
     print("[stt] listening… (release to send)")
     chunks: list = []
@@ -137,7 +146,7 @@ def record_ptt_until(
             print(f"[stt] {status}")
         q.put(indata.copy())
 
-    block = int(sample_rate * 0.1)
+    block = int(sample_rate * 0.1)  # 100 ms blocks
     stream = sd.InputStream(
         samplerate=sample_rate,
         channels=1,
@@ -146,15 +155,30 @@ def record_ptt_until(
         callback=callback,
     )
     started = time.time()
+    silence_since: float | None = None  # timestamp when silence started
     stream.start()
     try:
         while not stop_event.is_set():
-            if time.time() - started >= max_seconds:
+            elapsed = time.time() - started
+            if elapsed >= max_seconds:
                 break
             try:
-                chunks.append(q.get(timeout=0.08))
+                chunk = q.get(timeout=0.08)
             except queue.Empty:
-                pass
+                continue
+            chunks.append(chunk)
+
+            # Energy-based silence detection — only kicks in after min 1 s
+            if elapsed >= 1.0 and silence_stop > 0:
+                rms = float(np.sqrt(np.mean(chunk ** 2)))
+                now = time.time()
+                if rms < gate_threshold:
+                    if silence_since is None:
+                        silence_since = now
+                    elif (now - silence_since) >= silence_stop:
+                        break  # auto-stop: enough silence after speech
+                else:
+                    silence_since = None  # speech detected, reset
     finally:
         stream.stop()
         stream.close()

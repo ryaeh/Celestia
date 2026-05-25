@@ -13,6 +13,7 @@ from skills.pc_control.tools import (
     PC_TOOL_SCHEMAS,
     execute_pc,
 )
+from skills.web.tools import WEB_TOOL_SCHEMAS, fetch_page, web_search
 
 _OPEN_TRIGGERS = (
     "open ",
@@ -51,6 +52,8 @@ def tool_schemas(user_message: str = "") -> list:
     tools = list(pc) + list(FILE_TOOL_SCHEMAS) + list(CLIPBOARD_TOOL_SCHEMAS)
     if get("memory.enabled", True):
         tools += MEMORY_TOOL_SCHEMAS
+    if get("skills.web.enabled", True):
+        tools += WEB_TOOL_SCHEMAS
     return tools
 
 
@@ -118,6 +121,22 @@ def execute_tool(
                     result = memory.delete_matching(user_id, match)
                 else:
                     result = "Provide memory_id or match_text"
+            security.audit_tool(name, arguments, result, source=source)
+            return result
+
+        if name == "web_search":
+            result = web_search(
+                arguments["query"],
+                num_results=int(arguments.get("num_results", 5)),
+            )
+            security.audit_tool(name, arguments, result, source=source)
+            return result
+
+        if name == "fetch_page":
+            result = fetch_page(
+                arguments["url"],
+                max_chars=int(arguments.get("max_chars", 3000)),
+            )
             security.audit_tool(name, arguments, result, source=source)
             return result
 

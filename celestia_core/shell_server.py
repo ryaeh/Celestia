@@ -123,6 +123,10 @@ class PttStopBody(BaseModel):
     session_id: str | None = None
 
 
+class WorkspaceBody(BaseModel):
+    path: str
+
+
 # ---------------------------------------------------------------------------
 # Shared helpers (unchanged from original)
 # ---------------------------------------------------------------------------
@@ -208,8 +212,22 @@ def get_workspaces():
     return {"workspaces": [str(p) for p in list_workspaces()]}
 
 
+@app.post("/workspaces/add")
+def post_add_workspace(body: WorkspaceBody):
+    from celestia_core.scope import add_workspace, list_workspaces
+    msg = add_workspace(body.path)
+    return {"message": msg, "workspaces": [str(p) for p in list_workspaces()]}
+
+
+@app.post("/workspaces/remove")
+def post_remove_workspace(body: WorkspaceBody):
+    from celestia_core.scope import remove_workspace, list_workspaces
+    msg = remove_workspace(body.path)
+    return {"message": msg, "workspaces": [str(p) for p in list_workspaces()]}
+
+
 @app.get("/audit/tail")
-def get_audit_tail(n: int = 20):
+def get_audit_tail(n: int = 50):
     return {"entries": tail_audit(n)}
 
 

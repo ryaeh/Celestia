@@ -297,6 +297,12 @@ def _build_fresh_messages(user_message: str) -> list[dict[str, Any]]:
     return messages
 
 
+_VOICE_CAP_HINT = (
+    "[Voice reply] Keep your answer to 2 sentences maximum. "
+    "Be direct and conversational — no lists, no markdown, no headers."
+)
+
+
 def run_turn(
     user_message: str,
     *,
@@ -304,6 +310,7 @@ def run_turn(
     max_tool_rounds: int = 8,
     source: str = "cli",
     history: list[dict[str, Any]] | None = None,
+    voice_mode: bool = False,
 ) -> tuple[str, list[dict[str, Any]]]:
     uid = _user_id()
     model = get("llm.chat_model", "llama3.2:3b")
@@ -329,9 +336,14 @@ def run_turn(
             messages.append(hint)
         if mem_ctx:
             messages.append({"role": "system", "content": mem_ctx})
+        if voice_mode and get("voice.reply_cap_voice", True):
+            messages.append({"role": "system", "content": _VOICE_CAP_HINT})
         messages.append({"role": "user", "content": user_message})
     else:
         messages = _build_fresh_messages(user_message)
+        if voice_mode and get("voice.reply_cap_voice", True):
+            # Insert hint before the last user message
+            messages.insert(-1, {"role": "system", "content": _VOICE_CAP_HINT})
 
     client = _ollama_client()
     for _ in range(max_tool_rounds):
@@ -378,6 +390,7 @@ def run_turn_stream(
     source: str = "cli",
     history: list[dict[str, Any]] | None = None,
     max_tool_rounds: int = 8,
+    voice_mode: bool = False,
 ) -> Generator[dict[str, Any], None, None]:
     """Generator that yields token events then a final done/error event.
 
@@ -418,9 +431,13 @@ def run_turn_stream(
             messages.append(hint)
         if mem_ctx:
             messages.append({"role": "system", "content": mem_ctx})
+        if voice_mode and get("voice.reply_cap_voice", True):
+            messages.append({"role": "system", "content": _VOICE_CAP_HINT})
         messages.append({"role": "user", "content": user_message})
     else:
         messages = _build_fresh_messages(user_message)
+        if voice_mode and get("voice.reply_cap_voice", True):
+            messages.insert(-1, {"role": "system", "content": _VOICE_CAP_HINT})
 
     client = _ollama_client()
 

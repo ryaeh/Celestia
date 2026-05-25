@@ -329,6 +329,7 @@ def send_message(
     *,
     session_id: str | None = None,
     source: str = "shell",
+    voice_mode: bool = False,
 ) -> dict[str, Any]:
     text = message.strip()
     if not text:
@@ -359,9 +360,9 @@ def send_message(
             state["title"] = _title_from_message(text)
 
     if use_session:
-        reply, new_history = run_turn(text, speak=speak, source=source, history=history)
+        reply, new_history = run_turn(text, speak=speak, source=source, history=history, voice_mode=voice_mode)
     else:
-        reply, new_history = run_turn(text, speak=speak, source=source)
+        reply, new_history = run_turn(text, speak=speak, source=source, voice_mode=voice_mode)
 
     run_consolidation_bg: bool = False
     consolidation_history: list[dict[str, Any]] = []
@@ -404,6 +405,7 @@ def send_message_stream(
     *,
     session_id: str | None = None,
     source: str = "shell",
+    voice_mode: bool = False,
 ) -> Generator[dict[str, Any], None, None]:
     """Generator yielding token events then a final done/error event (CC-89).
 
@@ -444,7 +446,7 @@ def send_message_stream(
     final_event: dict[str, Any] | None = None
 
     for event in run_turn_stream(
-        text, source=source, history=history if use_session else None
+        text, source=source, history=history if use_session else None, voice_mode=voice_mode
     ):
         if "token" in event:
             yield event  # forward token immediately

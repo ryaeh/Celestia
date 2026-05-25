@@ -119,9 +119,29 @@ export async function fetchWorkspaces(): Promise<string[]> {
   return data.workspaces ?? [];
 }
 
+export async function addWorkspace(path: string): Promise<{ message: string; workspaces: string[] }> {
+  const r = await apiFetch("/workspaces/add", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path }),
+  });
+  if (!r.ok) throw new Error(`workspaces/add ${r.status}`);
+  return r.json();
+}
+
+export async function removeWorkspace(path: string): Promise<{ message: string; workspaces: string[] }> {
+  const r = await apiFetch("/workspaces/remove", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path }),
+  });
+  if (!r.ok) throw new Error(`workspaces/remove ${r.status}`);
+  return r.json();
+}
+
 export type AuditEntry = Record<string, unknown>;
 
-export async function fetchAuditTail(n = 20): Promise<AuditEntry[]> {
+export async function fetchAuditTail(n = 50): Promise<AuditEntry[]> {
   const r = await apiFetch(`/audit/tail?n=${n}`);
   if (!r.ok) throw new Error(`audit ${r.status}`);
   const data = await r.json();

@@ -115,25 +115,11 @@ export default function Sidebar({
             <Button
               type="button"
               variant="ghost"
-              className={cn("sidebar-foot-btn w-full justify-start gap-2", route === "memory" && "active")}
-              onClick={() => onNavigate("memory")}
-            >
-              <span className="foot-icon">🧠</span>
-              Memory
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
               className={cn("sidebar-foot-btn w-full justify-start gap-2", route === "settings" && "active")}
               onClick={() => onNavigate("settings")}
             >
               <span className="foot-icon">⚙</span>
               Settings
-            </Button>
-            <Button type="button" variant="ghost" className="sidebar-foot-btn w-full justify-start gap-2" disabled>
-              <span className="foot-icon">◉</span>
-              Profile
-              <span className="placeholder-tag">soon</span>
             </Button>
           </div>
         </div>

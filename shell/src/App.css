@@ -864,7 +864,37 @@ body {
   padding-top: 0.65rem;
 }
 
-/* audit log */
+/* ── Audit table (Settings) ──────────────────────────────────────────────── */
+
+.audit-table { display: flex; flex-direction: column; }
+
+.audit-row {
+  display: grid;
+  grid-template-columns: 56px 140px 1fr;
+  gap: 0.5rem;
+  padding: 0.28rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-family: "Cascadia Code", "Consolas", monospace;
+  line-height: 1.4;
+  align-items: baseline;
+}
+.audit-row-even { background: rgba(255,255,255,0.025); }
+.audit-ts   { color: var(--text-dim); flex-shrink: 0; }
+.audit-tool { color: var(--accent-bright); font-weight: 600; truncate; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.audit-ok   { color: var(--accent-bright); }
+.audit-blocked { color: #f87171; }
+.audit-result { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Voice info grid (Settings) ─────────────────────────────────────────── */
+
+.voice-info-grid { display: flex; flex-direction: column; gap: 0.9rem; }
+.info-row { display: grid; grid-template-columns: 130px 1fr; gap: 0.75rem; align-items: baseline; font-size: 0.82rem; }
+.info-label { color: var(--text-dim); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.info-value { color: var(--text-muted); line-height: 1.55; }
+.info-value code { font-size: 0.78rem; }
+
+/* audit log (legacy pre block, kept for compat) */
 .audit-log {
   margin: 0.65rem 0 0;
   padding: 0.75rem 0.9rem;

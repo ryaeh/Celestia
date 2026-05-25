@@ -48,12 +48,16 @@ memory:
 
 voice:
   push_to_talk_hotkey: ctrl+alt+v
+  reply_cap_voice: true          # cap voice replies to ~2 sentences (CC-98)
   stt:
     enabled: true
-    model: large-v3
-    device: cuda
-    compute_type: float16
+    model: base.en                # base.en = fast CPU; large-v3 = quality GPU
+    device: cpu                   # cpu or cuda
+    compute_type: int8            # int8 for cpu, float16 for cuda
     idle_unload_minutes: 10
+    vad_filter: true              # filter silent segments during transcription (CC-97)
+    noise_gate_threshold: 0.005   # RMS below this is zeroed before transcription
+    silence_stop_seconds: 1.5     # auto-stop recording after N seconds of silence
   tts:
     provider: orpheus
     voice: tara
