@@ -45,8 +45,39 @@ def _get_memory():
         with _lock:
             if _memory is None:
                 from mem0 import Memory
+                from pathlib import Path
+                from celestia_core.config import ROOT, get
 
-                _memory = Memory()
+                host = get("llm.host", "http://127.0.0.1:11434").rstrip("/")
+                embed_model = get("llm.embed_model", "nomic-embed-text")
+                chat_model = get("llm.chat_model", "llama3.2:3b")
+                chroma_path = str(ROOT / "data" / "memory" / "chroma")
+
+                _memory = Memory.from_config(
+                    {
+                        "embedder": {
+                            "provider": "ollama",
+                            "config": {
+                                "model": embed_model,
+                                "ollama_base_url": host,
+                            },
+                        },
+                        "vector_store": {
+                            "provider": "chroma",
+                            "config": {
+                                "collection_name": "celestia_memories",
+                                "path": chroma_path,
+                            },
+                        },
+                        "llm": {
+                            "provider": "ollama",
+                            "config": {
+                                "model": chat_model,
+                                "ollama_base_url": host,
+                            },
+                        },
+                    }
+                )
     return _memory
 
 

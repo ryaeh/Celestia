@@ -217,8 +217,8 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
 
       <div className="chat-main" ref={threadRef}>
         {error && !chatBusy && (
-          <div className="chat-error panel">
-            <p className="error">{error}</p>
+          <div className="chat-error">
+            <p className="error" style={{ margin: 0, flex: 1 }}>{error}</p>
             <button type="button" onClick={() => loadSession(sessionId)}>
               Retry
             </button>
@@ -260,10 +260,12 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
             )}
 
             {chatBusy && !pttListening && !streamingTokens && (
-              <article className="chat-bubble chat-bubble-typing">
+              <article className="chat-bubble">
                 <Avatar name={name} size="sm" />
                 <div className="chat-bubble-body">
-                  <p className="muted">Thinking…</p>
+                  <div className="thinking-dots">
+                    <span /><span /><span />
+                  </div>
                 </div>
               </article>
             )}

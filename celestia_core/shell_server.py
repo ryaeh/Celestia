@@ -19,6 +19,9 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from celestia_core.config import ROOT, get, load_config
+from celestia_core import faillog as _faillog
+
+_faillog.setup()
 
 # ---------------------------------------------------------------------------
 # App

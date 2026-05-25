@@ -50,13 +50,13 @@ export default function Sidebar({
         aria-hidden={!open}
       >
         <div className="sidebar-inner">
+          {/* Brand */}
           <div className="brand">
-            <span className="brand-mark" aria-hidden>
-              ◆
-            </span>
+            <div className="brand-mark" aria-hidden>◆</div>
             <strong>{displayName}</strong>
           </div>
 
+          {/* New chat */}
           <button
             type="button"
             className="btn-primary sidebar-new-chat"
@@ -70,6 +70,7 @@ export default function Sidebar({
             + New Chat
           </button>
 
+          {/* History */}
           <div className="sidebar-section">
             <span className="sidebar-label">History</span>
             <ul className="history-list">
@@ -96,12 +97,14 @@ export default function Sidebar({
             </ul>
           </div>
 
+          {/* Footer nav */}
           <div className="sidebar-footer">
             <button
               type="button"
               className={`sidebar-foot-btn ${route === "memory" ? "active" : ""}`}
               onClick={() => onNavigate("memory")}
             >
+              <span className="foot-icon">🧠</span>
               Memory
             </button>
             <button
@@ -109,9 +112,11 @@ export default function Sidebar({
               className={`sidebar-foot-btn ${route === "settings" ? "active" : ""}`}
               onClick={() => onNavigate("settings")}
             >
+              <span className="foot-icon">⚙</span>
               Settings
             </button>
             <button type="button" className="sidebar-foot-btn" disabled>
+              <span className="foot-icon">◉</span>
               Profile
               <span className="placeholder-tag">soon</span>
             </button>

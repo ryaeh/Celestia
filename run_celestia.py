@@ -13,8 +13,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from celestia_core.secrets import bootstrap
+from celestia_core import faillog
 
 bootstrap()
+faillog.setup()
 
 if sys.platform == "win32":
     for _stream in (sys.stdout, sys.stderr):

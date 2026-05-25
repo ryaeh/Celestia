@@ -16,10 +16,10 @@ function normalizeRoute(raw: string): Route {
   return "home";
 }
 
-function SecondaryPage({ route }: { route: Route }) {
+function SecondaryPage({ route, onNavigate }: { route: Route; onNavigate: (r: Route) => void }) {
   switch (route) {
     case "settings":
-      return <Settings />;
+      return <Settings onNavigate={onNavigate} />;
     case "memory":
       return <Memory />;
     case "personality":
@@ -90,10 +90,10 @@ export default function App() {
                 className="back-home"
                 onClick={() => setRoute("home")}
               >
-                ← Home
+                ← Chat
               </button>
             </header>
-            <SecondaryPage route={route} />
+            <SecondaryPage route={route} onNavigate={setRoute} />
           </main>
         )}
       </div>

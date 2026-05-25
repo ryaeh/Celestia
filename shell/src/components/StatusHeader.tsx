@@ -1,4 +1,4 @@
-import { usePersistedState } from "../hooks/usePersistedState";
+import { useState } from "react";
 import Avatar from "./Avatar";
 import type { Status } from "../api";
 
@@ -13,85 +13,75 @@ function modeBadge(mode: string): { label: string; tone: "safe" | "scoped" | "ar
   return { label: "SAFE", tone: "safe" };
 }
 
+const CHECK_LABELS = ["Context", "Memory", "Tools", "Models"];
+
 export default function StatusHeader({ status }: StatusHeaderProps) {
-  const [open, setOpen] = usePersistedState("celestia.shell.statusBarOpen", true);
+  const [expanded, setExpanded] = useState(false);
+
   const name = status?.display_name ?? "Celestia";
-  const security = status
-    ? modeBadge(status.mode)
-    : { label: "…", tone: "safe" as const };
-  const personality = status ? status.personality.toUpperCase() : "…";
+  const security = status ? modeBadge(status.mode) : { label: "…", tone: "safe" as const };
+  const personality = status?.personality ?? "";
 
   const preflightItems =
     status?.checks.slice(0, 4).map((c, i) => ({
-      label: ["Context", "Memory", "Tools", "Models"][i] ?? `Check ${i + 1}`,
+      label: CHECK_LABELS[i] ?? `Check ${i + 1}`,
       ok: c.ok,
-    })) ?? [];
-
-  while (preflightItems.length < 4) {
-    preflightItems.push({
-      label: ["Context", "Memory", "Tools", "Models"][preflightItems.length],
-      ok: true,
-    });
-  }
+    })) ?? CHECK_LABELS.map((label) => ({ label, ok: true }));
 
   return (
-    <header className={`status-header ${open ? "is-open" : "is-collapsed"}`}>
-      <div className="status-header-grid">
-        <div className="status-side status-side-left" aria-hidden={!open}>
-          <div className="status-card">
-            <span className="status-card-label">Security</span>
-            <span className={`status-pill status-pill-${security.tone}`}>
-              {security.label}
-            </span>
-          </div>
-          <div className="status-card">
-            <span className="status-card-label">Personality</span>
-            <span className="status-pill status-pill-accent">
-              {personality}
-            </span>
-          </div>
+    <>
+      <div className="top-bar">
+        <Avatar name={name} size="xs" />
+        <span className="top-bar-name">{name}</span>
+        <span className="top-bar-divider" aria-hidden />
+        <span className={`status-pill status-pill-${security.tone}`}>{security.label}</span>
+        {personality && (
+          <span className="status-pill status-pill-accent">{personality.toUpperCase()}</span>
+        )}
+        <span className="top-bar-spacer" />
+        <div className="top-bar-preflight" title="Preflight checks">
+          {preflightItems.map((item) => (
+            <span
+              key={item.label}
+              className={`preflight-dot ${item.ok ? "ok" : "warn"}`}
+              title={item.label}
+            />
+          ))}
         </div>
+        <button
+          type="button"
+          className="top-bar-expand"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          title={expanded ? "Hide status" : "Show status"}
+        >
+          {expanded ? "▲" : "▼"}
+        </button>
+      </div>
 
-        <div className="status-center">
-          <button
-            type="button"
-            className="status-bar-toggle"
-            onClick={() => setOpen((v) => !v)}
-            aria-expanded={open}
-            aria-label={open ? "Hide status panels" : "Show status panels"}
-            title={open ? "Hide status" : "Show status"}
-          >
-            <span className="status-bar-toggle-icon" />
-          </button>
-          <div className="status-avatar-slot">
-            <Avatar name={name} size="md" />
-          </div>
-          <div className="status-avatar-meta">
-            <strong>{name}</strong>
-            <span>Always available</span>
-          </div>
-        </div>
-
-        <div className="status-side status-side-right" aria-hidden={!open}>
-          <div className="status-card status-card-wide">
-            <span className="status-card-label">Preflight</span>
-            <ul className="preflight-list">
+      {expanded && (
+        <div className="top-bar-panel">
+          <div className="top-bar-card">
+            <span className="top-bar-card-label">Preflight</span>
+            <ul className="top-bar-check-list">
               {preflightItems.map((item) => (
                 <li key={item.label}>
                   <span className={`preflight-dot ${item.ok ? "ok" : "warn"}`} />
-                  <span>{item.label}</span>
-                  <span className="preflight-state">{item.ok ? "active" : "check"}</span>
+                  {item.label}
                 </li>
               ))}
             </ul>
           </div>
-          <div className="status-card">
-            <span className="status-card-label">Active mode</span>
-            <span className="status-pill status-pill-accent">FOCUS</span>
-            <span className="placeholder-tag">placeholder</span>
-          </div>
+          {status?.tray_max_mode && (
+            <div className="top-bar-card">
+              <span className="top-bar-card-label">Tray cap</span>
+              <span className="status-pill status-pill-accent">
+                {status.tray_max_mode.toUpperCase()}
+              </span>
+            </div>
+          )}
         </div>
-      </div>
-    </header>
+      )}
+    </>
   );
 }
