@@ -2,11 +2,13 @@
 
 CC-88: Migrated from ThreadingHTTPServer to FastAPI + uvicorn.
 CC-89: SSE streaming endpoint POST /chat/stream added.
+CC-114: Per-session API auth token (X-Celestia-Token header).
 """
 
 from __future__ import annotations
 
 import json
+import secrets
 import threading
 import time
 from pathlib import Path
@@ -24,6 +26,30 @@ from celestia_core import faillog as _faillog
 _faillog.setup()
 
 # ---------------------------------------------------------------------------
+# Auth token (CC-114)
+# Session-scoped random token written to data/.api_token at startup.
+# All endpoints except /status and /token require X-Celestia-Token header.
+# ---------------------------------------------------------------------------
+
+_API_TOKEN: str = secrets.token_hex(32)
+_TOKEN_PATH: Path = ROOT / "data" / ".api_token"
+
+# Endpoints that don't require the token:
+#   /status  — health check used by ensure-api.mjs before the frontend loads
+#   /token   — bootstrap endpoint that returns the token to the frontend
+_TOKEN_EXEMPT = {"/status", "/token"}
+
+
+def _write_token_file() -> None:
+    try:
+        _TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _TOKEN_PATH.write_text(_API_TOKEN, encoding="utf-8")
+        _TOKEN_PATH.chmod(0o600)
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
 
@@ -33,7 +59,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Content-Type", "X-Celestia-Token"],
+    expose_headers=["X-Celestia-Token"],
 )
 
 
@@ -43,6 +70,26 @@ async def localhost_only(request: Request, call_next):
     if host not in ("127.0.0.1", "::1"):
         return Response("Forbidden", status_code=403)
     return await call_next(request)
+
+
+@app.middleware("http")
+async def require_token(request: Request, call_next):
+    if request.url.path in _TOKEN_EXEMPT or request.method == "OPTIONS":
+        return await call_next(request)
+    token = request.headers.get("X-Celestia-Token", "")
+    if not secrets.compare_digest(token, _API_TOKEN):
+        return JSONResponse(status_code=401, content={"error": "invalid token"})
+    return await call_next(request)
+
+
+# ---------------------------------------------------------------------------
+# Bootstrap: write token, expose via /token
+# ---------------------------------------------------------------------------
+
+@app.get("/token")
+def get_api_token():
+    """Return the session token. Localhost-only (enforced by middleware)."""
+    return {"token": _API_TOKEN}
 
 
 # ---------------------------------------------------------------------------
@@ -393,6 +440,7 @@ def start_server(port: int | None = None, *, daemon: bool = True) -> int:
     """Start FastAPI server in a background thread; returns bound port."""
     global _uvicorn_server, _server_thread
     load_config()
+    _write_token_file()
     p = port if port is not None else default_port()
 
     if _uvicorn_server is not None and _uvicorn_server.started:
@@ -439,6 +487,7 @@ def stop_server() -> None:
 
 def run_server_forever(port: int | None = None) -> None:
     load_config()
+    _write_token_file()
     p = port if port is not None else default_port()
     print(f"[shell] API http://127.0.0.1:{p}", flush=True)
     try:

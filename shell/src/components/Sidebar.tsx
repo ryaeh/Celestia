@@ -7,6 +7,10 @@ import {
 } from "../api";
 import { usePersistedState } from "../hooks/usePersistedState";
 import type { Route } from "../App";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 
 type SidebarProps = {
   route: Route;
@@ -46,10 +50,10 @@ export default function Sidebar({
   return (
     <>
       <aside
-        className={`sidebar ${open ? "sidebar-open" : "sidebar-closed"}`}
+        className={cn("sidebar", open ? "sidebar-open" : "sidebar-closed")}
         aria-hidden={!open}
       >
-        <div className="sidebar-inner">
+        <div className="sidebar-inner flex flex-col h-full">
           {/* Brand */}
           <div className="brand">
             <div className="brand-mark" aria-hidden>◆</div>
@@ -57,9 +61,9 @@ export default function Sidebar({
           </div>
 
           {/* New chat */}
-          <button
-            type="button"
-            className="btn-primary sidebar-new-chat"
+          <Button
+            variant="default"
+            className="sidebar-new-chat w-full justify-start gap-2 bg-[var(--accent-bright)] hover:bg-[var(--accent-dim)] text-white border-0 mb-2"
             onClick={async () => {
               const id = await createChatSession();
               await loadSessions();
@@ -68,58 +72,69 @@ export default function Sidebar({
             }}
           >
             + New Chat
-          </button>
+          </Button>
+
+          <Separator className="bg-[var(--border-light)] my-1" />
 
           {/* History */}
-          <div className="sidebar-section">
+          <div className="sidebar-section flex-1 min-h-0">
             <span className="sidebar-label">History</span>
-            <ul className="history-list">
-              {sessions.length === 0 ? (
-                <li className="muted sidebar-empty">No chats yet</li>
-              ) : (
-                sessions.map((item) => (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      className={`history-item ${item.id === activeSessionId ? "active" : ""}`}
-                      onClick={async () => {
-                        await selectChatSession(item.id);
-                        onNavigate("home");
-                        onSelectSession(item.id);
-                      }}
-                    >
-                      <span className="history-title">{item.title}</span>
-                      <span className="history-when">{item.when}</span>
-                    </button>
-                  </li>
-                ))
-              )}
-            </ul>
+            <ScrollArea className="h-full">
+              <ul className="history-list">
+                {sessions.length === 0 ? (
+                  <li className="muted sidebar-empty">No chats yet</li>
+                ) : (
+                  sessions.map((item) => (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        className={cn(
+                          "history-item w-full",
+                          item.id === activeSessionId && "active",
+                        )}
+                        onClick={async () => {
+                          await selectChatSession(item.id);
+                          onNavigate("home");
+                          onSelectSession(item.id);
+                        }}
+                      >
+                        <span className="history-title">{item.title}</span>
+                        <span className="history-when">{item.when}</span>
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </ScrollArea>
           </div>
+
+          <Separator className="bg-[var(--border-light)] my-1" />
 
           {/* Footer nav */}
           <div className="sidebar-footer">
-            <button
+            <Button
               type="button"
-              className={`sidebar-foot-btn ${route === "memory" ? "active" : ""}`}
+              variant="ghost"
+              className={cn("sidebar-foot-btn w-full justify-start gap-2", route === "memory" && "active")}
               onClick={() => onNavigate("memory")}
             >
               <span className="foot-icon">🧠</span>
               Memory
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className={`sidebar-foot-btn ${route === "settings" ? "active" : ""}`}
+              variant="ghost"
+              className={cn("sidebar-foot-btn w-full justify-start gap-2", route === "settings" && "active")}
               onClick={() => onNavigate("settings")}
             >
               <span className="foot-icon">⚙</span>
               Settings
-            </button>
-            <button type="button" className="sidebar-foot-btn" disabled>
+            </Button>
+            <Button type="button" variant="ghost" className="sidebar-foot-btn w-full justify-start gap-2" disabled>
               <span className="foot-icon">◉</span>
               Profile
               <span className="placeholder-tag">soon</span>
-            </button>
+            </Button>
           </div>
         </div>
       </aside>

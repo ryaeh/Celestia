@@ -19,10 +19,56 @@ export function apiBase(): string {
   return DEFAULT_API;
 }
 
+// ---------------------------------------------------------------------------
+// CC-114: Session auth token
+// Fetched once from GET /token (localhost-only endpoint) and cached in memory.
+// Every apiFetch call includes it as X-Celestia-Token.
+// ---------------------------------------------------------------------------
+
+let _apiToken: string | null = null;
+let _tokenFetch: Promise<string> | null = null;
+
+async function acquireToken(): Promise<string> {
+  if (_apiToken) return _apiToken;
+  if (_tokenFetch) return _tokenFetch;
+  _tokenFetch = (async () => {
+    try {
+      const r = await fetch(`${apiBase()}/token`);
+      if (!r.ok) throw new Error(`/token ${r.status}`);
+      const d = await r.json() as { token: string };
+      _apiToken = d.token;
+      return _apiToken;
+    } catch {
+      // If the server doesn't support tokens yet, continue unauthenticated.
+      _apiToken = "";
+      return "";
+    } finally {
+      _tokenFetch = null;
+    }
+  })();
+  return _tokenFetch;
+}
+
 async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  const token = await acquireToken();
   const url = `${apiBase()}${path}`;
+  const headers: Record<string, string> = {
+    ...(init?.headers as Record<string, string> | undefined),
+  };
+  if (token) headers["X-Celestia-Token"] = token;
+
   try {
-    return await fetch(url, init);
+    const res = await fetch(url, { ...init, headers });
+    // If the server rotated its token (e.g. restart without frontend restart),
+    // clear cache and retry once.
+    if (res.status === 401 && _apiToken) {
+      _apiToken = null;
+      const retryToken = await acquireToken();
+      const retryHeaders = { ...headers };
+      if (retryToken) retryHeaders["X-Celestia-Token"] = retryToken;
+      return fetch(url, { ...init, headers: retryHeaders });
+    }
+    return res;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (/failed to fetch|network|load/i.test(msg)) {

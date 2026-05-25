@@ -1,4 +1,7 @@
 import { useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 type ChatInputProps = {
   onSend: (message: string) => void;
@@ -56,11 +59,15 @@ export default function ChatInput({
         <span className="chat-input-icon" aria-hidden>
           ✦
         </span>
-        <input
+        <Input
           type="search"
           name="celestia-chat-query"
           id="celestia-chat-query"
-          className="chat-input"
+          className={cn(
+            "chat-input",
+            "border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0",
+            "text-[var(--text)] placeholder:text-[var(--text-dim)]",
+          )}
           placeholder={
             pttListening
               ? "Listening… release mic to send"
@@ -79,9 +86,14 @@ export default function ChatInput({
           data-1p-ignore="true"
         />
         {pttEnabled && (
-          <button
+          <Button
             type="button"
-            className={`chat-ptt ${pttListening ? "chat-ptt-active" : ""}`}
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "chat-ptt h-8 w-8 shrink-0",
+              pttListening && "chat-ptt-active",
+            )}
             disabled={locked && !pttListening}
             aria-label={pttListening ? "Release to send" : "Hold to talk"}
             title="Hold to talk"
@@ -100,16 +112,18 @@ export default function ChatInput({
             onLostPointerCapture={() => endPtt()}
           >
             {pttListening ? "◉" : "🎤"}
-          </button>
+          </Button>
         )}
-        <button
+        <Button
           type="submit"
-          className="chat-send"
+          variant="ghost"
+          size="icon"
+          className="chat-send h-8 w-8 shrink-0"
           disabled={locked || pttListening}
           aria-label="Send"
         >
           {busy ? "…" : "↑"}
-        </button>
+        </Button>
       </form>
       <p className="chat-disclaimer">
         Hold <span className="chat-ptt-hint">🎤</span> to talk — same thread as typed chat.
