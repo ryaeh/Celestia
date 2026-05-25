@@ -1,229 +1,360 @@
+"""Long-term memory via mem0 + Chroma (typed entries, budgeted inject)."""
+
 from __future__ import annotations
 
-import json
+import re
+import threading
+import time
 from typing import Any
 
-from celestia_core.config import ROOT, get
+from celestia_core.config import get
+
+from skills.memory.last_session import context_block as last_session_block, is_greeting
+from skills.memory.types import DEFAULT_KIND, MemoryKind, normalize_kind
 
 _memory = None
-_init_error: str | None = None
+_lock = threading.Lock()
+
+# Instruction entries change rarely — cache them to avoid a full get_all_entries
+# scan on every conversation turn.
+_INSTRUCTION_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+_INSTRUCTION_CACHE_TTL = 60.0  # seconds
 
 
-def _vector_store_config() -> dict:
-    backend = get("memory.vector_store", "chroma").lower()
-    if backend == "qdrant":
-        host = get("memory.qdrant.host", "localhost")
-        port = get("memory.qdrant.port", get("docker.qdrant_port", 6333))
-        return {"provider": "qdrant", "config": {"host": host, "port": port}}
-    rel = get("memory.chroma.path", "data/chroma")
-    path = __import__("pathlib").Path(rel)
-    if not path.is_absolute():
-        path = __import__("pathlib").Path(ROOT) / path
-    path.mkdir(parents=True, exist_ok=True)
-    return {"provider": "chroma", "config": {"path": str(path)}}
+def _get_cached_instructions(user_id: str) -> list[dict[str, Any]]:
+    now = time.monotonic()
+    cached = _INSTRUCTION_CACHE.get(user_id)
+    if cached and now - cached[0] < _INSTRUCTION_CACHE_TTL:
+        return cached[1]
+    all_entries = get_all_entries(user_id, limit=100)
+    instructions = [e for e in all_entries if e["kind"] == "instruction"]
+    _INSTRUCTION_CACHE[user_id] = (now, instructions)
+    return instructions
 
 
-def _build_mem0():
-    from mem0 import Memory
-
-    ollama = get("llm.host", "http://127.0.0.1:11434")
-    chat = get("llm.chat_model", "llama3.2:3b")
-    embed = get("llm.embed_model", "nomic-embed-text")
-    return Memory.from_config(
-        {
-            "vector_store": _vector_store_config(),
-            "llm": {
-                "provider": "ollama",
-                "config": {"model": chat, "ollama_base_url": ollama},
-            },
-            "embedder": {
-                "provider": "ollama",
-                "config": {"model": embed, "ollama_base_url": ollama},
-            },
-        }
-    )
-
-
-def get_memory():
-    global _memory, _init_error
-    if not get("memory.enabled", True):
-        return None
-    if _memory is not None:
-        return _memory
-    if _init_error:
-        raise RuntimeError(_init_error)
-    try:
-        _memory = _build_mem0()
-        return _memory
-    except Exception as e:
-        _init_error = str(e)
-        raise RuntimeError(f"Memory init failed: {e}") from e
-
-
-def _extract_items(payload: Any) -> list[dict[str, Any]]:
-    if isinstance(payload, dict):
-        items = payload.get("results", payload)
+def _invalidate_instruction_cache(user_id: str | None = None) -> None:
+    if user_id:
+        _INSTRUCTION_CACHE.pop(user_id, None)
     else:
-        items = payload
-    if not isinstance(items, list):
+        _INSTRUCTION_CACHE.clear()
+
+
+def _get_memory():
+    global _memory
+    if _memory is None:
+        with _lock:
+            if _memory is None:
+                from mem0 import Memory
+
+                _memory = Memory()
+    return _memory
+
+
+def _extract_text(item: dict) -> str:
+    return (item.get("memory") or item.get("text") or "").strip()
+
+
+def _extract_kind(item: dict) -> MemoryKind:
+    meta = item.get("metadata") or {}
+    if isinstance(meta, dict):
+        return normalize_kind(meta.get("kind"))
+    return DEFAULT_KIND
+
+
+def _extract_updated(item: dict) -> float:
+    ts = item.get("updated_at") or item.get("created_at") or ""
+    if not ts:
+        return 0.0
+    try:
+        from datetime import datetime
+
+        if isinstance(ts, (int, float)):
+            return float(ts)
+        dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        return dt.timestamp()
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def _entry_from_item(item: dict) -> dict[str, Any]:
+    return {
+        "id": item.get("id", ""),
+        "text": _extract_text(item),
+        "kind": _extract_kind(item),
+        "updated_at": _extract_updated(item),
+    }
+
+
+def get_all_entries(user_id: str, limit: int = 100) -> list[dict[str, Any]]:
+    m = _get_memory()
+    try:
+        raw = m.get_all(user_id=user_id, limit=limit)
+        items = raw.get("results", raw) if isinstance(raw, dict) else raw
+        if not isinstance(items, list):
+            return []
+        out = [_entry_from_item(it) for it in items if _extract_text(it)]
+        out.sort(key=lambda e: e["updated_at"], reverse=True)
+        return out
+    except Exception:
         return []
-    out: list[dict[str, Any]] = []
-    for item in items:
-        if isinstance(item, dict) and (item.get("memory") or item.get("data") or item.get("content")):
-            out.append(item)
-    return out
 
 
-def _extract_memories(payload: Any) -> list[str]:
-    lines: list[str] = []
-    for item in _extract_items(payload):
-        text = item.get("memory") or item.get("data") or item.get("content")
-        if text:
-            lines.append(str(text).strip())
-    return lines
+def add(
+    content: str,
+    user_id: str = "default",
+    *,
+    kind: str | MemoryKind = DEFAULT_KIND,
+    infer: bool = False,
+) -> dict[str, Any]:
+    m = _get_memory()
+    k = normalize_kind(str(kind))
+    result = m.add(
+        content,
+        user_id=user_id,
+        metadata={"kind": k},
+        infer=infer,
+    )
+    if k == "instruction":
+        _invalidate_instruction_cache(user_id)
+    return result
 
 
-# Assistant self-descriptions wrongly stored as "user" facts — skip in prompts
-_SKIP_MEMORY_PATTERNS = (
-    "i am atlas",
-    "i am celestia",
-    "jarvis-style assistant",
-    "i am hearing from you",
+def get_all_texts(user_id: str, limit: int = 100) -> list[str]:
+    return [e["text"] for e in get_all_entries(user_id, limit)]
+
+
+def get_entries_by_kind(user_id: str, kind: str, limit: int = 50) -> list[dict[str, Any]]:
+    k = normalize_kind(kind)
+    return [e for e in get_all_entries(user_id, limit) if e["kind"] == k]
+
+
+_ASSISTANT_MARKERS = re.compile(
+    r"\b(i am|i'm)\s+(celestia|atlas|your assistant|an ai)\b|"
+    r"\b(celestia|atlas)\s+(said|replied|assistant)\b",
+    re.I,
 )
 
 
 def _should_skip_memory(text: str) -> bool:
-    low = text.strip().lower()
-    return any(p in low for p in _SKIP_MEMORY_PATTERNS)
+    t = text.strip()
+    if not t or len(t) < 4:
+        return True
+    if _ASSISTANT_MARKERS.search(t):
+        return True
+    low = t.lower()
+    if low.startswith(("celestia ", "atlas ", "the assistant ")):
+        return True
+    return False
 
 
-def search(query: str, user_id: str, limit: int = 8) -> list[Any]:
-    m = get_memory()
-    if m is None:
-        return []
-    return m.search(query, user_id=user_id, limit=limit)
-
-
-def add(content: str, user_id: str) -> dict[str, Any]:
-    m = get_memory()
-    if m is None:
-        return {"error": "memory disabled"}
-    # Store exact user words — no LLM rewrite (avoids losing "purple" etc.)
-    return m.add(content, user_id=user_id, infer=False)
-
-
-def get_all_entries(user_id: str, limit: int = 50) -> list[dict[str, Any]]:
-    m = get_memory()
-    if m is None:
-        return []
-    raw = m.get_all(user_id=user_id, limit=limit)
-    entries = []
-    for item in _extract_items(raw):
-        mid = item.get("id")
-        text = (item.get("memory") or item.get("data") or item.get("content") or "").strip()
-        if mid and text:
-            entries.append({"id": mid, "text": text})
-    return entries
-
-
-def get_all_texts(user_id: str, limit: int = 15) -> list[str]:
-    return [e["text"] for e in get_all_entries(user_id, limit=limit)]
-
-
-def build_context(query: str, user_id: str) -> str:
-    """Recent facts + semantic search for the current question."""
+def add_json(content: str, user_id: str = "default", kind: str = DEFAULT_KIND) -> str:
     try:
-        seen: set[str] = set()
-        lines: list[str] = []
-        for text in get_all_texts(user_id, limit=20):
-            if text and text not in seen and not _should_skip_memory(text):
-                seen.add(text)
-                lines.append(f"- {text}")
-        for text in _extract_memories(search(query, user_id, limit=8)):
-            if text and text not in seen and not _should_skip_memory(text):
-                seen.add(text)
-                lines.append(f"- {text}")
-        if not lines:
-            return ""
-        return "Stored facts about the user (trust these over guesses):\n" + "\n".join(lines[:25])
+        add(content, user_id, kind=kind)
+        return f"Saved ({normalize_kind(kind)}): {content[:80]}"
+    except Exception as e:
+        return f"Memory save failed: {e}"
+
+
+def search(query: str, user_id: str = "default", limit: int = 5) -> list[dict]:
+    m = _get_memory()
+    try:
+        raw = m.search(query, user_id=user_id, limit=limit)
+        items = raw.get("results", raw) if isinstance(raw, dict) else raw
+        if not isinstance(items, list):
+            return []
+        return [_entry_from_item(it) for it in items if _extract_text(it)]
     except Exception:
-        return ""
+        return []
 
 
-def search_json(query: str, user_id: str) -> str:
-    try:
-        hits = search(query, user_id)
-        texts = _extract_memories(hits)
-        return json.dumps({"memories": texts}, default=str)[:8000]
-    except Exception as e:
-        return f"Memory search failed: {e}"
-
-
-def add_json(content: str, user_id: str) -> str:
-    try:
-        result = add(content, user_id)
-        texts = _extract_memories(result)
-        if texts:
-            return f"Stored: {texts[0]}"
-        return json.dumps(result, default=str)[:2000]
-    except Exception as e:
-        return f"Memory add failed: {e}"
+def search_json(query: str, user_id: str = "default") -> str:
+    hits = search(query, user_id)
+    if not hits:
+        return "No matching memories."
+    lines = [f"- [{h['kind']}] {h['text']}" for h in hits[:10]]
+    return "Relevant memories:\n" + "\n".join(lines)
 
 
 def delete_by_id(memory_id: str) -> str:
-    m = get_memory()
-    if m is None:
-        return "Memory disabled"
-    m.delete(memory_id)
-    return f"Deleted memory {memory_id[:8]}…"
+    m = _get_memory()
+    try:
+        m.delete(memory_id)
+        _invalidate_instruction_cache()
+        return "Deleted."
+    except Exception as e:
+        return f"Delete failed: {e}"
 
 
-def delete_matching(user_id: str, text: str) -> str:
-    """Delete entries whose text contains the substring (case-insensitive)."""
-    needle = text.strip().lower()
-    if not needle:
-        return "Nothing to delete (empty match)."
+def delete_matching(user_id: str, match_text: str) -> str:
+    needle = match_text.lower()
     removed = 0
-    for entry in get_all_entries(user_id, limit=100):
+    for entry in get_all_entries(user_id, limit=200):
         if needle in entry["text"].lower():
             delete_by_id(entry["id"])
             removed += 1
-    if removed == 0:
-        return f"No memories matched '{text}'"
-    return f"Deleted {removed} memor{'y' if removed == 1 else 'ies'} matching '{text}'"
+    return f"Removed {removed} matching memories." if removed else "No matching memories found."
 
 
-def update_by_id(memory_id: str, new_text: str) -> str:
-    m = get_memory()
-    if m is None:
-        return "Memory disabled"
-    new_text = new_text.strip()
-    if not new_text:
-        return "Empty text not allowed"
-    m.update(memory_id, new_text)
-    return f"Updated memory: {new_text[:80]}"
+def edit_json(memory_id: str, new_text: str, user_id: str = "default", kind: str | None = None) -> str:
+    return update_entry(memory_id, text=new_text, kind=kind)
 
 
-def edit_json(memory_id: str, new_text: str, user_id: str) -> str:
+def clear_all(user_id: str = "default") -> str:
+    entries = get_all_entries(user_id, limit=500)
+    n = 0
+    for e in entries:
+        try:
+            _get_memory().delete(e["id"])
+            n += 1
+        except Exception:
+            pass
+    _invalidate_instruction_cache(user_id)
+    return f"Cleared {n} memories."
+
+
+def _known_user_ids() -> list[str]:
+    return [
+        get("memory.user_id", "default"),
+        "atlas_user",
+        "default",
+    ]
+
+
+def _user_for_id(memory_id: str) -> str | None:
+    m = _get_memory()
+    for uid in _known_user_ids():
+        try:
+            raw = m.get_all(user_id=uid, limit=200)
+            items = raw.get("results", raw) if isinstance(raw, dict) else raw
+            if isinstance(items, list):
+                for it in items:
+                    if it.get("id") == memory_id:
+                        return uid
+        except Exception:
+            continue
+    return None
+
+
+def update_entry(
+    memory_id: str,
+    *,
+    text: str | None = None,
+    kind: str | None = None,
+    user_id: str | None = None,
+) -> str:
+    uid = user_id or _user_for_id(memory_id)
+    if not uid:
+        return "Memory not found."
+    entries = get_all_entries(uid, 200)
+    entry = next((e for e in entries if e["id"] == memory_id), None)
+    if not entry:
+        return "Memory not found."
+    new_text = (text or entry["text"]).strip()
+    new_kind = normalize_kind(kind) if kind else entry["kind"]
+    m = _get_memory()
     try:
-        return update_by_id(memory_id.strip(), new_text)
-    except Exception as e:
-        return f"Memory edit failed: {e}"
+        m.delete(memory_id)
+    except Exception:
+        pass
+    add(new_text, uid, kind=new_kind)
+    _invalidate_instruction_cache(uid)
+    return "Updated."
 
 
-def format_list(user_id: str) -> str:
+def format_list(user_id: str = "default", *, kind: str | None = None) -> str:
     entries = get_all_entries(user_id, limit=50)
+    if kind:
+        k = normalize_kind(kind)
+        entries = [e for e in entries if e["kind"] == k]
     if not entries:
-        return "No stored memories yet."
-    lines = [f"Stored memories ({len(entries)}):"]
-    for i, e in enumerate(entries, 1):
-        lines.append(f"  {i}. [{e['id'][:8]}…] {e['text']}")
-    return "\n".join(lines)
+        return "No memories stored yet."
+    lines = [f"- [{e['kind']}] {e['text'][:120]}" for e in entries[:25]]
+    return "Stored memories:\n" + "\n".join(lines)
 
 
-def clear_all(user_id: str) -> str:
-    m = get_memory()
-    if m is None:
-        return "Memory disabled"
-    m.delete_all(user_id=user_id)
-    return f"Cleared all memories for {user_id}"
+def _dedupe_lines(lines: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for line in lines:
+        key = re.sub(r"\s+", " ", line.lower().strip())
+        if key and key not in seen:
+            seen.add(key)
+            out.append(line)
+    return out
+
+
+def build_context(query: str, user_id: str = "default") -> str:
+    """Budgeted memory block injected into each turn.
+
+    Per-turn cost: one vector search (Chroma) + cached instruction lookup.
+    The old approach did get_all_entries (100-row scan) + search every turn;
+    instructions are now served from a 60-second in-process cache instead.
+    """
+    if not get("memory.enabled", True):
+        return ""
+
+    mode = get("memory.inject", "always_budgeted")
+    if mode == "off":
+        return ""
+
+    max_lines = int(get("memory.inject_max_lines", 8))
+    max_chars = int(get("memory.inject_max_chars", 1200))
+
+    if mode == "smart" and not _needs_memory_smart(query):
+        return ""
+
+    lines: list[str] = []
+    seen: set[str] = set()
+
+    if is_greeting(query):
+        block = last_session_block()
+        if block:
+            lines.append(block)
+            seen.add(block)
+
+    # Pinned instructions — served from cache, no full scan per turn
+    for e in _get_cached_instructions(user_id)[:2]:
+        line = f"[instruction] {e['text']}"
+        if line not in seen:
+            lines.append(line)
+            seen.add(line)
+
+    # Semantic search covers facts, tasks, summaries, and relevant instructions
+    if query.strip():
+        hits = search(query, user_id, limit=6)
+        for h in hits[:4]:
+            line = f"[{h['kind']}] {h['text']}"
+            if line not in seen:
+                lines.append(line)
+                seen.add(line)
+
+    lines = _dedupe_lines(lines)[:max_lines]
+    if not lines:
+        return ""
+
+    body = "Relevant context from memory:\n" + "\n".join(f"- {ln}" for ln in lines)
+    if len(body) > max_chars:
+        body = body[: max_chars - 3] + "..."
+    return body
+
+
+def _needs_memory_smart(query: str) -> bool:
+    q = query.strip().lower()
+    if is_greeting(q):
+        return True
+    if len(q) < 4:
+        return False
+    triggers = (
+        "remember",
+        "recall",
+        "last time",
+        "you know",
+        "my name",
+        "about me",
+        "what did",
+        "when did",
+        "schedule",
+        "usually",
+        "prefer",
+    )
+    return any(t in q for t in triggers)

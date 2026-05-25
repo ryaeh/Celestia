@@ -8,16 +8,26 @@ import yaml
 
 from celestia_core.config import ROOT, get
 
+# Module-level cache: rebuilt only when personality.active changes.
+_PROMPT_CACHE: dict[str, str] = {}
+
+
+def invalidate_prompt_cache() -> None:
+    """Call after a config reload that may have changed the active personality."""
+    _PROMPT_CACHE.clear()
+
 _BASE = """You are {name}, a companion AI assistant on this Windows PC — not a generic smart speaker.
 Be natural and warm when appropriate; stay concise for tasks.
 For greetings or chat, reply in plain text only — no tools unless needed.
 Never open apps, CMD, browsers, or URLs unless the user clearly asked to open something specific.
 For Notepad on Windows, use open_path with 'notepad' or 'not defteri' only — never write.exe or WordPad.
 Never use example.com or made-up URLs.
-When the user asks you to remember something, call memory_add with their exact words (user facts only).
-To correct memory: memory_list, memory_delete (wrong entry), then memory_add (correct fact).
+When the user asks you to remember something, call memory_add with their exact words (optional kind: fact, instruction, summary, task).
+Memory also auto-saves in the background from chat — user can review or fix via the shell Memory page or memory_list / forget.
+To correct memory: memory_list, memory_delete (wrong entry), then memory_add (correct text).
 When answering about preferences, use stored facts in system context first; do not invent.
-On greetings (hi/hello), do not mention stored preferences unless the user asked."""
+On greetings (hi/hello), do not mention stored preferences unless the user asked.
+If the user says your name or a nickname (Celestia, Cece, etc.), they are addressing you — not telling you their name. Never call the user by your own name unless they explicitly said that is what they want to be called."""
 
 
 def _personality_dir() -> Path:
@@ -69,9 +79,13 @@ def _from_yaml(path: Path) -> str:
 
 
 def build_system_prompt() -> str:
+    active = get("personality.active", "default") or "default"
+    if active in _PROMPT_CACHE:
+        return _PROMPT_CACHE[active]
     display = get("app.display_name", "Celestia")
     prompt = _BASE.format(name=display)
     extra = load_personality_block()
     if extra:
         prompt = prompt + "\n\n--- Personality ---\n" + extra
+    _PROMPT_CACHE[active] = prompt
     return prompt

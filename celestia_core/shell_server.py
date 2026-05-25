@@ -1,31 +1,77 @@
-"""Localhost HTTP API for the Tauri desktop shell (127.0.0.1 only)."""
+"""Localhost HTTP API for the Tauri desktop shell (127.0.0.1 only).
+
+CC-88: Migrated from ThreadingHTTPServer to FastAPI + uvicorn.
+CC-89: SSE streaming endpoint POST /chat/stream added.
+"""
 
 from __future__ import annotations
 
 import json
 import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import time
 from pathlib import Path
-from typing import Any
-from urllib.parse import parse_qs, urlparse
+from typing import Any, Generator
+
+import uvicorn
+from fastapi import FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel
 
 from celestia_core.config import ROOT, get, load_config
 
-_server: ThreadingHTTPServer | None = None
-_server_thread: threading.Thread | None = None
+# ---------------------------------------------------------------------------
+# App
+# ---------------------------------------------------------------------------
+
+app = FastAPI(title="Celestia Shell API", docs_url=None, redoc_url=None)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type"],
+)
 
 
-def _json_response(handler: BaseHTTPRequestHandler, code: int, body: dict[str, Any]) -> None:
-    data = json.dumps(body, ensure_ascii=False).encode("utf-8")
-    handler.send_response(code)
-    handler.send_header("Content-Type", "application/json; charset=utf-8")
-    handler.send_header("Content-Length", str(len(data)))
-    handler.send_header("Access-Control-Allow-Origin", "*")
-    handler.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-    handler.send_header("Access-Control-Allow-Headers", "Content-Type")
-    handler.end_headers()
-    handler.wfile.write(data)
+@app.middleware("http")
+async def localhost_only(request: Request, call_next):
+    host = request.client.host if request.client else ""
+    if host not in ("127.0.0.1", "::1"):
+        return Response("Forbidden", status_code=403)
+    return await call_next(request)
 
+
+# ---------------------------------------------------------------------------
+# Request models
+# ---------------------------------------------------------------------------
+
+class ModeBody(BaseModel):
+    mode: str
+
+
+class ChatBody(BaseModel):
+    message: str
+    session_id: str | None = None
+
+
+class SelectSessionBody(BaseModel):
+    session_id: str
+
+
+class MemoryBody(BaseModel):
+    text: str
+    kind: str = "fact"
+
+
+class MemoryPatch(BaseModel):
+    text: str | None = None
+    kind: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers (unchanged from original)
+# ---------------------------------------------------------------------------
 
 def tail_audit(n: int = 20) -> list[dict[str, Any]]:
     rel = get("security.audit_log", "logs/tool_audit.jsonl")
@@ -74,122 +120,247 @@ def build_status() -> dict[str, Any]:
     }
 
 
-class _ShellHandler(BaseHTTPRequestHandler):
-    def log_message(self, format: str, *args: Any) -> None:
-        return
+def _memory_user_id() -> str:
+    return get("app.user_id", "atlas_user")
 
-    def _client_ok(self) -> bool:
-        host = self.client_address[0]
-        return host in ("127.0.0.1", "::1")
 
-    def do_OPTIONS(self) -> None:
-        if not self._client_ok():
-            self.send_error(403)
-            return
-        self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.end_headers()
+def _memory_list_payload() -> dict[str, Any]:
+    from skills.memory.store import get_all_entries
+    return {"entries": get_all_entries(_memory_user_id(), limit=200)}
 
-    def do_GET(self) -> None:
-        if not self._client_ok():
-            self.send_error(403)
-            return
-        path = urlparse(self.path).path
-        if path == "/status":
-            _json_response(self, 200, build_status())
-            return
-        if path == "/workspaces":
-            from celestia_core.scope import list_workspaces
 
-            ws = [str(p) for p in list_workspaces()]
-            _json_response(self, 200, {"workspaces": ws})
-            return
-        if path == "/audit/tail":
-            qs = parse_qs(urlparse(self.path).query)
-            n = int(qs.get("n", ["20"])[0])
-            _json_response(self, 200, {"entries": tail_audit(n)})
-            return
-        if path == "/chat/history":
-            from celestia_core.shell_chat import get_active_session_id, get_history
+def _memory_last_session_payload() -> dict[str, Any]:
+    from skills.memory.last_session import read_note
+    return read_note()
 
-            qs = parse_qs(urlparse(self.path).query)
-            sid = qs.get("session", [None])[0]
-            if not sid or sid == "default":
-                sid = get_active_session_id()
-            _json_response(self, 200, {"messages": get_history(sid), "session_id": sid})
-            return
-        if path == "/chat/sessions":
-            from celestia_core.shell_chat import get_active_session_id, list_sessions
 
-            _json_response(
-                self,
-                200,
-                {"sessions": list_sessions(), "active_id": get_active_session_id()},
-            )
-            return
-        self.send_error(404)
+def _memory_activity_payload(n: int = 30) -> dict[str, Any]:
+    from skills.memory.activity_feed import tail
+    return {"events": tail(n)}
 
-    def do_POST(self) -> None:
-        if not self._client_ok():
-            self.send_error(403)
-            return
-        path = urlparse(self.path).path
-        length = int(self.headers.get("Content-Length", 0))
-        raw = self.rfile.read(length) if length else b"{}"
+
+# ---------------------------------------------------------------------------
+# Routes — GET
+# ---------------------------------------------------------------------------
+
+@app.get("/status")
+def get_status():
+    return build_status()
+
+
+@app.get("/workspaces")
+def get_workspaces():
+    from celestia_core.scope import list_workspaces
+    return {"workspaces": [str(p) for p in list_workspaces()]}
+
+
+@app.get("/audit/tail")
+def get_audit_tail(n: int = 20):
+    return {"entries": tail_audit(n)}
+
+
+@app.get("/chat/history")
+def get_chat_history(session: str | None = None):
+    from celestia_core.shell_chat import get_active_session_id, get_history
+    sid = session if session and session != "default" else get_active_session_id()
+    return {"messages": get_history(sid), "session_id": sid}
+
+
+@app.get("/chat/sessions")
+def get_chat_sessions():
+    from celestia_core.shell_chat import get_active_session_id, list_sessions
+    return {"sessions": list_sessions(), "active_id": get_active_session_id()}
+
+
+@app.get("/chat/ptt/status")
+def get_ptt_status():
+    from celestia_core.shell_ptt import ptt_status
+    return ptt_status()
+
+
+@app.get("/memory")
+def get_memory():
+    return _memory_list_payload()
+
+
+@app.get("/memory/last-session")
+def get_memory_last_session():
+    return _memory_last_session_payload()
+
+
+@app.get("/memory/activity")
+def get_memory_activity(n: int = 30):
+    return _memory_activity_payload(n)
+
+
+@app.get("/memory/{memory_id}")
+def get_memory_entry(memory_id: str):
+    from skills.memory.store import get_all_entries
+    entry = next(
+        (e for e in get_all_entries(_memory_user_id(), 200) if e["id"] == memory_id),
+        None,
+    )
+    if not entry:
+        return JSONResponse(status_code=404, content={"error": "not found"})
+    return entry
+
+
+# ---------------------------------------------------------------------------
+# Routes — POST
+# ---------------------------------------------------------------------------
+
+@app.post("/mode")
+def post_mode(body: ModeBody):
+    from celestia_core import security
+    if body.mode not in ("safe", "scoped", "armed"):
+        return JSONResponse(status_code=400, content={"error": "mode must be safe, scoped, or armed"})
+    security.set_mode(body.mode)
+    return {"ok": True, "mode": security.get_mode(), "label": security.armed_status_label()}
+
+
+@app.post("/chat")
+def post_chat(body: ChatBody):
+    from celestia_core.shell_chat import send_message
+    msg = body.message.strip()
+    try:
+        result = send_message(msg, session_id=body.session_id, source="shell")
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+    if "error" in result:
+        return JSONResponse(status_code=400, content=result)
+    return result
+
+
+@app.post("/chat/stream")
+def post_chat_stream(body: ChatBody):
+    """SSE streaming endpoint (CC-89).
+
+    Yields:
+        data: {"token": "..."}      — one event per Ollama token chunk
+        data: {"done": true, "reply": "...", "session_id": "...", "messages": [...]}
+        data: {"error": "..."}      — on LLM failure
+    """
+    from celestia_core.shell_chat import send_message_stream
+
+    def _generate() -> Generator[str, None, None]:
         try:
-            body = json.loads(raw.decode("utf-8") or "{}")
-        except json.JSONDecodeError:
-            _json_response(self, 400, {"error": "invalid JSON"})
-            return
+            for event in send_message_stream(
+                body.message.strip(),
+                session_id=body.session_id,
+                source="shell",
+            ):
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
-        if path == "/mode":
-            from celestia_core import security
+    return StreamingResponse(
+        _generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
-            mode = str(body.get("mode", "")).lower()
-            if mode not in ("safe", "scoped", "armed"):
-                _json_response(self, 400, {"error": "mode must be safe, scoped, or armed"})
-                return
-            security.set_mode(mode)
-            _json_response(
-                self,
-                200,
-                {"ok": True, "mode": security.get_mode(), "label": security.armed_status_label()},
-            )
-            return
-        if path == "/chat":
-            from celestia_core.shell_chat import send_message
 
-            msg = str(body.get("message", "")).strip()
-            sid_raw = body.get("session_id")
-            sid = str(sid_raw) if sid_raw else None
-            result = send_message(msg, session_id=sid, source="shell")
-            if "error" in result:
-                _json_response(self, 400, result)
-                return
-            _json_response(self, 200, result)
-            return
-        if path == "/chat/new":
-            from celestia_core.shell_chat import create_session
+@app.post("/chat/new")
+def post_chat_new():
+    from celestia_core.shell_chat import create_session
+    sid = create_session()
+    return {"ok": True, "session_id": sid, "messages": []}
 
-            sid = create_session()
-            _json_response(self, 200, {"ok": True, "session_id": sid, "messages": []})
-            return
-        if path == "/chat/select":
-            from celestia_core.shell_chat import get_history, set_active_session
 
-            sid = str(body.get("session_id", "")).strip()
-            if not sid or not set_active_session(sid):
-                _json_response(self, 400, {"error": "invalid session_id"})
-                return
-            _json_response(
-                self,
-                200,
-                {"ok": True, "session_id": sid, "messages": get_history(sid)},
-            )
-            return
-        self.send_error(404)
+@app.post("/chat/select")
+def post_chat_select(body: SelectSessionBody):
+    from celestia_core.shell_chat import get_history, set_active_session
+    sid = body.session_id.strip()
+    if not sid or not set_active_session(sid):
+        return JSONResponse(status_code=400, content={"error": "invalid session_id"})
+    return {"ok": True, "session_id": sid, "messages": get_history(sid)}
+
+
+@app.post("/chat/ptt/start")
+def post_ptt_start():
+    from celestia_core.shell_ptt import ptt_start
+    result = ptt_start()
+    code = 400 if "error" in result else 200
+    return JSONResponse(status_code=code, content=result)
+
+
+@app.post("/chat/ptt/stop")
+def post_ptt_stop(body: ChatBody):
+    from celestia_core.shell_ptt import ptt_finish
+    try:
+        result = ptt_finish(session_id=body.session_id)
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+    code = 400 if "error" in result else 200
+    return JSONResponse(status_code=code, content=result)
+
+
+@app.post("/chat/ptt/cancel")
+def post_ptt_cancel():
+    from celestia_core.shell_ptt import ptt_cancel
+    return ptt_cancel()
+
+
+@app.post("/memory")
+def post_memory(body: MemoryBody):
+    from skills.memory.activity_feed import append_event
+    from skills.memory.store import add
+    text = body.text.strip()
+    if not text:
+        return JSONResponse(status_code=400, content={"error": "text required"})
+    try:
+        add(text, _memory_user_id(), kind=body.kind)
+        append_event(action="saved", text=text, kind=body.kind, source="manual")
+        return {"ok": True, **_memory_list_payload()}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/memory/last-session/refresh")
+def post_memory_last_session_refresh():
+    from celestia_core.shell_chat import get_active_session_id, get_history
+    from skills.memory.last_session import update_from_messages
+    hist = get_history(get_active_session_id())
+    update_from_messages(hist)
+    return {"ok": True, **_memory_last_session_payload()}
+
+
+# ---------------------------------------------------------------------------
+# Routes — PATCH / DELETE
+# ---------------------------------------------------------------------------
+
+@app.patch("/memory/{memory_id}")
+def patch_memory(memory_id: str, body: MemoryPatch):
+    from skills.memory.store import update_entry
+    result = update_entry(
+        memory_id,
+        text=body.text.strip() if body.text else None,
+        kind=body.kind.strip() if body.kind else None,
+        user_id=_memory_user_id(),
+    )
+    if result == "Memory not found.":
+        return JSONResponse(status_code=404, content={"error": result})
+    return {"ok": True, "message": result, **_memory_list_payload()}
+
+
+@app.delete("/memory/{memory_id}")
+def delete_memory(memory_id: str):
+    from skills.memory.store import delete_by_id
+    result = delete_by_id(memory_id)
+    if "failed" in result.lower():
+        return JSONResponse(status_code=400, content={"error": result})
+    return {"ok": True, "message": result, **_memory_list_payload()}
+
+
+# ---------------------------------------------------------------------------
+# Server lifecycle (same public interface as before)
+# ---------------------------------------------------------------------------
+
+_uvicorn_server: uvicorn.Server | None = None
+_server_thread: threading.Thread | None = None
 
 
 def default_port() -> int:
@@ -197,41 +368,79 @@ def default_port() -> int:
     return int(get("ui.shell_port", 8765))
 
 
+def api_url(port: int | None = None) -> str:
+    p = port if port is not None else default_port()
+    return f"http://127.0.0.1:{p}"
+
+
+def ping(port: int | None = None, *, timeout: float = 0.4) -> bool:
+    """True if the shell API responds on localhost."""
+    import urllib.error
+    import urllib.request
+
+    url = f"{api_url(port)}/status"
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            return resp.status == 200
+    except (urllib.error.URLError, OSError):
+        return False
+
+
 def start_server(port: int | None = None, *, daemon: bool = True) -> int:
-    """Start background HTTP server; returns bound port."""
-    global _server, _server_thread
+    """Start FastAPI server in a background thread; returns bound port."""
+    global _uvicorn_server, _server_thread
     load_config()
     p = port if port is not None else default_port()
-    if _server is not None:
+
+    if _uvicorn_server is not None and _uvicorn_server.started:
         return p
-    _server = ThreadingHTTPServer(("127.0.0.1", p), _ShellHandler)
-    actual = _server.server_address[1]
 
-    def _run() -> None:
-        assert _server is not None
-        _server.serve_forever(poll_interval=0.5)
-
-    _server_thread = threading.Thread(target=_run, name="celestia-shell-api", daemon=daemon)
+    config = uvicorn.Config(
+        app,
+        host="127.0.0.1",
+        port=p,
+        log_level="error",
+        access_log=False,
+    )
+    _uvicorn_server = uvicorn.Server(config)
+    _server_thread = threading.Thread(
+        target=_uvicorn_server.run,
+        name="celestia-shell-api",
+        daemon=daemon,
+    )
     _server_thread.start()
-    return actual
+
+    # Wait up to 5 s for uvicorn to become ready
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        if _uvicorn_server.started:
+            break
+        time.sleep(0.05)
+
+    try:
+        from celestia_core.shell_ptt import start_global_hotkey_listener
+        start_global_hotkey_listener()
+    except Exception as e:
+        print(f"[shell-ptt] hotkey listener skipped: {e}")
+
+    return p
 
 
 def stop_server() -> None:
-    global _server, _server_thread
-    if _server is not None:
-        _server.shutdown()
-        _server = None
+    global _uvicorn_server, _server_thread
+    if _uvicorn_server is not None:
+        _uvicorn_server.should_exit = True
+    _uvicorn_server = None
     _server_thread = None
 
 
 def run_server_forever(port: int | None = None) -> None:
     load_config()
     p = port if port is not None else default_port()
-    httpd = ThreadingHTTPServer(("127.0.0.1", p), _ShellHandler)
-    print(f"[shell] API http://127.0.0.1:{httpd.server_address[1]}", flush=True)
+    print(f"[shell] API http://127.0.0.1:{p}", flush=True)
     try:
-        httpd.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        httpd.shutdown()
+        from celestia_core.shell_ptt import start_global_hotkey_listener
+        start_global_hotkey_listener()
+    except Exception as e:
+        print(f"[shell-ptt] hotkey listener skipped: {e}")
+    uvicorn.run(app, host="127.0.0.1", port=p, log_level="error", access_log=False)

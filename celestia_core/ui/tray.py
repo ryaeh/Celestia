@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 import re
-import subprocess
-import sys
 import threading
-from pathlib import Path
 
-from celestia_core.agent import run_turn
 from celestia_core.cli_help import print_help
-from celestia_core.config import get
+from celestia_core.config import get, load_config
 from celestia_core import security
+from celestia_core.shell_chat import send_message
 
 _OPEN_LINE = re.compile(r"^open\s+(.+)$", re.I)
 
@@ -59,6 +56,13 @@ class CelestiaTray:
     def _prompt_tag(self) -> str:
         return self._name.lower()
 
+    def _session_chat(self, text: str, *, source: str) -> str:
+        """Send to the shared shell session store (CC-5)."""
+        result = send_message(text, source=source)
+        if "error" in result:
+            raise RuntimeError(result["error"])
+        return str(result.get("reply") or "")
+
     def _on_voice_ptt(self):
         if not self._busy.acquire(blocking=False):
             print("[tray] busy — wait for current task")
@@ -70,7 +74,7 @@ class CelestiaTray:
             text = record_and_transcribe(seconds=self.record_seconds)
             if text:
                 print(f"[you] {text}")
-                reply, _ = run_turn(text, speak=self.speak, source="tray")
+                reply = self._session_chat(text, source="voice")
                 print(f"{self._prompt_tag()}>", reply)
         except Exception as e:
             print(f"[ptt] error: {e}")
@@ -209,7 +213,11 @@ class CelestiaTray:
             print(opened)
             return True
 
-        reply, _ = run_turn(line, speak=self.speak, source="tray")
+        try:
+            reply = self._session_chat(line, source="tray")
+        except Exception as e:
+            print(f"[tray] chat error: {e}")
+            return True
         print(f"{tag}>", reply)
         return True
 
@@ -307,19 +315,18 @@ class CelestiaTray:
             self._cycle_mode(icon)
 
         def on_chat(_icon, _item):
-            root = Path(__file__).resolve().parents[1]
-            script = root / "run_celestia.py"
-            flags = (
-                subprocess.CREATE_NEW_CONSOLE
-                if sys.platform == "win32" and hasattr(subprocess, "CREATE_NEW_CONSOLE")
-                else 0
-            )
-            subprocess.Popen(
-                [sys.executable, str(script), "--tray-chat"],
-                cwd=str(root),
-                creationflags=flags,
-            )
-            print("[tray] Chat window opened (type there — not in this console).")
+            load_config()
+            if get("ui.shell_settings", True):
+                from celestia_core.shell_launch import open_shell_chat
+
+                open_shell_chat()
+                return
+            threading.Thread(
+                target=self._chat_loop,
+                daemon=True,
+                name="celestia-tray-chat",
+            ).start()
+            print("[tray] Chat thread started (shared session file; enable shell for the app UI).")
 
         def on_help(_icon, _item):
             print_help(for_tray=True)
@@ -330,7 +337,10 @@ class CelestiaTray:
         sec_label = f"Security: {_mode_title(mode)} -> {_mode_title(nxt)}"
         items = [
             pystray.MenuItem(sec_label, on_cycle),
-            pystray.MenuItem("Chat (multi-turn)", on_chat),
+            pystray.MenuItem(
+                "Chat" if get("ui.shell_settings", True) else "Chat (console)",
+                on_chat,
+            ),
             pystray.MenuItem("Help", on_help),
             pystray.MenuItem("Voice (PTT)", on_voice),
         ]
@@ -352,7 +362,11 @@ class CelestiaTray:
         )
         self._start_hotkey_listeners()
         print(f"[tray] {self._name} — mode {mode}. Right-click icon near the clock.")
-        print("[tray] Chat opens a NEW window. Screen: three menu items or Ctrl+Shift+S.")
+        if get("ui.shell_settings", True):
+            print("[tray] Chat opens the desktop shell (same history as voice PTT).")
+        else:
+            print("[tray] Chat runs in a background thread here (set ui.shell_settings: true for the app).")
+        print("[tray] Screen: menu items or vision hotkey when enabled.")
         icon.run()
 
 

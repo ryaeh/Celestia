@@ -1,14 +1,35 @@
 const DEFAULT_API = "http://127.0.0.1:8765";
+const DEV_PROXY_API = "/api";
+
+const API_HINT =
+  "Start the Python API: .\\venv\\Scripts\\python.exe run_celestia.py --shell-server (or run_celestia.py --shell).";
 
 export function apiBase(): string {
+  // Vite dev: same-origin proxy avoids browser blocks (localhost:1420 → :8765).
+  if (import.meta.env.DEV) {
+    return DEV_PROXY_API;
+  }
   const fromEnv = import.meta.env.VITE_SHELL_API;
-  if (fromEnv) return fromEnv;
+  if (fromEnv) return fromEnv.replace(/\/$/, "");
   if (typeof window !== "undefined") {
     const injected = (window as unknown as { __CELESTIA_SHELL_API?: string })
       .__CELESTIA_SHELL_API;
-    if (injected) return injected;
+    if (injected) return injected.replace(/\/$/, "");
   }
   return DEFAULT_API;
+}
+
+async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  const url = `${apiBase()}${path}`;
+  try {
+    return await fetch(url, init);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/failed to fetch|network|load/i.test(msg)) {
+      throw new Error(`${msg}. ${API_HINT}`);
+    }
+    throw e;
+  }
 }
 
 export type Status = {
@@ -31,13 +52,13 @@ export type ChatSession = {
 };
 
 export async function fetchStatus(): Promise<Status> {
-  const r = await fetch(`${apiBase()}/status`);
+  const r = await apiFetch("/status");
   if (!r.ok) throw new Error(`status ${r.status}`);
   return r.json();
 }
 
 export async function setMode(mode: string): Promise<void> {
-  const r = await fetch(`${apiBase()}/mode`, {
+  const r = await apiFetch("/mode", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ mode }),
@@ -46,7 +67,7 @@ export async function setMode(mode: string): Promise<void> {
 }
 
 export async function fetchWorkspaces(): Promise<string[]> {
-  const r = await fetch(`${apiBase()}/workspaces`);
+  const r = await apiFetch("/workspaces");
   if (!r.ok) throw new Error(`workspaces ${r.status}`);
   const data = await r.json();
   return data.workspaces ?? [];
@@ -55,7 +76,7 @@ export async function fetchWorkspaces(): Promise<string[]> {
 export type AuditEntry = Record<string, unknown>;
 
 export async function fetchAuditTail(n = 20): Promise<AuditEntry[]> {
-  const r = await fetch(`${apiBase()}/audit/tail?n=${n}`);
+  const r = await apiFetch(`/audit/tail?n=${n}`);
   if (!r.ok) throw new Error(`audit ${r.status}`);
   const data = await r.json();
   return data.entries ?? [];
@@ -65,7 +86,7 @@ export async function fetchChatSessions(): Promise<{
   sessions: ChatSession[];
   active_id: string;
 }> {
-  const r = await fetch(`${apiBase()}/chat/sessions`);
+  const r = await apiFetch("/chat/sessions");
   if (!r.ok) throw new Error(`chat sessions ${r.status}`);
   return r.json();
 }
@@ -75,7 +96,7 @@ export async function fetchChatHistory(sessionId?: string): Promise<{
   session_id: string;
 }> {
   const q = sessionId ? `?session=${encodeURIComponent(sessionId)}` : "";
-  const r = await fetch(`${apiBase()}/chat/history${q}`);
+  const r = await apiFetch(`/chat/history${q}`);
   if (!r.ok) throw new Error(`chat history ${r.status}`);
   return r.json();
 }
@@ -88,17 +109,26 @@ export async function sendChatMessage(
   session_id: string;
   messages: ChatMessage[];
 }> {
-  const r = await fetch(`${apiBase()}/chat`, {
+  const r = await apiFetch("/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, session_id: sessionId }),
   });
-  if (!r.ok) throw new Error(`chat ${r.status}`);
+  if (!r.ok) {
+    let detail = `chat ${r.status}`;
+    try {
+      const err = (await r.json()) as { error?: string };
+      if (err.error) detail = err.error;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail);
+  }
   return r.json();
 }
 
 export async function createChatSession(): Promise<string> {
-  const r = await fetch(`${apiBase()}/chat/new`, {
+  const r = await apiFetch("/chat/new", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({}),
@@ -108,11 +138,60 @@ export async function createChatSession(): Promise<string> {
   return data.session_id as string;
 }
 
+export type PttStatus = {
+  phase: string;
+  listening: boolean;
+  busy: boolean;
+  error?: string | null;
+};
+
+export async function fetchPttStatus(): Promise<PttStatus> {
+  const r = await apiFetch("/chat/ptt/status");
+  if (!r.ok) throw new Error(`ptt status ${r.status}`);
+  return r.json();
+}
+
+export async function pttStart(): Promise<{ ok?: boolean; error?: string }> {
+  const r = await apiFetch("/chat/ptt/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || `ptt start ${r.status}`);
+  return data;
+}
+
+export async function pttStop(sessionId?: string): Promise<{
+  reply?: string;
+  session_id?: string;
+  messages?: ChatMessage[];
+  error?: string;
+}> {
+  const r = await apiFetch("/chat/ptt/stop", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId }),
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || `ptt stop ${r.status}`);
+  return data;
+}
+
+export async function pttCancel(): Promise<void> {
+  const r = await apiFetch("/chat/ptt/cancel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  if (!r.ok) throw new Error(`ptt cancel ${r.status}`);
+}
+
 export async function selectChatSession(sessionId: string): Promise<{
   session_id: string;
   messages: ChatMessage[];
 }> {
-  const r = await fetch(`${apiBase()}/chat/select`, {
+  const r = await apiFetch("/chat/select", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ session_id: sessionId }),
@@ -126,6 +205,92 @@ export async function clearChatSession(): Promise<string> {
   return createChatSession();
 }
 
+// ---------------------------------------------------------------------------
+// Streaming chat (CC-90)
+// ---------------------------------------------------------------------------
+
+export type ChatStreamToken = { token: string };
+export type ChatStreamDone = {
+  done: true;
+  reply: string;
+  session_id: string;
+  messages: ChatMessage[];
+};
+export type ChatStreamError = { error: string };
+export type ChatStreamEvent = ChatStreamToken | ChatStreamDone | ChatStreamError;
+
+/**
+ * Async generator that yields token events as the model streams, then a
+ * final done event once the response is complete and the session is saved.
+ *
+ * Falls back to the blocking POST /chat if the stream fails to open.
+ */
+export async function* streamChatMessage(
+  message: string,
+  sessionId?: string,
+): AsyncGenerator<ChatStreamEvent> {
+  const response = await apiFetch("/chat/stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, session_id: sessionId }),
+  });
+
+  if (!response.ok) {
+    let detail = `chat/stream ${response.status}`;
+    try {
+      const err = (await response.json()) as { error?: string };
+      if (err.error) detail = err.error;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail);
+  }
+
+  if (!response.body) {
+    throw new Error("Streaming not supported by this environment.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const data = line.slice(6).trim();
+        if (!data) continue;
+        try {
+          yield JSON.parse(data) as ChatStreamEvent;
+        } catch {
+          /* malformed chunk — skip */
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  // Flush any remaining data in the buffer
+  if (buffer.startsWith("data: ")) {
+    const data = buffer.slice(6).trim();
+    if (data) {
+      try {
+        yield JSON.parse(data) as ChatStreamEvent;
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
 export function initialRoute(): string {
   const envRoute = import.meta.env.VITE_SHELL_ROUTE;
   if (envRoute) return envRoute;
@@ -134,4 +299,83 @@ export function initialRoute(): string {
     if (q.get("route")) return q.get("route")!;
   }
   return "home";
+}
+
+export type MemoryKind = "fact" | "instruction" | "summary" | "task";
+
+export type MemoryEntry = {
+  id: string;
+  text: string;
+  kind: MemoryKind | string;
+  updated_at: number;
+};
+
+export type LastSessionNote = {
+  bullets: string[];
+  text: string;
+  updated_at: number;
+};
+
+async function memoryPayload(r: Response): Promise<MemoryEntry[]> {
+  if (!r.ok) throw new Error(`memory ${r.status}`);
+  const data = await r.json();
+  return data.entries ?? [];
+}
+
+export async function fetchMemoryEntries(): Promise<MemoryEntry[]> {
+  const r = await apiFetch("/memory");
+  return memoryPayload(r);
+}
+
+export async function fetchLastSession(): Promise<LastSessionNote> {
+  const r = await apiFetch("/memory/last-session");
+  if (!r.ok) throw new Error(`last-session ${r.status}`);
+  return r.json();
+}
+
+export async function createMemoryEntry(
+  text: string,
+  kind: MemoryKind = "fact",
+): Promise<MemoryEntry[]> {
+  const r = await apiFetch("/memory", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, kind }),
+  });
+  return memoryPayload(r);
+}
+
+export async function updateMemoryEntry(
+  id: string,
+  text: string,
+  kind?: MemoryKind,
+): Promise<MemoryEntry[]> {
+  const r = await apiFetch(`/memory/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, kind }),
+  });
+  return memoryPayload(r);
+}
+
+export async function deleteMemoryEntry(id: string): Promise<MemoryEntry[]> {
+  const r = await apiFetch(`/memory/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  return memoryPayload(r);
+}
+
+export async function refreshLastSession(): Promise<LastSessionNote> {
+  const r = await apiFetch("/memory/last-session/refresh", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  if (!r.ok) throw new Error(`refresh last-session ${r.status}`);
+  const data = await r.json();
+  return {
+    bullets: data.bullets ?? [],
+    text: data.text ?? "",
+    updated_at: data.updated_at ?? 0,
+  };
 }

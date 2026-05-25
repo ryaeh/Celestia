@@ -112,7 +112,14 @@ MEMORY_TOOL_SCHEMAS = [
             ),
             "parameters": {
                 "type": "object",
-                "properties": {"content": {"type": "string"}},
+                "properties": {
+                    "content": {"type": "string"},
+                    "kind": {
+                        "type": "string",
+                        "enum": ["fact", "instruction", "summary", "task"],
+                        "description": "Memory type (default fact)",
+                    },
+                },
                 "required": ["content"],
             },
         },

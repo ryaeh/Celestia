@@ -25,7 +25,40 @@ High-level delivery phases. **Planned work and ideas** live in [backlog.md](back
 
 | Phase | Focus |
 |-------|--------|
-| **4 — Product UI** | Tauri shell, folder picker, activity log; quiet chat (system lines → UI or verbose only) |
+| **4 — Product UI** | Tauri shell, Memory page, shell PTT, activity log, quiet UI |
+
+---
+
+## Next cycle (CC-88–CC-113)
+
+From the May 2026 project review. Broken into 5 epics:
+
+| Epic | Tickets | Focus |
+|------|---------|-------|
+| **Epic 1 — Latency & Streaming** | CC-88–CC-95 | FastAPI migration, SSE streaming, mode hint fix, Ollama timeout |
+| **Epic 2 — Companion Voice (M1)** | CC-96–CC-99 | Early TTS, end-of-utterance PTT, reply cap, quiet UI |
+| **Epic 3 — Habit Memory (M2)** | CC-100–CC-104 | Signal logger, habit rollup, habit kind, inject router |
+| **Epic 4 — Shell UI Completion** | CC-49, CC-105–CC-107 | Vision confirm modal, Activity panel, personality switcher |
+| **Epic 5 — Developer Health** | CC-108–CC-113 | API docs, skills guide, troubleshoot guide, pytest, CI |
+
+Execution order: Epic 1 → Epic 2 → Epics 3–5 in parallel.
+
+---
+
+## Companion track (M phases)
+
+Runs alongside the main phase roadmap. M phases focus on memory + conversation feel:
+
+| M phase | Focus | Status |
+|---------|-------|--------|
+| **M0** | Memory v2 — typed entries, auto-save, budgeted inject, shell Memory page | **Done** |
+| **M1** | Streaming voice — first audio in ~1–2s, end-of-utterance PTT, reply caps | Epic 2 above |
+| **M2** | Habit memory — signal log, weekly rollup, inject router | Epic 3 above |
+| **M3a** | Dialogue manager — listen / answer / brainstorm / vent states (text first) | Backlog |
+| **M3b** | Duplex voice — barge-in, mic open while speaking | Backlog |
+| **M4** | Proactive companion — speak first on high-confidence habits | Backlog |
+
+Full companion track detail: [companion-roadmap.md](companion-roadmap.md)
 
 ---
 
@@ -36,7 +69,7 @@ High-level delivery phases. **Planned work and ideas** live in [backlog.md](back
 | **3.5** | Linux port (`platform/linux.py`), tray on target distro |
 | **5+** | Morning briefing, autostart, installer |
 
-Detail for each planned item: [backlog.md](backlog.md)
+Detail for each planned item: [backlog.md](backlog.md) · Dev workflow: [workflow.md](workflow.md)
 
 ---
 

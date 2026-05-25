@@ -102,7 +102,11 @@ def execute_tool(
             if name == "memory_search":
                 result = memory.search_json(arguments["query"], user_id)
             elif name == "memory_add":
-                result = memory.add_json(arguments["content"], user_id)
+                result = memory.add_json(
+                    arguments["content"],
+                    user_id,
+                    kind=str(arguments.get("kind") or "fact"),
+                )
             elif name == "memory_list":
                 result = memory.format_list(user_id)
             elif name == "memory_delete":

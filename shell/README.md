@@ -45,7 +45,7 @@ $env:VITE_SHELL_API="http://127.0.0.1:8765"
 npm run tauri dev
 ```
 
-Or use `--shell` which sets `VITE_SHELL_API` and `VITE_SHELL_ROUTE` automatically.
+Or use `--shell` which sets `VITE_SHELL_ROUTE` and starts the API. `npm run dev` also runs `scripts/ensure-api.mjs` so the Python server is up before Vite (dev UI uses `/api` proxy → port 8765).
 
 ## API (127.0.0.1)
 
@@ -57,6 +57,12 @@ Or use `--shell` which sets `VITE_SHELL_API` and `VITE_SHELL_ROUTE` automaticall
 | GET | `/audit/tail?n=20` | Recent tool audit lines |
 
 Port: `ui.shell_port` in `config.yaml` (default `8765`).
+
+### Push-to-talk (CC-84)
+
+- Hold the **mic** button in the chat bar, or hold **`ui.shell_ptt_hotkey`** (default `ctrl+alt+shift+v`) when the shell API is running.
+- Release to transcribe and reply in the **active** sidebar chat (same session as typed messages).
+- Tray PTT stays on `voice.push_to_talk_hotkey` (`ctrl+alt+v`).
 
 ## Config
 

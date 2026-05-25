@@ -2,14 +2,15 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchChatSessions, initialRoute } from "./api";
 import Sidebar from "./components/Sidebar";
 import Home from "./pages/Home";
+import Memory from "./pages/Memory";
 import Placeholder from "./pages/Placeholder";
 import Settings from "./pages/Settings";
 import "./App.css";
 
-export type Route = "home" | "settings" | "personality" | "activity";
+export type Route = "home" | "settings" | "personality" | "activity" | "memory";
 
 function normalizeRoute(raw: string): Route {
-  if (raw === "settings" || raw === "personality" || raw === "activity") {
+  if (raw === "settings" || raw === "personality" || raw === "activity" || raw === "memory") {
     return raw;
   }
   return "home";
@@ -19,6 +20,8 @@ function SecondaryPage({ route }: { route: Route }) {
   switch (route) {
     case "settings":
       return <Settings />;
+    case "memory":
+      return <Memory />;
     case "personality":
       return (
         <Placeholder

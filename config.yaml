@@ -24,12 +24,19 @@ llm:
 
 memory:
   enabled: true
-  inject: smart          # smart | always | off — when to auto-load memories into chat
+  inject: always_budgeted      # always_budgeted | smart | off
+  inject_max_lines: 8
+  inject_max_chars: 1200
+  last_session_path: data/memory/last_session.json
+  activity_feed_path: data/memory/activity_feed.jsonl
   session_consolidate: true
-  session_consolidate_every: 4      # every N chat turns, summarize → long-term memory
-  session_consolidate_on_end: true  # also run on newchat / quit
-  session_consolidate_verbose: true # print [memory] saved: ... with reasoning
+  session_consolidate_mode: auto
+  session_consolidate_every: 6
+  session_consolidate_min_user_turns: 2
+  session_consolidate_on_end: true
+  session_consolidate_verbose: false
   session_consolidate_max_facts: 3
+  kinds_enabled: [fact, instruction, summary, task]
   provider: mem0
   vector_store: chroma
   chroma:
@@ -106,6 +113,11 @@ resources:
 
 ui:
   tray: true
+  shell_port: 8765
+  shell_settings: true
+  shell_ptt_enabled: true
+  shell_ptt_hotkey: ctrl+alt+shift+v
+  shell_ptt_max_seconds: 45
 
 automation:
   n8n_enabled: false

@@ -1,4 +1,4 @@
-"""Summarize chat session → long-term memory (no user confirm)."""
+"""Summarize chat session → typed long-term memory (v2 auto-save)."""
 
 from __future__ import annotations
 
@@ -9,9 +9,30 @@ from typing import Any
 import ollama
 
 from celestia_core.config import get
-from skills.memory.store import _should_skip_memory, add, get_all_texts
+from skills.memory.activity_feed import append_event
+from skills.memory.store import _should_skip_memory, add, get_entries_by_kind
+from skills.memory.types import KINDS, MemoryKind, normalize_kind
 
 _JSON_BLOCK = re.compile(r"\{[\s\S]*\}")
+
+_REMEMBER_HINTS = re.compile(
+    r"\b(remember|memorize|memorise|don't forget|dont forget|do not forget|"
+    r"keep in mind|save this|note that|store this|never forget)\b",
+    re.I,
+)
+
+_INFERENCE_MARKERS = re.compile(
+    r"\b(helps in|useful for|understanding user|scheduling|inferred|likely|probably|"
+    r"may help|could help|suggests that|it seems)\b",
+    re.I,
+)
+
+_KIND_KEYS: dict[str, MemoryKind] = {
+    "facts": "fact",
+    "instructions": "instruction",
+    "summaries": "summary",
+    "tasks": "task",
+}
 
 
 def _dialog_excerpt(messages: list[dict[str, Any]], start_index: int) -> str:
@@ -23,44 +44,127 @@ def _dialog_excerpt(messages: list[dict[str, Any]], start_index: int) -> str:
         elif role == "assistant":
             text = (m.get("content") or "").strip()
             if text:
-                lines.append(f"Assistant: {text[:500]}")
-        elif role == "tool":
-            name = m.get("name", "tool")
-            body = str(m.get("content", ""))[:200]
-            lines.append(f"[{name}: {body}]")
-    return "\n".join(lines[-40:])
+                lines.append(f"Assistant: {text[:400]}")
+    return "\n".join(lines[-30:])
 
 
-def _parse_facts(raw: str) -> list[dict[str, str]]:
+def _user_turns_since(messages: list[dict[str, Any]], start_index: int) -> int:
+    return sum(1 for m in messages[start_index:] if m.get("role") == "user")
+
+
+def _user_asked_to_remember(messages: list[dict[str, Any]], start_index: int) -> bool:
+    for m in messages[start_index:]:
+        if m.get("role") != "user":
+            continue
+        if _REMEMBER_HINTS.search(m.get("content") or ""):
+            return True
+    return False
+
+
+def consolidate_mode() -> str:
+    """off | explicit | auto."""
+    raw = str(get("memory.session_consolidate_mode", "auto") or "auto").lower()
+    if raw in ("off", "false", "0", "none"):
+        return "off"
+    if raw in ("explicit", "manual"):
+        return "explicit"
+    return "auto"
+
+
+def should_run_consolidation(
+    messages: list[dict[str, Any]],
+    *,
+    start_index: int,
+    end: bool = False,
+) -> bool:
+    if not get("memory.enabled", True):
+        return False
+    if not get("memory.session_consolidate", True):
+        return False
+
+    mode = consolidate_mode()
+    if mode == "off":
+        return False
+    if mode == "explicit":
+        if end and get("memory.session_consolidate_on_end", True):
+            return _user_asked_to_remember(messages, start_index)
+        return _user_asked_to_remember(messages, start_index)
+
+    if end:
+        return bool(get("memory.session_consolidate_on_end", True))
+
+    min_users = int(get("memory.session_consolidate_min_user_turns", 2))
+    if _user_turns_since(messages, start_index) < min_users:
+        return False
+
+    return True
+
+
+def _parse_typed(raw: str) -> dict[MemoryKind, list[str]]:
     raw = raw.strip()
     match = _JSON_BLOCK.search(raw)
     if not match:
-        return []
+        return {k: [] for k in KINDS}
     try:
         data = json.loads(match.group())
     except json.JSONDecodeError:
-        return []
-    facts = data.get("facts") or []
-    if not isinstance(facts, list):
-        return []
-    out: list[dict[str, str]] = []
-    for item in facts:
-        if not isinstance(item, dict):
+        return {k: [] for k in KINDS}
+
+    out: dict[MemoryKind, list[str]] = {k: [] for k in KINDS}
+    for key, kind in _KIND_KEYS.items():
+        items = data.get(key) or []
+        if not isinstance(items, list):
             continue
-        text = str(item.get("text") or item.get("fact") or "").strip()
-        if not text:
-            continue
-        reason = str(item.get("reason") or item.get("why") or "session summary").strip()
-        out.append({"text": text, "reason": reason})
+        for item in items:
+            if isinstance(item, str):
+                text = item.strip()
+            elif isinstance(item, dict):
+                text = str(item.get("text") or item.get("fact") or "").strip()
+            else:
+                continue
+            if text:
+                out[kind].append(text)
     return out
 
 
+def _normalize_fact(text: str) -> str:
+    return re.sub(r"\s+", " ", text.lower().strip())
+
+
+def _word_set(text: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9]{3,}", text.lower()))
+
+
 def _is_duplicate(text: str, existing: list[str]) -> bool:
-    low = text.lower()
+    low = _normalize_fact(text)
+    words = _word_set(text)
     for ex in existing:
-        if low == ex.lower() or low in ex.lower() or ex.lower() in low:
+        ex_low = _normalize_fact(ex)
+        if low == ex_low:
             return True
+        if len(low) > 12 and (low in ex_low or ex_low in low):
+            return True
+        ex_words = _word_set(ex)
+        if words and ex_words:
+            overlap = len(words & ex_words) / min(len(words), len(ex_words))
+            if overlap >= 0.72:
+                return True
     return False
+
+
+def _reject_entry(text: str, kind: MemoryKind) -> str | None:
+    if _should_skip_memory(text):
+        return "assistant/self text"
+    if len(text) < 6:
+        return "too short"
+    if kind != "summary" and _INFERENCE_MARKERS.search(text):
+        return "inferred/meta"
+    if text.strip().endswith("?"):
+        return "question"
+    low = text.lower()
+    if low.startswith(("the user asked", "the assistant", "celestia ", "atlas ")):
+        return "meta narration"
+    return None
 
 
 def consolidate_session_messages(
@@ -70,61 +174,74 @@ def consolidate_session_messages(
     start_index: int = 0,
 ) -> tuple[int, list[str]]:
     """
-    Analyze new session messages; store 0–3 user facts in long-term memory.
-    Returns (new_start_index, human-readable lines about what was stored).
+    Store typed memories. Returns (new_start_index, lines for optional verbose log).
     """
-    if not get("memory.enabled", True):
-        return len(messages), []
-    if not get("memory.session_consolidate", True):
+    if not should_run_consolidation(messages, start_index=start_index):
         return len(messages), []
 
     excerpt = _dialog_excerpt(messages, start_index)
-    if not excerpt.strip() or len(excerpt) < 40:
+    if not excerpt.strip() or len(excerpt) < 30:
         return len(messages), []
 
+    known_blocks: list[str] = []
+    existing_by_kind: dict[MemoryKind, list[str]] = {}
+    for kind in KINDS:
+        texts = [e["text"] for e in get_entries_by_kind(user_id, kind, limit=40)]
+        existing_by_kind[kind] = texts
+        if texts:
+            known_blocks.append(f"{kind.upper()}:\n" + "\n".join(f"- {t}" for t in texts[:20]))
+    known_block = "\n\n".join(known_blocks) if known_blocks else "(none yet)"
+
     model = get("memory.session_consolidate_model") or get("llm.chat_model", "llama3.2:3b")
+    max_per_kind = int(get("memory.session_consolidate_max_facts", 3))
+
     prompt = (
-        "You review a chat between a user and an assistant. "
-        "Pick 0–3 durable facts about THE USER ONLY that would help in future conversations.\n"
-        "Store: preferences, names, projects, habits, stated goals.\n"
-        "Do NOT store: greetings, one-off tasks, assistant identity, tool errors, "
-        "file paths unless the user said they always use that location.\n"
-        "Respond with JSON only:\n"
-        '{"facts":[{"text":"short fact in third person about user","reason":"why it matters"}]}\n'
-        "If nothing is worth long-term memory, return: {\"facts\":[]}\n\n"
-        f"--- Chat excerpt ---\n{excerpt}"
+        "Review this chat excerpt. Extract durable memories in four categories.\n"
+        "Rules:\n"
+        "- 0 items per category is valid.\n"
+        "- NEVER duplicate items under KNOWN MEMOS.\n"
+        "- facts: user-stated preferences, projects, names, habits\n"
+        "- instructions: standing rules the user wants you to follow\n"
+        "- summaries: brief recap of what was discussed (1-2 lines max)\n"
+        "- tasks: open todos or things the user plans to do\n"
+        "- Do NOT store greetings, assistant opinions, 'helps with X' reasoning, or guesses.\n"
+        "JSON only:\n"
+        '{"facts":[{"text":"..."}],"instructions":[{"text":"..."}],'
+        '"summaries":[{"text":"..."}],"tasks":[{"text":"..."}]}\n\n'
+        f"KNOWN:\n{known_block}\n\n--- Excerpt ---\n{excerpt}"
     )
 
     try:
         resp = ollama.chat(
             model=model,
             messages=[{"role": "user", "content": prompt}],
-            options={"num_predict": 512, "temperature": 0.2},
+            options={"num_predict": 512, "temperature": 0.1},
         )
         raw = (resp.get("message") or {}).get("content") or ""
+        if hasattr(raw, "model_dump"):
+            raw = raw.model_dump().get("content", "") or str(raw)
     except Exception as e:
-        return len(messages), [f"[memory] consolidate skipped: {e}"]
+        return len(messages), [f"consolidate skipped: {e}"]
 
-    facts = _parse_facts(raw)
-    if not facts:
-        return len(messages), []
-
-    existing = get_all_texts(user_id, limit=30)
+    typed = _parse_typed(str(raw))
     stored_lines: list[str] = []
-    max_facts = int(get("memory.session_consolidate_max_facts", 3))
 
-    for item in facts[:max_facts]:
-        text = item["text"]
-        reason = item["reason"]
-        if _should_skip_memory(text):
-            continue
-        if _is_duplicate(text, existing):
-            continue
-        try:
-            add(text, user_id)
-            existing.append(text)
-            stored_lines.append(f"{text} — {reason}")
-        except Exception as e:
-            stored_lines.append(f"(failed to store '{text[:40]}': {e})")
+    for kind in KINDS:
+        existing = existing_by_kind[kind]
+        for text in typed[kind][:max_per_kind]:
+            text = text.strip()
+            reject = _reject_entry(text, kind)
+            if reject:
+                continue
+            if _is_duplicate(text, existing):
+                continue
+            try:
+                add(text, user_id, kind=kind)
+                existing.append(text)
+                append_event(action="saved", text=text, kind=kind)
+                if get("memory.session_consolidate_verbose", False):
+                    stored_lines.append(f"[{kind}] {text}")
+            except Exception as e:
+                stored_lines.append(f"(failed [{kind}] '{text[:40]}': {e})")
 
     return len(messages), stored_lines

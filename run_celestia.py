@@ -139,7 +139,7 @@ def main() -> int:
             from celestia_core.shell_launch import launch_shell
 
             return launch_shell(route="settings")
-        from ui.settings_app import run_settings
+        from celestia_core.ui.settings_app import run_settings
 
         run_settings()
         return 0
@@ -156,7 +156,7 @@ def main() -> int:
         return 0
 
     if args.logs is not None:
-        from ui.settings_app import _tail_jsonl
+        from celestia_core.ui.settings_app import _tail_jsonl
         from celestia_core.config import ROOT
 
         rel = get("security.audit_log", "logs/tool_audit.jsonl")
@@ -190,15 +190,24 @@ def main() -> int:
 
     def _try_consolidate(*, end: bool = False) -> None:
         nonlocal chat_history, consolidate_from
-        if not chat_history or not get("memory.session_consolidate", True):
+        if not chat_history:
             return
-        if end and not get("memory.session_consolidate_on_end", True):
+        from skills.memory.session_consolidate import (
+            consolidate_mode,
+            consolidate_session_messages,
+            should_run_consolidation,
+        )
+
+        if consolidate_mode() == "off" or not get("memory.session_consolidate", True):
+            return
+        if not should_run_consolidation(
+            chat_history, start_index=consolidate_from, end=end
+        ):
             return
         if not end:
-            every = int(get("memory.session_consolidate_every", 4))
+            every = int(get("memory.session_consolidate_every", 6))
             if chat_turns < every or chat_turns % every != 0:
                 return
-        from skills.memory.session_consolidate import consolidate_session_messages
 
         uid = get("app.user_id", "atlas_user")
         consolidate_from, stored = consolidate_session_messages(
@@ -206,22 +215,24 @@ def main() -> int:
             uid,
             start_index=consolidate_from,
         )
-        if stored and get("memory.session_consolidate_verbose", True):
+        if stored and get("memory.session_consolidate_verbose", False):
             for line in stored:
                 print(f"[memory] saved: {line}")
 
     def handle(text: str, *, source: str = "cli") -> None:
-        nonlocal chat_history
+        nonlocal chat_turns
         text = text.strip()
         if not text:
             return
         use_session = get("chat.session_enabled", True)
         if use_session:
-            reply, chat_history = run_turn(
-                text, speak=speak, source=source, history=chat_history
-            )
-        else:
-            reply, _ = run_turn(text, speak=speak, source=source)
+            from celestia_core.shell_chat import send_message
+
+            result = send_message(text, source=source)
+            print(f"{tag}>", result.get("reply", ""))
+            chat_turns += 1
+            return
+        reply, _ = run_turn(text, speak=speak, source=source)
         print(f"{tag}>", reply)
 
     if args.screen is not None:
@@ -239,13 +250,13 @@ def main() -> int:
         return 0
 
     if args.tray_chat:
-        from ui.tray import run_tray_chat_console
+        from celestia_core.ui.tray import run_tray_chat_console
 
         run_tray_chat_console(speak=speak or get("voice.always_speak", False))
         return 0
 
     if args.tray:
-        from ui.tray import run_tray
+        from celestia_core.ui.tray import run_tray
 
         run_tray(speak=speak or get("voice.always_speak", False), record_seconds=args.seconds)
         return 0
@@ -263,8 +274,14 @@ def main() -> int:
                 if not text:
                     continue
                 print(f"[you] {text}")
-                reply, _ = run_turn(text, speak=speak or True, source="cli")
-                print(f"{tag}>", reply)
+                if get("chat.session_enabled", True):
+                    from celestia_core.shell_chat import send_message
+
+                    result = send_message(text, source="voice")
+                    print(f"{tag}>", result.get("reply", ""))
+                else:
+                    reply, _ = run_turn(text, speak=speak or True, source="cli")
+                    print(f"{tag}>", reply)
         except KeyboardInterrupt:
             print()
         return 0
@@ -277,23 +294,42 @@ def main() -> int:
 
         text = record_and_transcribe(seconds=args.seconds)
         print(f"[you] {text}")
-        handle(text)
+        if get("chat.session_enabled", True):
+            from celestia_core.shell_chat import send_message
+
+            result = send_message(text, source="voice")
+            print(f"{tag}>", result.get("reply", ""))
+        else:
+            handle(text, source="voice")
         return 0
 
     if args.interactive:
         name = get("app.display_name", "Celestia")
         print(f"{name} interactive — mode: {security.armed_status_label()} (shared with tray)")
         sess = "on" if get("chat.session_enabled", True) else "off"
-        cons = "on" if get("memory.session_consolidate", True) else "off"
+        mem_mode = "off"
+        if get("memory.session_consolidate", True):
+            mem_mode = get("memory.session_consolidate_mode", "auto")
         print(
             f"  Chat session: {sess} (newchat = clear). "
-            f"Auto memory from chat: {cons}. Empty line to quit."
+            f"Session→memory: {mem_mode} (auto-save in background). Empty line to quit."
         )
         try:
             while True:
                 line = input("you> ").strip()
                 if not line:
-                    _try_consolidate(end=True)
+                    if get("chat.session_enabled", True):
+                        from celestia_core.shell_chat import finalize_active_session
+
+                        finalize_active_session()
+                    else:
+                        _try_consolidate(end=True)
+                        try:
+                            from skills.memory.last_session import update_from_messages
+
+                            update_from_messages(chat_history)
+                        except Exception:
+                            pass
                     break
                 low = line.lower()
                 if low == "arm":
@@ -325,7 +361,7 @@ def main() -> int:
                         print("Usage: scope | scope scoped | scope add <path> | scope remove <path>")
                     continue
                 if low == "status":
-                    inj = get("memory.inject", "smart")
+                    inj = get("memory.inject", "always_budgeted")
                     print(
                         f"[status] PC: {security.armed_status_label()} (shared) | memory: {inj} | "
                         f"personality: {get('personality.active', 'default')}"
@@ -365,11 +401,18 @@ def main() -> int:
                     print("[tray] Started in a new window (icon near the clock). This chat stays open.")
                     continue
                 if low in ("newchat", "new chat", "clear chat"):
-                    _try_consolidate(end=True)
-                    chat_history = None
-                    consolidate_from = 0
-                    chat_turns = 0
-                    print("[chat] New conversation — previous messages forgotten.")
+                    if get("chat.session_enabled", True):
+                        from celestia_core.shell_chat import create_session
+
+                        create_session()
+                        chat_turns = 0
+                        print("[chat] New conversation (shared with shell/tray).")
+                    else:
+                        _try_consolidate(end=True)
+                        chat_history = None
+                        consolidate_from = 0
+                        chat_turns = 0
+                        print("[chat] New conversation — previous messages forgotten.")
                     continue
                 if low == "help":
                     print_help(for_tray=False)
@@ -464,10 +507,16 @@ def main() -> int:
                     print(run_screen_ask(q, mode=mode, speak=speak))
                 else:
                     handle(line, source="repl")
-                    chat_turns += 1
-                    _try_consolidate()
+                    if not get("chat.session_enabled", True):
+                        chat_turns += 1
+                        _try_consolidate()
         except (KeyboardInterrupt, EOFError):
-            _try_consolidate(end=True)
+            if get("chat.session_enabled", True):
+                from celestia_core.shell_chat import finalize_active_session
+
+                finalize_active_session()
+            else:
+                _try_consolidate(end=True)
             print()
         return 0
 

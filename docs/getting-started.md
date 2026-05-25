@@ -65,15 +65,31 @@ cd C:\celestia
 .\venv\Scripts\python.exe run_celestia.py --shell
 ```
 
-Development (hot reload — start the API in one terminal first):
+Development (hot reload — start the API in one terminal, then the Tauri dev build in a second):
+
+**Terminal 1:**
 
 ```powershell
+cd C:\celestia
 .\venv\Scripts\python.exe run_celestia.py --shell-server
-cd shell
+```
+
+You should see: `[shell] API http://127.0.0.1:8765`
+
+**Terminal 2:**
+
+```powershell
+cd C:\celestia\shell
 npm run tauri dev
 ```
 
-See [shell/README.md](../shell/README.md) for details.
+Vite proxies `/api/*` to `:8765` automatically in dev mode. Frontend changes hot-reload without restarting Python.
+
+**Shell API port conflict?** If port 8765 is in use: `netstat -ano | findstr :8765` → `taskkill /PID <pid> /F`. Or change `ui.shell_port` in `config.yaml` and run `--trust-config`.
+
+**Orpheus model path:** The GGUF must be at `models/Orpheus-3b-FT-Q8_0.gguf` relative to the project root (`C:\celestia\models\`). Create the folder if needed.
+
+See [reference/deployment.md](reference/deployment.md) for full shell startup details and Tauri production build steps.
 
 In `-i`, type `help` for commands, or read [guide/commands.md](guide/commands.md).
 

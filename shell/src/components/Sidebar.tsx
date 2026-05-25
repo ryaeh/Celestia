@@ -99,6 +99,13 @@ export default function Sidebar({
           <div className="sidebar-footer">
             <button
               type="button"
+              className={`sidebar-foot-btn ${route === "memory" ? "active" : ""}`}
+              onClick={() => onNavigate("memory")}
+            >
+              Memory
+            </button>
+            <button
+              type="button"
               className={`sidebar-foot-btn ${route === "settings" ? "active" : ""}`}
               onClick={() => onNavigate("settings")}
             >

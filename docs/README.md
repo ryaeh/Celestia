@@ -1,6 +1,6 @@
 # Docs
 
-Everything for Celestia is under `docs/`. Start with **getting started** if you're new; use **resume** when you're coming back to the project.
+Everything for Celestia is under `docs/`. Start with **getting started** if you're new; use **resume** when coming back to the project.
 
 ## New or daily use
 
@@ -14,18 +14,33 @@ Everything for Celestia is under `docs/`. Start with **getting started** if you'
 - [guide/vision.md](guide/vision.md) — screenshots, region vs window vs full screen
 - [guide/memory.md](guide/memory.md) — what she remembers and how to clean it up
 - [guide/personality.md](guide/personality.md) — YAML packs in `personalities/`
+- [guide/skills.md](guide/skills.md) — how to write a new tool skill
+
+## Troubleshooting
+
+- [guide/troubleshooting.md](guide/troubleshooting.md) — Ollama down, CUDA OOM, Whisper fail, shell port conflicts, and more
 
 ## Under the hood
 
-- [reference/architecture.md](reference/architecture.md) — folders and stack
-- [reference/deployment.md](reference/deployment.md) — one process, no extra servers
-- [reference/performance.md](reference/performance.md) — VRAM while gaming, HF token
+- [reference/architecture.md](reference/architecture.md) — folders, stack, data flow diagrams
+- [reference/api.md](reference/api.md) — shell server HTTP API reference (all routes)
+- [reference/deployment.md](reference/deployment.md) — startup modes, shell dev workflow, fresh machine setup
+- [reference/performance.md](reference/performance.md) — VRAM profiles, model choices
 
 ## Planning
 
 - [project/roadmap.md](project/roadmap.md) — what's done and what phase we're in
 - [project/backlog.md](project/backlog.md) — ideas and features not built yet
-- [testing/checklist.md](testing/checklist.md) — quick manual tests
+- [project/companion-roadmap.md](project/companion-roadmap.md) — M0–M4: habits, voice pacing, proactive companion
+- [project/workflow.md](project/workflow.md) — personal dev workflow: how to add issues, ship features, manage Linear
+
+## Testing
+
+- [testing/checklist.md](testing/checklist.md) — manual test pass (includes shell UI cases)
+
+## Changelog
+
+- [../CHANGELOG.md](../CHANGELOG.md) — what shipped in each phase
 
 ## Old notes
 

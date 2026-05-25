@@ -38,15 +38,18 @@ CLI: `--arm "message"`, `--disarm`
 
 ## Memory
 
-Long-term facts (Chroma) are separate from **chat session** (recent turns in `-i`).
+Global long-term memory (Chroma/mem0) is shared across shell, tray, and CLI. Entries are typed: **facts**, **instructions**, **summaries**, and **tasks**.
 
-- Every few turns (config `memory.session_consolidate_every`), Celestia may auto-save 0–3 summarized user facts — no confirm. Look for `[memory] saved: …`
-- `newchat` — consolidates remaining session, then clears chat history
-
-- `memory` — list facts
+- **Auto-save:** `session_consolidate_mode: auto` extracts memories every N turns and on new chat / quit. Saves are silent; see the shell **Memory** page or `data/memory/activity_feed.jsonl`.
+- **Inject:** `inject: always_budgeted` loads up to ~8 relevant items each turn; greetings also get the **last session** note (`data/memory/last_session.json`).
+- `newchat` — consolidates the current chat, updates last-session, then starts fresh
+- `memory` — list stored entries (with kind)
 - `forget` — wipe everything (asks yes/no)
 - `forget <text>` — drop lines that contain that text
-- Agent `memory_edit` — update a fact by id from `memory`
+- Agent `memory_add` / `memory_edit` — manual add or update (optional `kind` on add)
+- Shell **Memory** page — list, add, edit, delete entries; refresh last-session note
+
+Long-term plan (M phases): [companion-roadmap.md](../project/companion-roadmap.md)
 
 ## Voice
 
@@ -96,9 +99,11 @@ Set `ui.shell_settings: false` in `config.yaml` to use the legacy tk settings wi
 ## Tray window
 
 - **Security** — cycles safe → scoped → armed (tooltip; icon letter S/C/A)
-- **Chat** — keeps going until you hit Enter on an empty line
-- **Voice** — one shot per use
+- **Chat** — opens the desktop shell (`ui.shell_settings: true`); same session as Home chat and voice PTT
+- **Voice (PTT)** — global hotkey; replies append to the **active** shell chat session
 - **Screen** — submenu: region, fullscreen, active window
+
+Session file: `data/shell_chat/sessions.json` (config: `ui.shell_chat_store`).
 
 ```powershell
 .\venv\Scripts\python.exe run_celestia.py --tray

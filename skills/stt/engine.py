@@ -75,6 +75,83 @@ def transcribe_file(path: str) -> str:
     return text
 
 
+def record_ptt_until(
+    stop_event: threading.Event,
+    *,
+    max_seconds: float = 45.0,
+    sample_rate: int = 16000,
+    min_seconds: float = 0.35,
+) -> str:
+    """Record from the mic until stop_event is set or max_seconds elapses."""
+    import queue
+
+    import numpy as np
+    import sounddevice as sd
+
+    print("[stt] listening… (release to send)")
+    chunks: list = []
+    q: queue.Queue = queue.Queue()
+
+    def callback(indata, _frames, _time, status) -> None:
+        if status:
+            print(f"[stt] {status}")
+        q.put(indata.copy())
+
+    block = int(sample_rate * 0.1)
+    stream = sd.InputStream(
+        samplerate=sample_rate,
+        channels=1,
+        dtype="float32",
+        blocksize=block,
+        callback=callback,
+    )
+    started = time.time()
+    stream.start()
+    try:
+        while not stop_event.is_set():
+            if time.time() - started >= max_seconds:
+                break
+            try:
+                chunks.append(q.get(timeout=0.08))
+            except queue.Empty:
+                pass
+    finally:
+        stream.stop()
+        stream.close()
+
+    elapsed = time.time() - started
+    if elapsed < min_seconds:
+        print("[stt] too short — hold a little longer")
+        _maybe_unload()
+        return ""
+
+    if not chunks:
+        _maybe_unload()
+        return ""
+
+    import os
+    import tempfile
+    import wave
+
+    audio = np.concatenate(chunks, axis=0).flatten()
+    audio_i16 = (audio * 32767).astype("int16")
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:
+        path = f.name
+    with wave.open(path, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(audio_i16.tobytes())
+
+    try:
+        print(f"[stt] transcribing ({elapsed:.1f}s)…")
+        return transcribe_file(path)
+    finally:
+        os.unlink(path)
+        _maybe_unload()
+
+
 def record_and_transcribe(seconds: float = 5.0, sample_rate: int = 16000) -> str:
     import numpy as np
     import sounddevice as sd

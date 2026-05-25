@@ -1,6 +1,6 @@
 # Backlog — planned and to-be-added
 
-Features **not shipped yet**. Shipped work is listed in [shipped-audit.md](shipped-audit.md). Phase timeline: [roadmap.md](roadmap.md). Linear views: [linear-views.md](linear-views.md).
+Features **not shipped yet**. Shipped work is listed in [shipped-audit.md](shipped-audit.md). Phase timeline: [roadmap.md](roadmap.md). Linear views: [linear-views.md](linear-views.md). Dev workflow: [workflow.md](workflow.md).
 
 **Horizon:** `short` · `long` · `opt` (maps to Linear labels `short-term`, `long-term`, `optimization`)
 
@@ -129,8 +129,4 @@ Feasible via API v3: `GET /files/{hash}`, `POST /urls`, ~500 req/day public limi
 
 ---
 
-## How to maintain
-
-1. Add a row with **Horizon** + **Status** + **Done when**.  
-2. Create/update Linear issue on team **Celestia** with matching label.  
-3. When shipped: **Done** in Linear, remove row here, note in [shipped-audit.md](shipped-audit.md) and [guide/](../guide/).
+> **How to maintain:** see [workflow.md](workflow.md) for the full process.

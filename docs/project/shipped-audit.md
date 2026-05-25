@@ -23,7 +23,7 @@ Comparison of `main` vs [backlog.md](backlog.md) and Linear team **Celestia** (C
 
 | Item | Action |
 |------|--------|
-| Session chat memory (tray/voice) | **Reworded** — `--tray-chat` exists but separate console; goal is in-tray/UI session |
+| Session chat memory (tray/voice) | **Done (CC-5)** — tray PTT, tray chat fallback, `-i`/`--listen` use `shell_chat` store; tray Chat opens shell |
 | Everything else in backlog.md | Kept with **Horizon** + **Done when** columns |
 
 ## Linear

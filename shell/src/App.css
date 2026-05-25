@@ -637,6 +637,53 @@ body {
   cursor: not-allowed;
 }
 
+.chat-ptt {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    color var(--transition),
+    border-color var(--transition),
+    background var(--transition);
+}
+
+.chat-ptt:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: rgba(139, 92, 246, 0.45);
+}
+
+.chat-ptt-active {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.65);
+  background: rgba(248, 113, 113, 0.12);
+  animation: ptt-pulse 1s ease-in-out infinite;
+}
+
+@keyframes ptt-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(248, 113, 113, 0);
+  }
+}
+
+.chat-ptt-hint {
+  opacity: 0.85;
+}
+
+.chat-bubble-listening .chat-bubble-body p {
+  color: #f87171;
+}
+
 .chat-send {
   width: 2rem;
   height: 2rem;
@@ -875,4 +922,122 @@ code {
     width: 100%;
     max-width: 280px;
   }
+}
+
+/* —— Memory page —— */
+
+.memory-page {
+  max-width: 720px;
+}
+
+.memory-head h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.5rem;
+}
+
+.memory-error {
+  color: var(--armed);
+  margin: 0.5rem 0;
+}
+
+.memory-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  margin-bottom: 1.25rem;
+}
+
+.memory-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.memory-card-head h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.last-session-body {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+}
+
+.memory-add h2,
+.memory-group h2 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin: 0 0 0.65rem;
+}
+
+.memory-add-row,
+.memory-edit-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.memory-add-row input,
+.memory-edit-row input {
+  flex: 1;
+  min-width: 180px;
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: inherit;
+  font: inherit;
+}
+
+.memory-add-row select,
+.memory-edit-row select {
+  padding: 0.45rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: inherit;
+  font: inherit;
+}
+
+.memory-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.memory-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.memory-text {
+  flex: 1;
+  line-height: 1.45;
+}
+
+.memory-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.btn-ghost.danger {
+  color: #f87171;
 }
