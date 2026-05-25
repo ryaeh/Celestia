@@ -8,11 +8,15 @@ import {
   type Status,
 } from "../api";
 import type { Route } from "../App";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 
 const MODES = [
-  { label: "Safe",   value: "safe"   },
-  { label: "Scoped", value: "scoped" },
-  { label: "Armed",  value: "armed"  },
+  { label: "Safe",   value: "safe",   color: "var(--safe)"   },
+  { label: "Scoped", value: "scoped", color: "var(--scoped)" },
+  { label: "Armed",  value: "armed",  color: "var(--armed)"  },
 ] as const;
 
 function formatAuditEntry(entry: AuditEntry): string {
@@ -24,7 +28,7 @@ function formatAuditEntry(entry: AuditEntry): string {
   return `${ts} [${tool}] ${result} ${summary}`.trim();
 }
 
-// ── card row ──────────────────────────────────────────────────────────────
+// ── Card row ─────────────────────────────────────────────────────────────────
 
 type RowProps = {
   icon: string;
@@ -43,26 +47,35 @@ function SettingRow({
   return (
     <div className="setting-card">
       <div
-        className={`setting-row${expanded ? " setting-row-open" : ""}`}
+        className={cn("setting-row", expanded && "setting-row-open")}
         onClick={onToggle}
         role={onToggle ? "button" : undefined}
         tabIndex={onToggle ? 0 : undefined}
         onKeyDown={(e) => { if (onToggle && (e.key === "Enter" || e.key === " ")) onToggle(); }}
       >
-        <div className={`setting-icon ${iconClass}`}>{icon}</div>
+        <div className={cn("setting-icon", iconClass)}>{icon}</div>
         <div className="setting-text">
           <span className="setting-title">{title}</span>
           <span className="setting-sub">{subtitle}</span>
         </div>
         {pill}
-        {onToggle && <span className="setting-chevron">›</span>}
+        {onToggle && (
+          <span
+            className={cn(
+              "setting-chevron transition-transform duration-200",
+              expanded && "rotate-90",
+            )}
+          >
+            ›
+          </span>
+        )}
       </div>
       {expanded && children && <div className="setting-body">{children}</div>}
     </div>
   );
 }
 
-// ── main component ────────────────────────────────────────────────────────
+// ── Main component ────────────────────────────────────────────────────────────
 
 type SettingsProps = {
   onNavigate?: (route: Route) => void;
@@ -130,7 +143,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
           icon="🔒"
           iconClass="setting-icon-security"
           title="Security"
-          subtitle={`Threat level, access & session policies`}
+          subtitle="Threat level, access &amp; session policies"
           expanded={openSection === "security"}
           onToggle={() => toggle("security")}
           pill={
@@ -139,18 +152,24 @@ export default function Settings({ onNavigate }: SettingsProps) {
             </span>
           }
         >
-          {message && <p className={`setting-msg ok-text`}>{message}</p>}
+          {message && <p className="setting-msg ok-text">{message}</p>}
           <div className="mode-row">
             {MODES.map((m) => (
-              <button
+              <Button
                 key={m.value}
                 type="button"
-                className={`mode-btn${modeValue === m.value ? ` mode-active-${m.value}` : ""}`}
+                variant={modeValue === m.value ? "default" : "outline"}
+                size="sm"
+                className={cn(
+                  "mode-btn flex-1",
+                  modeValue === m.value && `mode-active-${m.value}`,
+                )}
                 disabled={busy}
                 onClick={() => onMode(m.value)}
+                style={modeValue === m.value ? { background: m.color, borderColor: m.color } : undefined}
               >
                 {m.label}
-              </button>
+              </Button>
             ))}
           </div>
         </SettingRow>
@@ -172,9 +191,12 @@ export default function Settings({ onNavigate }: SettingsProps) {
           subtitle="Tone, style and behaviour presets"
           pill={
             status?.personality ? (
-              <span className="status-pill status-pill-accent">
+              <Badge
+                variant="secondary"
+                className="text-[var(--accent-bright)] border-[var(--accent-bright)]/30 bg-[var(--accent-glow)] text-[0.68rem]"
+              >
                 {status.personality.toUpperCase()}
-              </span>
+              </Badge>
             ) : undefined
           }
         />
@@ -193,9 +215,15 @@ export default function Settings({ onNavigate }: SettingsProps) {
               No workspaces configured.
             </p>
           ) : (
-            <div className="workspace-pills">
+            <div className="workspace-pills flex flex-wrap gap-1.5 pt-2">
               {workspaces.map((ws) => (
-                <span key={ws} className="workspace-pill">{ws}</span>
+                <Badge
+                  key={ws}
+                  variant="secondary"
+                  className="font-mono text-[0.75rem] bg-[var(--bg-panel)] text-[var(--text-muted)] border-[var(--border-light)]"
+                >
+                  {ws}
+                </Badge>
               ))}
             </div>
           )}
@@ -210,8 +238,16 @@ export default function Settings({ onNavigate }: SettingsProps) {
           expanded={openSection === "audit"}
           onToggle={() => toggle("audit")}
         >
-          <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "0.6rem" }}>
-            <button type="button" onClick={refresh} disabled={busy}>Refresh</button>
+          <div className="flex justify-end pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={refresh}
+              disabled={busy}
+            >
+              Refresh
+            </Button>
           </div>
           <pre className="audit-log">
             {audit.length === 0
@@ -219,6 +255,8 @@ export default function Settings({ onNavigate }: SettingsProps) {
               : audit.map((e) => formatAuditEntry(e)).join("\n")}
           </pre>
         </SettingRow>
+
+        <Separator className="bg-[var(--border-light)]" />
 
         {/* Error log */}
         <SettingRow

@@ -1,17 +1,19 @@
 import { useState } from "react";
 import Avatar from "./Avatar";
 import type { Status } from "../api";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 type StatusHeaderProps = {
   status: Status | null;
 };
 
-function modeBadge(mode: string): { label: string; tone: "safe" | "scoped" | "armed" } {
-  const m = mode.toLowerCase();
-  if (m === "armed") return { label: "ARMED", tone: "armed" };
-  if (m === "scoped") return { label: "SCOPED", tone: "scoped" };
-  return { label: "SAFE", tone: "safe" };
-}
+const MODE_STYLE: Record<string, string> = {
+  armed:  "bg-[var(--armed)]/15  text-[var(--armed)]  border-[var(--armed)]/40",
+  scoped: "bg-[var(--scoped)]/15 text-[var(--scoped)] border-[var(--scoped)]/40",
+  safe:   "bg-[var(--safe)]/15   text-[var(--safe)]   border-[var(--safe)]/40",
+};
 
 const CHECK_LABELS = ["Context", "Memory", "Tools", "Models"];
 
@@ -19,7 +21,8 @@ export default function StatusHeader({ status }: StatusHeaderProps) {
   const [expanded, setExpanded] = useState(false);
 
   const name = status?.display_name ?? "Celestia";
-  const security = status ? modeBadge(status.mode) : { label: "…", tone: "safe" as const };
+  const mode = (status?.mode ?? "safe").toLowerCase();
+  const modeLabel = status?.mode_label ?? (mode === "armed" ? "ARMED" : mode === "scoped" ? "SCOPED" : "SAFE");
   const personality = status?.personality ?? "";
 
   const preflightItems =
@@ -34,29 +37,50 @@ export default function StatusHeader({ status }: StatusHeaderProps) {
         <Avatar name={name} size="xs" />
         <span className="top-bar-name">{name}</span>
         <span className="top-bar-divider" aria-hidden />
-        <span className={`status-pill status-pill-${security.tone}`}>{security.label}</span>
+
+        {/* Mode badge */}
+        <Badge
+          className={cn(
+            "text-[0.65rem] font-semibold tracking-wide px-1.5 py-0 h-5 border",
+            MODE_STYLE[mode] ?? MODE_STYLE.safe,
+          )}
+        >
+          {modeLabel}
+        </Badge>
+
+        {/* Personality badge */}
         {personality && (
-          <span className="status-pill status-pill-accent">{personality.toUpperCase()}</span>
+          <Badge
+            className="text-[0.65rem] font-semibold tracking-wide px-1.5 py-0 h-5 border bg-[var(--accent-glow)] text-[var(--accent-bright)] border-[var(--accent-bright)]/30"
+          >
+            {personality.toUpperCase()}
+          </Badge>
         )}
+
         <span className="top-bar-spacer" />
-        <div className="top-bar-preflight" title="Preflight checks">
+
+        {/* Preflight dots */}
+        <div className="top-bar-preflight flex items-center gap-1" title="Preflight checks">
           {preflightItems.map((item) => (
             <span
               key={item.label}
-              className={`preflight-dot ${item.ok ? "ok" : "warn"}`}
+              className={cn("preflight-dot", item.ok ? "ok" : "warn")}
               title={item.label}
             />
           ))}
         </div>
-        <button
+
+        <Button
           type="button"
-          className="top-bar-expand"
+          variant="ghost"
+          size="icon"
+          className="top-bar-expand h-7 w-7 text-[var(--text-muted)] hover:text-[var(--text)]"
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
           title={expanded ? "Hide status" : "Show status"}
         >
           {expanded ? "▲" : "▼"}
-        </button>
+        </Button>
       </div>
 
       {expanded && (
@@ -65,8 +89,8 @@ export default function StatusHeader({ status }: StatusHeaderProps) {
             <span className="top-bar-card-label">Preflight</span>
             <ul className="top-bar-check-list">
               {preflightItems.map((item) => (
-                <li key={item.label}>
-                  <span className={`preflight-dot ${item.ok ? "ok" : "warn"}`} />
+                <li key={item.label} className="flex items-center gap-2">
+                  <span className={cn("preflight-dot", item.ok ? "ok" : "warn")} />
                   {item.label}
                 </li>
               ))}
@@ -75,9 +99,9 @@ export default function StatusHeader({ status }: StatusHeaderProps) {
           {status?.tray_max_mode && (
             <div className="top-bar-card">
               <span className="top-bar-card-label">Tray cap</span>
-              <span className="status-pill status-pill-accent">
+              <Badge className="text-[0.65rem] bg-[var(--accent-glow)] text-[var(--accent-bright)] border-[var(--accent-bright)]/30">
                 {status.tray_max_mode.toUpperCase()}
-              </span>
+              </Badge>
             </div>
           )}
         </div>

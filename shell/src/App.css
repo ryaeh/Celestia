@@ -2,12 +2,13 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
 
 @custom-variant dark (&:is(.dark *));
 
 /* ========================================================================
    Celestia Shell — design system
+   All shadcn/ui CSS variables are mapped to our dark palette here so
+   that shadcn components (Button, Input, Badge…) inherit our theme.
    ======================================================================== */
 
 :root {
@@ -20,56 +21,60 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 
-  --bg: #080810;
-  --bg-elevated: #0d0d1a;
-  --bg-panel: #111120;
-  --bg-hover: #161628;
-  --border: oklch(0.922 0 0);
+  /* ── Celestia design tokens ── */
+  --bg:           #080810;
+  --bg-elevated:  #0d0d1a;
+  --bg-panel:     #111120;
+  --bg-hover:     #161628;
   --border-light: #262640;
-  --text: #dde0ec;
-  --text-muted: #7074a0;
-  --text-dim: #4a4e70;
-  --accent: oklch(0.97 0 0);
-  --accent-bright: #8b5cf6;
-  --accent-dim: #5b21b6;
-  --accent-glow: rgba(124, 58, 237, 0.18);
-  --safe: #22c55e;
-  --scoped: #eab308;
-  --armed: #ef4444;
+  --text:         #dde0ec;
+  --text-muted:   #7074a0;
+  --text-dim:     #4a4e70;
+  --accent-bright:#8b5cf6;
+  --accent-dim:   #5b21b6;
+  --accent-glow:  rgba(124, 58, 237, 0.18);
+  --safe:         #22c55e;
+  --scoped:       #eab308;
+  --armed:        #ef4444;
   --sidebar-width: 220px;
   --topbar-height: 52px;
-  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease:       cubic-bezier(0.22, 1, 0.36, 1);
   --transition: 0.35s var(--ease);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+
+  /* ── shadcn/ui variables (dark theme) ──────────────────────────────────
+     These map to Tailwind utilities: bg-background, text-foreground,
+     bg-primary, text-muted-foreground, border-border, etc.
+     -------------------------------------------------------------------- */
+  --background:          #080810;
+  --foreground:          #dde0ec;
+  --card:                #0d0d1a;
+  --card-foreground:     #dde0ec;
+  --popover:             #111120;
+  --popover-foreground:  #dde0ec;
+  --primary:             #8b5cf6;
+  --primary-foreground:  #ffffff;
+  --secondary:           #161628;
+  --secondary-foreground:#dde0ec;
+  --muted:               #0d0d1a;
+  --muted-foreground:    #7074a0;
+  --accent:              #161628;  /* hover bg for ghost/outline buttons */
+  --accent-foreground:   #dde0ec;
+  --destructive:         #ef4444;
+  --destructive-foreground: #ffffff;
+  --border:              #262640;
+  --input:               #262640;
+  --ring:                #8b5cf6;
+  --radius:              0.5rem;
+
+  /* ── shadcn sidebar tokens ── */
+  --sidebar:                    #0d0d1a;
+  --sidebar-foreground:         #dde0ec;
+  --sidebar-primary:            #8b5cf6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent:             #161628;
+  --sidebar-accent-foreground:  #dde0ec;
+  --sidebar-border:             #262640;
+  --sidebar-ring:               #8b5cf6;
 }
 
 * { box-sizing: border-box; }
@@ -168,13 +173,13 @@ body {
   font-size: 0.88rem;
   font-weight: 500;
   color: #fff;
-  background: var(--accent);
+  background: var(--accent-bright);
   cursor: pointer;
   transition: background var(--transition), opacity var(--transition);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--accent-bright);
+  background: var(--accent-dim);
 }
 
 .btn-primary:disabled {
@@ -476,16 +481,15 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - var(--topbar-height));
+  height: 100%;
   overflow: hidden;
 }
 
+/* chat-main is now a child of <ScrollArea> — centering is handled inline */
 .chat-main {
-  flex: 1;
-  overflow-y: auto;
-  padding: 1.5rem 1rem;
   display: flex;
   justify-content: center;
+  min-height: 100%;
 }
 
 .chat-thread {
@@ -664,7 +668,7 @@ body {
   width: 32px; height: 32px;
   border-radius: 9px;
   border: none;
-  background: var(--accent);
+  background: var(--accent-bright);
   color: #fff;
   font-size: 1.1rem;
   display: grid; place-items: center;
@@ -676,7 +680,7 @@ body {
 }
 
 .chat-send:not(:disabled)       { opacity: 1; cursor: pointer; }
-.chat-send:not(:disabled):hover { background: var(--accent-bright); }
+.chat-send:not(:disabled):hover { background: var(--accent-dim); }
 
 .chat-disclaimer {
   text-align: center;
