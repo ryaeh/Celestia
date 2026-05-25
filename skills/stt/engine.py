@@ -66,6 +66,46 @@ def _load():
         return _model
 
 
+def _preprocess_audio(audio: "np.ndarray", sample_rate: int) -> "np.ndarray":  # type: ignore[name-defined]
+    """
+    Clean up microphone audio before Whisper transcription.
+
+    Steps (all pure numpy/scipy, no extra deps):
+    1. High-pass filter at 80 Hz  — removes AC hum, low-frequency rumble and
+       keyboard noise that would otherwise cause Whisper hallucinations.
+    2. Noise gate                 — silence frames whose RMS is below a
+       threshold; prevents Whisper from "hearing" background hiss.
+    3. Peak normalise to 0.95    — ensures Whisper always receives a
+       consistent loudness regardless of mic gain setting.
+    """
+    import numpy as np
+
+    # ── 1. High-pass filter ──────────────────────────────────────────────────
+    try:
+        from scipy.signal import butter, sosfilt
+
+        sos = butter(4, 80.0, btype="high", fs=sample_rate, output="sos")
+        audio = sosfilt(sos, audio).astype(np.float32)
+    except ImportError:
+        pass  # scipy not installed — skip filter but still apply gate+norm
+
+    # ── 2. Noise gate (25 ms frames) ────────────────────────────────────────
+    frame_len = max(1, int(sample_rate * 0.025))
+    gate_threshold = float(get("voice.stt.noise_gate_threshold", 0.005))
+    if gate_threshold > 0:
+        for start in range(0, len(audio) - frame_len, frame_len):
+            frame = audio[start : start + frame_len]
+            if np.sqrt(np.mean(frame ** 2)) < gate_threshold:
+                audio[start : start + frame_len] = 0.0
+
+    # ── 3. Peak normalise ────────────────────────────────────────────────────
+    peak = float(np.max(np.abs(audio)))
+    if peak > 0.01:
+        audio = audio * (0.95 / peak)
+
+    return audio
+
+
 def transcribe_file(path: str) -> str:
     _touch()
     model = _load()
@@ -134,7 +174,8 @@ def record_ptt_until(
     import wave
 
     audio = np.concatenate(chunks, axis=0).flatten()
-    audio_i16 = (audio * 32767).astype("int16")
+    audio = _preprocess_audio(audio, sample_rate)
+    audio_i16 = (np.clip(audio, -1.0, 1.0) * 32767).astype("int16")
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:
         path = f.name

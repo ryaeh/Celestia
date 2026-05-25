@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Mic, MicOff, ArrowUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ChatInputProps = {
@@ -111,7 +112,10 @@ export default function ChatInput({
             onPointerCancel={() => cancelPtt()}
             onLostPointerCapture={() => endPtt()}
           >
-            {pttListening ? "◉" : "🎤"}
+            {pttListening
+              ? <MicOff size={16} className="text-red-400" />
+              : <Mic size={16} />
+            }
           </Button>
         )}
         <Button
@@ -122,11 +126,11 @@ export default function ChatInput({
           disabled={locked || pttListening}
           aria-label="Send"
         >
-          {busy ? "…" : "↑"}
+          {busy ? <span className="text-xs">…</span> : <ArrowUp size={16} />}
         </Button>
       </form>
       <p className="chat-disclaimer">
-        Hold <span className="chat-ptt-hint">🎤</span> to talk — same thread as typed chat.
+        Hold <span className="chat-ptt-hint">mic</span> to talk — same thread as typed chat.
         Celestia may make mistakes — verify important information.
       </p>
     </div>

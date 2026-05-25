@@ -119,6 +119,10 @@ class MemoryPatch(BaseModel):
     kind: str | None = None
 
 
+class PttStopBody(BaseModel):
+    session_id: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Shared helpers (unchanged from original)
 # ---------------------------------------------------------------------------
@@ -338,7 +342,7 @@ def post_ptt_start():
 
 
 @app.post("/chat/ptt/stop")
-def post_ptt_stop(body: ChatBody):
+def post_ptt_stop(body: PttStopBody):
     from celestia_core.shell_ptt import ptt_finish
     try:
         result = ptt_finish(session_id=body.session_id)
