@@ -109,7 +109,7 @@ def _preprocess_audio(audio: "np.ndarray", sample_rate: int) -> "np.ndarray":  #
 def transcribe_file(path: str) -> str:
     _touch()
     model = _load()
-    vad = get("voice.stt.vad_filter", True)
+    vad = get("voice.stt.vad_filter", False)
     segments, _ = model.transcribe(path, vad_filter=bool(vad))
     text = " ".join(s.text.strip() for s in segments).strip()
     _touch()

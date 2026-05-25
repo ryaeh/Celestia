@@ -43,9 +43,22 @@ function SecondaryPage({ route, onNavigate }: { route: Route; onNavigate: (r: Ro
 
 export default function App() {
   const [route, setRoute] = useState<Route>(() => normalizeRoute(initialRoute()));
+  const [prevRoute, setPrevRoute] = useState<Route>("home");
   const [activeSessionId, setActiveSessionId] = useState("");
   const [historyRefresh, setHistoryRefresh] = useState(0);
   const displayName = "Celestia";
+
+  function navigate(to: Route) {
+    setPrevRoute(route);
+    setRoute(to);
+  }
+
+  function goBack() {
+    // Don't go back to another non-home secondary page — fall back to home.
+    const dest = prevRoute === "home" || prevRoute === "settings" ? prevRoute : "home";
+    setPrevRoute(route);
+    setRoute(dest);
+  }
 
   useEffect(() => {
     fetchChatSessions()
@@ -62,7 +75,7 @@ export default function App() {
       <Sidebar
         route={route}
         activeSessionId={activeSessionId}
-        onNavigate={setRoute}
+        onNavigate={navigate}
         onNewChat={(id) => {
           setActiveSessionId(id);
           bumpHistory();
@@ -88,12 +101,12 @@ export default function App() {
               <button
                 type="button"
                 className="back-home"
-                onClick={() => setRoute("home")}
+                onClick={goBack}
               >
-                ← Chat
+                ← {prevRoute === "settings" ? "Settings" : "Chat"}
               </button>
             </header>
-            <SecondaryPage route={route} onNavigate={setRoute} />
+            <SecondaryPage route={route} onNavigate={navigate} />
           </main>
         )}
       </div>

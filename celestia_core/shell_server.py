@@ -127,6 +127,11 @@ class WorkspaceBody(BaseModel):
     path: str
 
 
+class PrefPatch(BaseModel):
+    key: str
+    value: Any
+
+
 # ---------------------------------------------------------------------------
 # Shared helpers (unchanged from original)
 # ---------------------------------------------------------------------------
@@ -204,6 +209,23 @@ def _memory_activity_payload(n: int = 30) -> dict[str, Any]:
 @app.get("/status")
 def get_status():
     return build_status()
+
+
+@app.get("/prefs")
+def get_prefs():
+    from celestia_core.config import MUTABLE_PREF_KEYS, get, get_all_prefs
+    saved = get_all_prefs()
+    effective = {k: get(k) for k in MUTABLE_PREF_KEYS}
+    return {"prefs": effective, "saved": saved}
+
+
+@app.patch("/prefs")
+def patch_pref(body: PrefPatch):
+    from celestia_core.config import set_pref
+    msg = set_pref(body.key, body.value)
+    if not msg.startswith("ok"):
+        return JSONResponse(status_code=400, content={"error": msg})
+    return {"ok": True, "key": body.key, "value": body.value}
 
 
 @app.get("/workspaces")

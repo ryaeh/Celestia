@@ -886,13 +886,74 @@ body {
 .audit-blocked { color: #f87171; }
 .audit-result { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* ── Voice info grid (Settings) ─────────────────────────────────────────── */
+/* ── Voice info grid (Settings — legacy, kept for compat) ────────────────── */
 
 .voice-info-grid { display: flex; flex-direction: column; gap: 0.9rem; }
 .info-row { display: grid; grid-template-columns: 130px 1fr; gap: 0.75rem; align-items: baseline; font-size: 0.82rem; }
 .info-label { color: var(--text-dim); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
 .info-value { color: var(--text-muted); line-height: 1.55; }
 .info-value code { font-size: 0.78rem; }
+
+/* ── Runtime pref controls ──────────────────────────────────────────────── */
+
+.pref-grid { display: flex; flex-direction: column; gap: 0.85rem; }
+.pref-row { display: grid; grid-template-columns: 145px 1fr; gap: 0.75rem; align-items: start; }
+.pref-label { color: var(--text-dim); font-size: 0.78rem; font-weight: 500; padding-top: 0.35rem; line-height: 1.4; }
+.pref-hint { font-size: 0.7rem; color: var(--text-muted); opacity: 0.75; line-height: 1.4; }
+
+.pref-select {
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  color: var(--text);
+  border-radius: 6px;
+  font-size: 0.82rem;
+  padding: 0.28rem 0.6rem;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+}
+.pref-select:focus { border-color: var(--ring); }
+.pref-select:disabled { opacity: 0.5; }
+
+.pref-number {
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  color: var(--text);
+  border-radius: 6px;
+  font-size: 0.82rem;
+  padding: 0.28rem 0.6rem;
+  outline: none;
+  width: 7rem;
+  transition: border-color 0.15s;
+}
+.pref-number:focus { border-color: var(--ring); }
+.pref-number:disabled { opacity: 0.5; }
+
+.pref-toggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--border);
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+  padding: 0;
+}
+.pref-toggle-on { background: var(--accent-bright); }
+.pref-toggle-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: white;
+  transition: transform 0.2s;
+  display: block;
+}
+.pref-toggle-on .pref-toggle-knob { transform: translateX(16px); }
 
 /* audit log (legacy pre block, kept for compat) */
 .audit-log {

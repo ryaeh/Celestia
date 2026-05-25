@@ -43,6 +43,9 @@ def tool_schemas(user_message: str = "") -> list:
         tools = list(pc)
         if get("memory.enabled", True):
             tools += MEMORY_TOOL_SCHEMAS
+        # Web search is read-only and doesn't require PC access — enable in safe mode too.
+        if get("skills.web.enabled", True):
+            tools += WEB_TOOL_SCHEMAS
         return tools
 
     pc = list(PC_TOOL_SCHEMAS)

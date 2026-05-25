@@ -58,6 +58,7 @@ def speak_stream(
     *,
     play: bool = True,
     min_sentence_chars: int = 12,
+    drain: bool = True,
 ) -> str:
     """Pipeline LLM token streaming with TTS playback (CC-115).
 
@@ -115,8 +116,10 @@ def speak_stream(
         if q:
             q.push(buffer.strip())
 
-    # Block until every sentence has finished playing
-    if q:
+    # Block until every sentence has finished playing.
+    # Pass drain=False from PTT path so the HTTP response returns immediately
+    # and TTS continues playing in the background daemon thread.
+    if q and drain:
         q.drain()
 
     return full_text.strip()

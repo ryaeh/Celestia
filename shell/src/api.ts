@@ -139,6 +139,29 @@ export async function removeWorkspace(path: string): Promise<{ message: string; 
   return r.json();
 }
 
+// ---------------------------------------------------------------------------
+// UI runtime preferences — mirrors /prefs on the Python backend
+// ---------------------------------------------------------------------------
+export type PrefsResponse = {
+  prefs: Record<string, unknown>;
+  saved: Record<string, unknown>;
+};
+
+export async function fetchPrefs(): Promise<PrefsResponse> {
+  const r = await apiFetch("/prefs");
+  if (!r.ok) throw new Error(`prefs ${r.status}`);
+  return r.json();
+}
+
+export async function setPref(key: string, value: unknown): Promise<void> {
+  const r = await apiFetch("/prefs", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ key, value }),
+  });
+  if (!r.ok) throw new Error(`prefs PATCH ${r.status}`);
+}
+
 export type AuditEntry = Record<string, unknown>;
 
 export async function fetchAuditTail(n = 50): Promise<AuditEntry[]> {

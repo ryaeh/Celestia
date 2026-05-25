@@ -176,7 +176,7 @@ def _send_with_streaming_tts(
 
     try:
         from skills.tts import speak_stream
-        speak_stream(_token_iter(), play=bool(play))
+        speak_stream(_token_iter(), play=bool(play), drain=False)
     except Exception as e:
         print(f"[ptt] TTS stream error: {e}")
         # Fall back: final may already be set from the generator exhaustion

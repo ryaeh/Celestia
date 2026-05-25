@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +9,57 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent  # project root (celestia/)
 POLICY_FILE = "security.policy.yaml"
 _config: dict[str, Any] | None = None
+
+# ---------------------------------------------------------------------------
+# UI runtime preferences — a flat JSON overlay on top of config.yaml.
+# Written by the Settings UI; survives restarts; does NOT touch config.yaml.
+# ---------------------------------------------------------------------------
+_UI_PREFS_PATH = ROOT / "data" / "ui_prefs.json"
+
+MUTABLE_PREF_KEYS: frozenset[str] = frozenset(
+    {
+        "voice.stt.model",
+        "voice.stt.device",
+        "voice.stt.compute_type",
+        "voice.stt.noise_gate_threshold",
+        "voice.stt.vad_filter",
+        "voice.stt.silence_stop_seconds",
+        "voice.tts.provider",
+        "voice.reply_cap_voice",
+        "ui.shell_ptt_max_seconds",
+    }
+)
+
+
+def _load_ui_prefs() -> dict[str, Any]:
+    if not _UI_PREFS_PATH.exists():
+        return {}
+    try:
+        return json.loads(_UI_PREFS_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def get_all_prefs() -> dict[str, Any]:
+    return _load_ui_prefs()
+
+
+def set_pref(key: str, value: Any) -> str:
+    """Write a single mutable pref to data/ui_prefs.json."""
+    if key not in MUTABLE_PREF_KEYS:
+        return f"not allowed: {key}"
+    prefs = _load_ui_prefs()
+    prefs[key] = value
+    _UI_PREFS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _UI_PREFS_PATH.write_text(json.dumps(prefs, indent=2), encoding="utf-8")
+    # Force-unload the Whisper model so it reloads with the new settings.
+    if key in ("voice.stt.model", "voice.stt.device", "voice.stt.compute_type"):
+        try:
+            from skills.stt.engine import force_unload
+            force_unload()
+        except Exception:
+            pass
+    return "ok"
 
 
 def policy_path() -> Path:
@@ -51,6 +103,11 @@ def load_config(reload: bool = False) -> dict[str, Any]:
 
 
 def get(path: str, default: Any = None) -> Any:
+    # UI prefs override config.yaml for mutable keys.
+    if path in MUTABLE_PREF_KEYS:
+        prefs = _load_ui_prefs()
+        if path in prefs:
+            return prefs[path]
     cfg = load_config()
     node: Any = cfg
     for part in path.split("."):

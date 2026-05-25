@@ -228,7 +228,7 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
                 <article className="chat-bubble chat-bubble-listening">
                   <Avatar name={name} size="sm" />
                   <div className="chat-bubble-body">
-                    <p className="muted">Listening… release mic or hotkey to send</p>
+                    <p className="muted">Listening… click mic again to send</p>
                   </div>
                 </article>
               )}

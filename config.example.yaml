@@ -55,7 +55,7 @@ voice:
     device: cpu                   # cpu or cuda
     compute_type: int8            # int8 for cpu, float16 for cuda
     idle_unload_minutes: 10
-    vad_filter: true              # filter silent segments during transcription (CC-97)
+    vad_filter: false             # filter silent segments during transcription (CC-97) — enable for GPU users
     noise_gate_threshold: 0.005   # RMS below this is zeroed before transcription
     silence_stop_seconds: 1.5     # auto-stop recording after N seconds of silence
   tts:

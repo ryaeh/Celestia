@@ -9,6 +9,11 @@ from __future__ import annotations
 import json
 from typing import Any
 
+try:
+    import httpx as httpx
+except ImportError:
+    httpx = None  # type: ignore[assignment]
+
 # ── Tool schemas ──────────────────────────────────────────────────────────────
 
 WEB_TOOL_SCHEMAS: list[dict[str, Any]] = [
@@ -81,20 +86,23 @@ _BLOCKED_HOSTS = frozenset(
 
 
 def _is_safe_url(url: str) -> bool:
-    """Reject private/loopback addresses to prevent SSRF."""
+    """Reject non-http(s) schemes and private/loopback addresses to prevent SSRF."""
     from urllib.parse import urlparse
+    import re
 
     try:
-        host = (urlparse(url).hostname or "").lower()
+        p = urlparse(url)
     except Exception:
+        return False
+    if p.scheme not in ("http", "https"):
+        return False
+    host = (p.hostname or "").lower()
+    if not host:
         return False
     if host in _BLOCKED_HOSTS:
         return False
     if host.endswith(".local") or host.endswith(".internal"):
         return False
-    # Block raw IPs that look like private ranges
-    import re
-
     if re.match(r"^(10|172\.(1[6-9]|2\d|3[01])|192\.168)\.", host):
         return False
     return True
@@ -133,9 +141,7 @@ def fetch_page(url: str, max_chars: int = 3000) -> str:
 
     max_chars = min(max(500, int(max_chars)), 8000)
 
-    try:
-        import httpx
-    except ImportError:
+    if httpx is None:
         return json.dumps({"error": "httpx not installed. Run: pip install httpx"})
 
     try:

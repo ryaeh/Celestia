@@ -1,4 +1,3 @@
-import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Mic, MicOff, ArrowUp } from "lucide-react";
@@ -23,22 +22,16 @@ export default function ChatInput({
   pttListening = false,
   onPttStart,
   onPttStop,
-  onPttCancel,
 }: ChatInputProps) {
   const locked = disabled || busy;
-  const pttHeld = useRef(false);
 
-  const endPtt = () => {
-    if (!pttHeld.current) return;
-    pttHeld.current = false;
-    onPttStop?.();
-  };
-
-  const cancelPtt = () => {
-    if (!pttHeld.current) return;
-    pttHeld.current = false;
-    onPttCancel?.();
-  };
+  function handleMicClick() {
+    if (pttListening) {
+      onPttStop?.();
+    } else if (!locked) {
+      onPttStart?.();
+    }
+  }
 
   return (
     <div className="chat-input-wrap">
@@ -48,18 +41,14 @@ export default function ChatInput({
         onSubmit={(e) => {
           e.preventDefault();
           const form = e.currentTarget;
-          const input = form.elements.namedItem(
-            "celestia-chat-query",
-          ) as HTMLInputElement;
+          const input = form.elements.namedItem("celestia-chat-query") as HTMLInputElement;
           const text = input.value.trim();
           if (!text || locked) return;
           onSend(text);
           input.value = "";
         }}
       >
-        <span className="chat-input-icon" aria-hidden>
-          ✦
-        </span>
+        <span className="chat-input-icon" aria-hidden>✦</span>
         <Input
           type="search"
           name="celestia-chat-query"
@@ -70,11 +59,7 @@ export default function ChatInput({
             "text-[var(--text)] placeholder:text-[var(--text-dim)]",
           )}
           placeholder={
-            pttListening
-              ? "Listening… release mic to send"
-              : busy
-                ? "Thinking…"
-                : "Ask Celestia anything…"
+            pttListening ? "Listening… click mic to send" : busy ? "Thinking…" : "Ask Celestia anything…"
           }
           disabled={locked || pttListening}
           aria-label="Message Celestia"
@@ -91,29 +76,14 @@ export default function ChatInput({
             type="button"
             variant="ghost"
             size="icon"
-            className={cn(
-              "chat-ptt h-8 w-8 shrink-0",
-              pttListening && "chat-ptt-active",
-            )}
+            className={cn("chat-ptt h-8 w-8 shrink-0", pttListening && "chat-ptt-active")}
             disabled={locked && !pttListening}
-            aria-label={pttListening ? "Release to send" : "Hold to talk"}
-            title="Hold to talk"
-            onPointerDown={(e) => {
-              if (locked || pttListening) return;
-              e.preventDefault();
-              (e.target as HTMLElement).setPointerCapture(e.pointerId);
-              pttHeld.current = true;
-              onPttStart?.();
-            }}
-            onPointerUp={(e) => {
-              e.preventDefault();
-              endPtt();
-            }}
-            onPointerCancel={() => cancelPtt()}
-            onLostPointerCapture={() => endPtt()}
+            aria-label={pttListening ? "Click to send" : "Click to talk"}
+            title={pttListening ? "Click to send" : "Click to talk"}
+            onClick={handleMicClick}
           >
             {pttListening
-              ? <MicOff size={16} className="text-red-400" />
+              ? <MicOff size={16} className="text-red-400 animate-pulse" />
               : <Mic size={16} />
             }
           </Button>
@@ -130,8 +100,8 @@ export default function ChatInput({
         </Button>
       </form>
       <p className="chat-disclaimer">
-        Hold <span className="chat-ptt-hint">mic</span> to talk — same thread as typed chat.
-        Celestia may make mistakes — verify important information.
+        Click <span className="chat-ptt-hint">mic</span> to start talking, click again to send.
+        Hotkey: <code>ctrl+alt+shift+v</code> (hold). Celestia may make mistakes.
       </p>
     </div>
   );
