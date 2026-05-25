@@ -881,7 +881,7 @@ body {
 }
 .audit-row-even { background: rgba(255,255,255,0.025); }
 .audit-ts   { color: var(--text-dim); flex-shrink: 0; }
-.audit-tool { color: var(--accent-bright); font-weight: 600; truncate; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.audit-tool { color: var(--accent-bright); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .audit-ok   { color: var(--accent-bright); }
 .audit-blocked { color: #f87171; }
 .audit-result { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
