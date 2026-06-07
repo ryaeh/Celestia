@@ -1,6 +1,21 @@
 # Test checklist
 
-Manual sanity pass after significant changes. Not automated — run the relevant sections only.
+## Automated tests (run first)
+
+No Ollama needed — all heavy deps are mocked.
+
+```powershell
+pip install -r requirements-dev.txt
+pytest tests/ -v
+```
+
+Failing tests mean something is broken before you open the app. Fix those first.
+
+---
+
+## Manual sanity pass
+
+Run the relevant sections below after significant changes.
 
 ```powershell
 cd C:\celestia

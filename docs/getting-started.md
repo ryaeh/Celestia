@@ -115,5 +115,5 @@ pc_control:
 
 - Personality: [guide/personality.md](guide/personality.md)
 - Memory: [guide/memory.md](guide/memory.md)
-- What's next to build: [project/backlog.md](project/backlog.md)
-- Pick up tomorrow: [project/resume.md](project/resume.md)
+- Roadmap: [project/roadmap.md](project/roadmap.md)
+- Issues / planned work: [GitHub Issues](https://github.com/ryaeh/celestia/issues)

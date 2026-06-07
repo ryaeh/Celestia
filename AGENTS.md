@@ -37,7 +37,7 @@ For headless/cloud environments, set in `config.yaml`:
 
 ### Gotchas
 
-- **No formal test suite** yet. Use `python3 -m py_compile <file>` for syntax checks.
+- **Test suite:** `pytest tests/ -v` (mocks all heavy deps — no Ollama needed). Use `python3 -m py_compile <file>` for quick syntax checks on individual files.
 - **`data/` and `logs/`** are gitignored and created at runtime.
 - **Orpheus TTS** needs GPU locally; cloud uses `edge` TTS.
 - **PC control** (open app, PowerShell) is Windows-specific in practice.
@@ -66,4 +66,4 @@ CI runs on every push/PR via `.github/workflows/ci.yml` (Ubuntu, Python 3.11). H
 
 ### Backlog / issues
 
-Planned work: [docs/project/backlog.md](docs/project/backlog.md). Tracked in GitHub Issues — Linear is no longer used.
+Tracked in [GitHub Issues](https://github.com/ryaeh/celestia/issues). Roadmap: [docs/project/roadmap.md](docs/project/roadmap.md).

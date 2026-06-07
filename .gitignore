@@ -1,6 +1,8 @@
 # --- Secrets & local config ---
 .env
 !.env.example
+config.yaml
+security.policy.yaml
 
 # --- Python ---
 venv/
@@ -46,3 +48,4 @@ Desktop.ini
 # --- Misc ---
 .exe/
 legacy/
+.claude/session.md
