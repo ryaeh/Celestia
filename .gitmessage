@@ -1,0 +1,7 @@
+# <type>: CC-XXX: short description (72 chars max)
+# type: feat | fix | refactor | docs | test | chore
+
+# Body (optional — explain WHY, not what):
+
+# Always add for issue-linked work:
+# Closes #<github-issue-number>

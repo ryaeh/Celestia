@@ -18,14 +18,51 @@ _thread_lock = threading.Lock()
 
 
 def _store_path() -> Path:
+    """Legacy path — used only for migration detection."""
     rel = get("ui.shell_chat_store", "data/shell_chat/sessions.json")
     path = Path(rel) if Path(rel).is_absolute() else ROOT / rel
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
 
 
+def _sessions_dir() -> Path:
+    d = _store_path().parent / "sessions"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _active_path() -> Path:
+    return _store_path().parent / "active"
+
+
 def _lock_path() -> Path:
-    return _store_path().with_suffix(".lock")
+    return _store_path().parent / ".lock"
+
+
+def _migrate_legacy() -> None:
+    """One-time migration: split sessions.json into per-session files."""
+    legacy = _store_path()
+    if not legacy.is_file():
+        return
+    try:
+        raw = json.loads(legacy.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        legacy.rename(legacy.with_suffix(".bak"))
+        return
+    active = raw.get("active")
+    sessions = raw.get("sessions") or {}
+    if not isinstance(sessions, dict):
+        legacy.rename(legacy.with_suffix(".bak"))
+        return
+    sdir = _sessions_dir()
+    ap = _active_path()
+    for sid, state in sessions.items():
+        dest = sdir / f"{sid}.json"
+        if not dest.exists():
+            dest.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    if active and not ap.exists():
+        ap.write_text(active, encoding="utf-8")
+    legacy.rename(legacy.with_suffix(".bak"))
 
 
 @contextmanager
@@ -66,18 +103,23 @@ def _store_lock() -> Iterator[None]:
 
 
 def _read_store() -> tuple[str | None, dict[str, dict[str, Any]]]:
-    path = _store_path()
-    if not path.is_file():
-        return None, {}
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        active = raw.get("active")
-        sessions = raw.get("sessions") or {}
-        if not isinstance(sessions, dict):
-            sessions = {}
-        return active, sessions
-    except (json.JSONDecodeError, OSError):
-        return None, {}
+    _migrate_legacy()
+    active_path = _active_path()
+    active: str | None = None
+    if active_path.is_file():
+        try:
+            active = active_path.read_text(encoding="utf-8").strip() or None
+        except OSError:
+            pass
+    sessions: dict[str, dict[str, Any]] = {}
+    for f in _sessions_dir().glob("*.json"):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                sessions[f.stem] = data
+        except (json.JSONDecodeError, OSError):
+            continue
+    return active, sessions
 
 
 def _sanitize_history(history: Any) -> list[dict[str, Any]] | None:
@@ -97,14 +139,17 @@ def _sanitize_history(history: Any) -> list[dict[str, Any]] | None:
 
 
 def _write_store(active_id: str | None, sessions: dict[str, dict[str, Any]]) -> None:
-    path = _store_path()
-    clean: dict[str, dict[str, Any]] = {}
+    sessions_dir = _sessions_dir()
+    _active_path().write_text(active_id or "", encoding="utf-8")
+    known = {f.stem for f in sessions_dir.glob("*.json")}
     for sid, state in sessions.items():
         st = dict(state)
         st["history"] = _sanitize_history(st.get("history"))
-        clean[sid] = st
-    payload = {"active": active_id, "sessions": clean}
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        (sessions_dir / f"{sid}.json").write_text(
+            json.dumps(st, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    for stale in known - set(sessions.keys()):
+        (sessions_dir / f"{stale}.json").unlink(missing_ok=True)
 
 
 def _ensure_default_session(

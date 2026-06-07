@@ -1,0 +1,12 @@
+# Test-time only — heavy runtime deps (torch, faster-whisper, chromadb, mem0ai,
+# sounddevice, pystray, etc.) are not needed because tests mock them.
+pytest>=8.0
+PyYAML>=6.0
+python-dotenv>=1.0
+ollama>=0.6
+numpy>=1.26
+requests>=2.31
+httpx>=0.28
+duckduckgo-search>=8.0
+html2text>=2024.0
+fastapi>=0.115

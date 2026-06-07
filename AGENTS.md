@@ -45,6 +45,25 @@ For headless/cloud environments, set in `config.yaml`:
 - After editing `config.yaml` or `security.policy.yaml`, run `python3 run_celestia.py --trust-config`.
 - **Desktop shell:** `shell/` is Tauri + React. Local API in `celestia_core/shell_server.py` on `127.0.0.1`. Dev: `--shell-server` then `cd shell && npm run tauri dev`. No secrets in the frontend bundle.
 
+### Commit convention
+
+Every commit that closes a GitHub issue must include a footer line:
+
+```
+Closes #<issue-number>
+```
+
+GitHub closes the issue automatically on merge to `main`. The commit template (`.gitmessage`) and the `commit-msg` hook both remind you if you forget. To open the issue list: `gh issue list --repo ryaeh/celestia`.
+
+### Running tests
+
+```
+pip install -r requirements-dev.txt
+pytest tests/ -v
+```
+
+CI runs on every push/PR via `.github/workflows/ci.yml` (Ubuntu, Python 3.11). Heavy runtime deps (torch, faster-whisper, mem0, chromadb, etc.) are not installed in CI — they're mocked in all tests.
+
 ### Backlog / issues
 
-Planned work: [docs/project/backlog.md](docs/project/backlog.md). Linear team **Celestia** mirrors backlog (labels: `short-term`, `long-term`, `optimization`).
+Planned work: [docs/project/backlog.md](docs/project/backlog.md). Tracked in GitHub Issues — Linear is no longer used.
