@@ -167,20 +167,31 @@ MEMORY_TOOL_SCHEMAS = [
 ]
 
 
-def _run_ps(command: str, timeout: int = 30) -> str:
+def _run_ps(command: str) -> str:
+    from celestia_core.config import get as _get
+    timeout = int(_get("pc_control.powershell_timeout_seconds", 30))
+    max_chars = int(_get("pc_control.powershell_output_max_chars", 4000))
+
     if BLOCKED_PS.search(command):
         return "Blocked: command matches safety denylist."
-    proc = subprocess.run(
-        ["powershell", "-NoProfile", "-Command", command],
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-    )
+    try:
+        proc = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", command],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return f"Blocked: command timed out after {timeout}s."
     out = (proc.stdout or "").strip()
     err = (proc.stderr or "").strip()
     if proc.returncode != 0:
-        return f"Exit {proc.returncode}\n{err or out}"
-    return out or "(no output)"
+        result = f"Exit {proc.returncode}\n{err or out}"
+    else:
+        result = out or "(no output)"
+    if len(result) > max_chars:
+        result = result[:max_chars] + f"\n[truncated — {len(result)} chars total]"
+    return result
 
 
 def _system32_exe(name: str) -> Path:

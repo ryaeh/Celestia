@@ -88,6 +88,8 @@ vision:
 
 pc_control:
   require_confirm_destructive: true
+  powershell_timeout_seconds: 30
+  powershell_output_max_chars: 4000
   app_aliases: {}              # e.g. notepad: "C:\\Program Files\\Notepad++\\notepad++.exe"
 
 security:

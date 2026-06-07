@@ -26,7 +26,6 @@ PC_TOOLS_SAFE_BLOCK = frozenset(
         "open_url",
         "file_read",
         "file_write",
-        "clipboard_read",
         "clipboard_write",
     }
 )

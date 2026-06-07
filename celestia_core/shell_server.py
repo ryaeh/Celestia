@@ -57,7 +57,7 @@ app = FastAPI(title="Celestia Shell API", docs_url=None, redoc_url=None)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["tauri://localhost", "http://localhost:1420"],
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "X-Celestia-Token"],
     expose_headers=["X-Celestia-Token"],
