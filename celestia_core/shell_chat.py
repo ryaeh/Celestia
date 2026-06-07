@@ -403,6 +403,7 @@ def send_message(
         history = state.get("history") if use_session else None
         if state.get("title") in (None, "", "New chat"):
             state["title"] = _title_from_message(text)
+            _write_store(active_id, sessions)
 
     if use_session:
         reply, new_history = run_turn(text, speak=speak, source=source, history=history, voice_mode=voice_mode)
