@@ -99,4 +99,3 @@ All notable changes by delivery phase. Most recent first.
 ## Rename: Atlas → Celestia
 - Project folder, package name, and entry point renamed.
 - `app.user_id: atlas_user` kept to preserve existing Chroma memories — no migration needed.
-- See [docs/archive/rename-to-celestia.md](docs/archive/rename-to-celestia.md).

@@ -69,7 +69,7 @@ Full companion track detail: [companion-roadmap.md](companion-roadmap.md)
 | **3.5** | Linux port (`platform/linux.py`), tray on target distro |
 | **5+** | Morning briefing, autostart, installer |
 
-Detail for each planned item: [backlog.md](backlog.md) · Dev workflow: [workflow.md](workflow.md)
+Planned work is tracked in [GitHub Issues](https://github.com/ryaeh/Celestia/issues).
 
 ---
 
@@ -83,9 +83,3 @@ ollama pull nomic-embed-text
 
 Orpheus: `models/Orpheus-3b-FT-Q8_0.gguf`  
 HF token: `C:\celestia\.env` → `HF_TOKEN=...`
-
----
-
-## Session pickup
-
-[resume.md](resume.md)
