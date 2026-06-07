@@ -263,15 +263,18 @@ _VOICE_CAP_HINT = (
 )
 
 
-def run_turn(
+def _prepare_messages(
     user_message: str,
-    *,
-    speak: bool = False,
-    max_tool_rounds: int = 8,
-    source: str = "cli",
-    history: list[dict[str, Any]] | None = None,
-    voice_mode: bool = False,
-) -> tuple[str, list[dict[str, Any]]]:
+    history: list[dict[str, Any]] | None,
+    voice_mode: bool,
+) -> tuple[str, str, list[dict[str, Any]], str | None]:
+    """Build the initial message list for a turn.
+
+    Returns (uid, model, messages, early_reply_or_None).
+    When early_reply_or_None is not None, the preflight fired and messages
+    already includes the canned assistant reply — callers should return/yield
+    immediately without hitting Ollama.
+    """
     uid = _user_id()
     model = get("llm.chat_model", "llama3.2:3b")
 
@@ -283,13 +286,12 @@ def run_turn(
             messages = _normalize_history(history) or []
             messages.append({"role": "user", "content": user_message})
             messages.append({"role": "assistant", "content": early})
-            return early, _trim_session_messages(_strip_ephemeral(messages))
-        messages = _build_fresh_messages(user_message)
-        messages.append({"role": "assistant", "content": early})
-        return early, _trim_session_messages(_strip_ephemeral(messages))
+        else:
+            messages = _build_fresh_messages(user_message)
+            messages.append({"role": "assistant", "content": early})
+        return uid, model, messages, early
 
     mem_ctx = _memory_context(user_message)
-
     if history:
         messages = _normalize_history(history) or []
         for hint in _pc_control_hints(user_message):
@@ -302,12 +304,27 @@ def run_turn(
     else:
         messages = _build_fresh_messages(user_message, mem_ctx)
         if voice_mode and get("voice.reply_cap_voice", True):
-            # Insert hint before the last user message
             messages.insert(-1, {"role": "system", "content": _VOICE_CAP_HINT})
 
-    client = _ollama_client()
-    schemas = tool_schemas(user_message)  # deterministic per turn — build once
-    for _ in range(max_tool_rounds):
+    return uid, model, messages, None
+
+
+def _sync_tool_rounds(
+    messages: list[dict[str, Any]],
+    model: str,
+    client: ollama.Client,
+    user_message: str,
+    uid: str,
+    source: str,
+    max_rounds: int,
+) -> tuple[str, list[dict[str, Any]]]:
+    """Run synchronous LLM + tool-call rounds until text reply or round cap.
+
+    Mutates *messages* in place. Raises RuntimeError on LLM failure so callers
+    can handle it their own way (return tuple vs. yield error dict).
+    """
+    schemas = tool_schemas(user_message)
+    for _ in range(max_rounds):
         try:
             response = client.chat(
                 model=model,
@@ -316,23 +333,13 @@ def run_turn(
                 options={"num_predict": 1024},
             )
         except Exception as e:
-            err = f"LLM error: {e}"
-            messages.append({"role": "assistant", "content": err})
-            return err, _trim_session_messages(_strip_ephemeral(messages))
+            raise RuntimeError(f"LLM error: {e}") from e
 
         msg = _message_to_dict(response["message"])
         messages.append(msg)
-
         tool_calls = msg.get("tool_calls") or []
         if not tool_calls:
             text = _honest_reply(messages, (msg.get("content") or "").strip())
-            if speak and text:
-                try:
-                    from skills.tts import speak as tts_speak
-
-                    tts_speak(text)
-                except Exception as e:
-                    print(f"[warn] TTS: {e}")
             return text, _trim_session_messages(_strip_ephemeral(messages))
 
         for tc in tool_calls:
@@ -343,6 +350,40 @@ def run_turn(
             messages.append({"role": "tool", "content": result, "name": name})
 
     return "Stopped: too many tool rounds.", _trim_session_messages(_strip_ephemeral(messages))
+
+
+def run_turn(
+    user_message: str,
+    *,
+    speak: bool = False,
+    max_tool_rounds: int = 8,
+    source: str = "cli",
+    history: list[dict[str, Any]] | None = None,
+    voice_mode: bool = False,
+) -> tuple[str, list[dict[str, Any]]]:
+    uid, model, messages, early = _prepare_messages(user_message, history, voice_mode)
+    if early is not None:
+        return early, _trim_session_messages(_strip_ephemeral(messages))
+
+    client = _ollama_client()
+    try:
+        text, final_messages = _sync_tool_rounds(
+            messages, model, client, user_message, uid, source, max_tool_rounds
+        )
+    except RuntimeError as e:
+        err = str(e)
+        messages.append({"role": "assistant", "content": err})
+        return err, _trim_session_messages(_strip_ephemeral(messages))
+
+    if speak and text:
+        try:
+            from skills.tts import speak as tts_speak
+
+            tts_speak(text)
+        except Exception as e:
+            print(f"[warn] TTS: {e}")
+
+    return text, final_messages
 
 
 def run_turn_stream(
@@ -363,42 +404,14 @@ def run_turn_stream(
     Tool-call turns are handled synchronously (non-streaming) so the caller
     always receives a clean done event with the full message history.
     """
-    uid = _user_id()
-    model = get("llm.chat_model", "llama3.2:3b")
-
-    from celestia_core.security import preflight_chat_pc
-
-    early = preflight_chat_pc(user_message)
-    if early:
-        if history is not None:
-            messages = _normalize_history(history) or []
-            messages.append({"role": "user", "content": user_message})
-            messages.append({"role": "assistant", "content": early})
-        else:
-            messages = _build_fresh_messages(user_message)
-            messages.append({"role": "assistant", "content": early})
+    uid, model, messages, early = _prepare_messages(user_message, history, voice_mode)
+    if early is not None:
         yield {
             "done": True,
             "reply": early,
             "messages": _trim_session_messages(_strip_ephemeral(messages)),
         }
         return
-
-    mem_ctx = _memory_context(user_message)
-
-    if history:
-        messages = _normalize_history(history) or []
-        for hint in _pc_control_hints(user_message):
-            messages.append(hint)
-        if mem_ctx:
-            messages.append({"role": "system", "content": mem_ctx})
-        if voice_mode and get("voice.reply_cap_voice", True):
-            messages.append({"role": "system", "content": _VOICE_CAP_HINT})
-        messages.append({"role": "user", "content": user_message})
-    else:
-        messages = _build_fresh_messages(user_message, mem_ctx)
-        if voice_mode and get("voice.reply_cap_voice", True):
-            messages.insert(-1, {"role": "system", "content": _VOICE_CAP_HINT})
 
     client = _ollama_client()
     schemas = tool_schemas(user_message)  # deterministic per turn — build once
@@ -450,8 +463,7 @@ def run_turn_stream(
 
     if not tool_calls_found:
         # Clean text reply — finish here
-        final_msg = {"role": "assistant", "content": full_content}
-        messages.append(final_msg)
+        messages.append({"role": "assistant", "content": full_content})
         text = _honest_reply(messages, full_content.strip())
         yield {
             "done": True,
@@ -474,38 +486,10 @@ def run_turn_stream(
         result = execute_tool(name, args, uid, source=source)
         messages.append({"role": "tool", "content": result, "name": name})
 
-    for _ in range(max_tool_rounds - 1):
-        try:
-            response = client.chat(
-                model=model,
-                messages=messages,
-                tools=schemas,
-                options={"num_predict": 1024},
-            )
-        except Exception as e:
-            yield {"error": f"LLM error: {e}"}
-            return
-
-        msg = _message_to_dict(response["message"])
-        messages.append(msg)
-        next_tool_calls = msg.get("tool_calls") or []
-        if not next_tool_calls:
-            text = _honest_reply(messages, (msg.get("content") or "").strip())
-            yield {
-                "done": True,
-                "reply": text,
-                "messages": _trim_session_messages(_strip_ephemeral(messages)),
-            }
-            return
-        for tc in next_tool_calls:
-            fn = tc.get("function") or {}
-            name = fn.get("name", "")
-            args = _parse_tool_args(fn.get("arguments"))
-            result = execute_tool(name, args, uid, source=source)
-            messages.append({"role": "tool", "content": result, "name": name})
-
-    yield {
-        "done": True,
-        "reply": "Stopped: too many tool rounds.",
-        "messages": _trim_session_messages(_strip_ephemeral(messages)),
-    }
+    try:
+        text, final_messages = _sync_tool_rounds(
+            messages, model, client, user_message, uid, source, max_tool_rounds - 1
+        )
+        yield {"done": True, "reply": text, "messages": final_messages}
+    except RuntimeError as e:
+        yield {"error": str(e)}
