@@ -24,13 +24,16 @@ temp/
 models/
 *.gguf
 
-# --- Orpheus-FastAPI (source yes, runtime no) ---
+# --- Orpheus-FastAPI (source yes, runtime + demo assets no) ---
 Orpheus-FastAPI/.env
 Orpheus-FastAPI/models/
 Orpheus-FastAPI/outputs/
 Orpheus-FastAPI/__pycache__/
 Orpheus-FastAPI/.venv/
 Orpheus-FastAPI/venv/
+Orpheus-FastAPI/docs/*.mp3
+Orpheus-FastAPI/docs/*.png
+Orpheus-FastAPI/static/favicon.ico
 
 # --- OS / editor ---
 Thumbs.db
