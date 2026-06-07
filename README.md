@@ -1,5 +1,7 @@
 # Celestia
 
+> **Active development — Phase 4 (desktop shell, streaming chat, memory UI)**
+
 A local AI companion for Windows — chat, voice, memory, screen reading, and PC control. Runs entirely on-device via [Ollama](https://ollama.com). No cloud, no API keys, no subscription.
 
 > **Personal project.** Not accepting pull requests or issues from external contributors.  
@@ -82,9 +84,7 @@ copy security.policy.example.yaml security.policy.yaml
 .\venv\Scripts\python.exe run_celestia.py -i
 ```
 
-Type `help` once you're in.
-
-**Or double-click** `start_shell.bat` to launch the desktop shell directly.
+Type `help` once you're in. Or double-click `start_shell.bat` to launch the desktop shell directly.
 
 ---
 
@@ -101,13 +101,5 @@ Type `help` once you're in.
 | [docs/reference/architecture.md](docs/reference/architecture.md) | Folder map, data flows, API overview |
 | [docs/reference/api.md](docs/reference/api.md) | Full shell API reference |
 | [docs/testing/checklist.md](docs/testing/checklist.md) | Manual test pass |
-| [CHANGELOG.md](CHANGELOG.md) | What shipped in each phase |
 
----
-
-## Project status
-
-Active development. Currently in **Phase 4 — Product UI** (Tauri shell, streaming chat, memory page, PTT).
-
-Roadmap: [docs/project/roadmap.md](docs/project/roadmap.md)  
-Companion track (voice feel, habit memory): [docs/project/companion-roadmap.md](docs/project/companion-roadmap.md)
+Roadmap: [docs/project/roadmap.md](docs/project/roadmap.md) · Companion track: [docs/project/companion-roadmap.md](docs/project/companion-roadmap.md)
