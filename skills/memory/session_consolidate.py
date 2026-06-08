@@ -10,7 +10,7 @@ import ollama
 
 from celestia_core.config import get
 from skills.memory.activity_feed import append_event
-from skills.memory.store import _should_skip_memory, add, get_entries_by_kind
+from skills.memory.store import _should_skip_memory, add, get_all_entries
 from skills.memory.types import KINDS, MemoryKind, normalize_kind
 
 _JSON_BLOCK = re.compile(r"\{[\s\S]*\}")
@@ -183,11 +183,15 @@ def consolidate_session_messages(
     if not excerpt.strip() or len(excerpt) < 30:
         return len(messages), []
 
+    # One fetch of the recent entries, grouped by kind — equivalent to calling
+    # get_entries_by_kind(limit=40) per kind but without the repeated get_all scan.
+    recent = get_all_entries(user_id, limit=40)
+    existing_by_kind: dict[MemoryKind, list[str]] = {
+        kind: [e["text"] for e in recent if e["kind"] == kind] for kind in KINDS
+    }
     known_blocks: list[str] = []
-    existing_by_kind: dict[MemoryKind, list[str]] = {}
     for kind in KINDS:
-        texts = [e["text"] for e in get_entries_by_kind(user_id, kind, limit=40)]
-        existing_by_kind[kind] = texts
+        texts = existing_by_kind[kind]
         if texts:
             known_blocks.append(f"{kind.upper()}:\n" + "\n".join(f"- {t}" for t in texts[:20]))
     known_block = "\n\n".join(known_blocks) if known_blocks else "(none yet)"
