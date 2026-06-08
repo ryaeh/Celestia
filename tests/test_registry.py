@@ -171,7 +171,7 @@ def test_execute_tool_unknown_in_armed_mode(monkeypatch) -> None:
 
 
 def test_tool_schemas_safe_mode_excludes_blocked_pc_tools() -> None:
-    schemas = reg.tool_schemas("hello")
+    schemas = reg.tool_schemas()
     names = {s["function"]["name"] for s in schemas}
     # Blocked in safe mode — must be absent
     assert "run_powershell" not in names
@@ -182,7 +182,7 @@ def test_tool_schemas_safe_mode_excludes_blocked_pc_tools() -> None:
 
 
 def test_tool_schemas_safe_mode_includes_always_ok_tools() -> None:
-    schemas = reg.tool_schemas("hello")
+    schemas = reg.tool_schemas()
     names = {s["function"]["name"] for s in schemas}
     assert "get_system_status" in names
     assert "list_processes" in names
@@ -190,20 +190,18 @@ def test_tool_schemas_safe_mode_includes_always_ok_tools() -> None:
 
 def test_tool_schemas_armed_mode_includes_pc_tools(monkeypatch) -> None:
     monkeypatch.setattr(sec, "get_mode", lambda: "armed")
-    # Trigger message contains open keyword so open_path/open_url are included
-    schemas = reg.tool_schemas("open youtube please")
+    schemas = reg.tool_schemas()
     names = {s["function"]["name"] for s in schemas}
     assert "run_powershell" in names
     assert "open_path" in names
     assert "open_url" in names
 
 
-def test_tool_schemas_no_open_triggers_skips_open_tools(monkeypatch) -> None:
-    """Without open/launch/etc. triggers, open_path and open_url are omitted."""
+def test_tool_schemas_always_includes_open_tools_in_armed_mode(monkeypatch) -> None:
+    """open_path and open_url are always present in armed mode regardless of message."""
     monkeypatch.setattr(sec, "get_mode", lambda: "armed")
-    schemas = reg.tool_schemas("what time is it")
+    schemas = reg.tool_schemas()
     names = {s["function"]["name"] for s in schemas}
-    assert "open_path" not in names
-    assert "open_url" not in names
-    # But run_powershell should still be present
+    assert "open_path" in names
+    assert "open_url" in names
     assert "run_powershell" in names

@@ -15,17 +15,6 @@ from skills.pc_control.tools import (
 from skills.web.tools import WEB_TOOL_SCHEMAS, fetch_page, web_search
 from skills.briefing.tools import BRIEFING_TOOL_SCHEMA, morning_briefing
 
-_OPEN_TRIGGERS = (
-    "open ",
-    "launch ",
-    "start ",
-    "go to ",
-    "browse ",
-    "visit ",
-    "http://",
-    "https://",
-)
-
 # Handler type: (arguments, user_id) -> result string
 _Handler = Callable[[dict[str, Any], str], str]
 
@@ -107,11 +96,10 @@ _TOOL_DISPATCH: dict[str, _Handler] = {
 }
 
 
-def tool_schemas(user_message: str = "") -> list:
+def tool_schemas() -> list:
     from celestia_core.config import load_config
 
     load_config()
-    msg = (user_message or "").lower()
     mode = security.get_mode()
 
     if mode == "safe":
@@ -129,11 +117,7 @@ def tool_schemas(user_message: str = "") -> list:
         tools += BRIEFING_TOOL_SCHEMA
         return tools
 
-    pc = list(PC_TOOL_SCHEMAS)
-    if not any(t in msg for t in _OPEN_TRIGGERS):
-        pc = [t for t in pc if t["function"]["name"] not in ("open_path", "open_url")]
-
-    tools = list(pc) + list(FILE_TOOL_SCHEMAS) + list(CLIPBOARD_TOOL_SCHEMAS)
+    tools = list(PC_TOOL_SCHEMAS) + list(FILE_TOOL_SCHEMAS) + list(CLIPBOARD_TOOL_SCHEMAS)
     if get("memory.enabled", True):
         tools += MEMORY_TOOL_SCHEMAS
     if get("skills.web.enabled", True):

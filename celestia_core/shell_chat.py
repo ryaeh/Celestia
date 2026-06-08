@@ -15,6 +15,7 @@ from celestia_core.agent import run_turn, run_turn_stream
 from celestia_core.config import ROOT, get, load_config
 
 _thread_lock = threading.Lock()
+_last_turn_time: float = 0.0
 
 
 def _store_path() -> Path:
@@ -247,12 +248,23 @@ def _should_consolidate_now(state: dict[str, Any], *, end: bool = False) -> bool
     return True
 
 
+_CONSOLIDATION_IDLE_SECONDS = 5.0
+
+
 def _run_consolidation_bg(
     sid: str,
     history: list[dict[str, Any]],
     start_index: int,
 ) -> None:
-    """Background thread: run LLM consolidation, then write consolidate_from back."""
+    """Background thread: wait for idle then run LLM consolidation.
+
+    Sleeps briefly so a new turn arriving immediately after the done event
+    cancels the pass — avoiding GPU contention with an in-flight chat request.
+    """
+    time.sleep(_CONSOLIDATION_IDLE_SECONDS)
+    if time.time() - _last_turn_time < _CONSOLIDATION_IDLE_SECONDS - 0.5:
+        return  # new turn started during the wait; skip this pass
+
     uid = get("app.user_id", "atlas_user")
     try:
         from skills.memory.session_consolidate import consolidate_session_messages
@@ -389,10 +401,12 @@ def send_message(
     source: str = "shell",
     voice_mode: bool = False,
 ) -> dict[str, Any]:
+    global _last_turn_time
     text = message.strip()
     if not text:
         return {"error": "message required"}
 
+    _last_turn_time = time.time()
     load_config()
     use_session = get("chat.session_enabled", True)
     speak = get("voice.always_speak", False)
@@ -460,11 +474,13 @@ def send_message_stream(
     Yields the same events as run_turn_stream(), plus the final done event
     includes "session_id" and the UI-ready "messages" list.
     """
+    global _last_turn_time
     text = message.strip()
     if not text:
         yield {"error": "message required"}
         return
 
+    _last_turn_time = time.time()
     load_config()
     use_session = get("chat.session_enabled", True)
 

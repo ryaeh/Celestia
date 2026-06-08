@@ -23,6 +23,7 @@ llm:
   vision_fast_model: moondream
   embed_model: nomic-embed-text
   request_timeout_seconds: 60   # seconds before an Ollama call is aborted (CC-92)
+  max_tokens: 1024              # max tokens per LLM reply (num_predict)
 
 memory:
   enabled: true

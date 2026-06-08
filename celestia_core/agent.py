@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 from typing import Any, Generator
 
 import ollama
@@ -23,16 +22,6 @@ def _ollama_client() -> ollama.Client:
         _ollama_client_cache.clear()
         _ollama_client_cache[key] = ollama.Client(host=host, timeout=timeout)
     return _ollama_client_cache[key]
-
-_FALSE_SUCCESS = re.compile(
-    r"\b(i\s+)?(have\s+)?(opened|launched|started|visited|navigated to)\b",
-    re.I,
-)
-_FAKE_NARRATION = re.compile(
-    r"\[.*\bopens?\b.*\]|^opening url:",
-    re.I | re.M,
-)
-
 
 def _user_id() -> str:
     return get("app.user_id", "atlas_user")
@@ -123,8 +112,8 @@ def _pc_control_hints(user_message: str) -> list[dict[str, Any]]:
                 "role": "system",
                 "content": (
                     "PC control is SAFE (off). You cannot open apps, URLs, or files. "
-                    "Do NOT say you opened, launched, or visited anything. "
-                    "Tell the user to use scope scoped, arm, or the direct command: open https://…"
+                    "Do NOT say you opened, launched, or visited anything — not even in brackets. "
+                    "Tell the user to use scoped mode, arm, or the direct command: open https://…"
                 ),
             }
         )
@@ -136,7 +125,9 @@ def _pc_control_hints(user_message: str) -> list[dict[str, Any]]:
                     "PC control is SCOPED: open_path for allowlisted apps (notepad, calc, …); "
                     "file_read/write only under workspace folders. "
                     "For web links use open_url (only hosts on url_allowlist). "
-                    "Never pass a URL to open_path. No PowerShell, no System32."
+                    "Never pass a URL to open_path. No PowerShell, no System32. "
+                    "IMPORTANT: call the tool first — do NOT describe the action in text before calling it. "
+                    "Report the tool result honestly; never claim success without a successful tool call."
                 ),
             }
         )
@@ -146,7 +137,9 @@ def _pc_control_hints(user_message: str) -> list[dict[str, Any]]:
                 "role": "system",
                 "content": (
                     "PC control is ARMED. For http(s) links use open_url with the URL only. "
-                    "For apps/files use open_path. Report Blocked messages honestly."
+                    "For apps/files use open_path. "
+                    "IMPORTANT: call the tool first — do NOT describe the action in text before calling it. "
+                    "Report the tool result honestly; never claim success without a successful tool call."
                 ),
             }
         )
@@ -176,51 +169,6 @@ def _pc_control_hints(user_message: str) -> list[dict[str, Any]]:
             }
         )
     return hints
-
-
-def _honest_reply(messages: list[dict[str, Any]], text: str) -> str:
-    """If tools were blocked but the model claims success, append the real tool result."""
-    blocked: list[str] = []
-    seen_user = False
-    for m in reversed(messages):
-        if m.get("role") == "user":
-            if not seen_user:
-                seen_user = True
-                continue
-            break
-        if seen_user and m.get("role") == "tool":
-            body = str(m.get("content") or "")
-            if body.startswith("Blocked:"):
-                blocked.append(body)
-
-    open_ok = any(
-        m.get("role") == "tool"
-        and m.get("name") == "open_url"
-        and not str(m.get("content") or "").startswith("Blocked:")
-        for m in messages
-    )
-
-    if not blocked and not (_FALSE_SUCCESS.search(text) or _FAKE_NARRATION.search(text)):
-        return text
-    if open_ok and "block" not in text.lower():
-        return text
-
-    low = text.lower()
-    if blocked and (
-        "block" in low
-        or "could not" in low
-        or "did not open" in low
-        or "can't open" in low
-    ):
-        return text
-    if blocked:
-        return f"{text}\n\n(Tool result: {blocked[-1]})"
-    if _FALSE_SUCCESS.search(text) or _FAKE_NARRATION.search(text):
-        return (
-            f"{text}\n\n(I did not run a successful open — nothing was opened. "
-            "Try: open https://github.com or ask again.)"
-        )
-    return text
 
 
 def _strip_ephemeral(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -323,14 +271,14 @@ def _sync_tool_rounds(
     Mutates *messages* in place. Raises RuntimeError on LLM failure so callers
     can handle it their own way (return tuple vs. yield error dict).
     """
-    schemas = tool_schemas(user_message)
+    schemas = tool_schemas()
     for _ in range(max_rounds):
         try:
             response = client.chat(
                 model=model,
                 messages=messages,
                 tools=schemas,
-                options={"num_predict": 1024},
+                options={"num_predict": int(get("llm.max_tokens", 1024))},
             )
         except Exception as e:
             raise RuntimeError(f"LLM error: {e}") from e
@@ -339,7 +287,7 @@ def _sync_tool_rounds(
         messages.append(msg)
         tool_calls = msg.get("tool_calls") or []
         if not tool_calls:
-            text = _honest_reply(messages, (msg.get("content") or "").strip())
+            text = (msg.get("content") or "").strip()
             return text, _trim_session_messages(_strip_ephemeral(messages))
 
         for tc in tool_calls:
@@ -414,7 +362,8 @@ def run_turn_stream(
         return
 
     client = _ollama_client()
-    schemas = tool_schemas(user_message)  # deterministic per turn — build once
+    schemas = tool_schemas()
+    max_tokens = int(get("llm.max_tokens", 1024))
 
     # --- Round 1: stream the first response ---------------------------------
     try:
@@ -422,7 +371,7 @@ def run_turn_stream(
             model=model,
             messages=messages,
             tools=schemas,
-            options={"num_predict": 1024},
+            options={"num_predict": max_tokens},
             stream=True,
         )
     except Exception as e:
@@ -464,7 +413,7 @@ def run_turn_stream(
     if not tool_calls_found:
         # Clean text reply — finish here
         messages.append({"role": "assistant", "content": full_content})
-        text = _honest_reply(messages, full_content.strip())
+        text = full_content.strip()
         yield {
             "done": True,
             "reply": text,
