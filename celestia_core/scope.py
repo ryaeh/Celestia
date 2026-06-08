@@ -45,6 +45,11 @@ _INSTALLED_REL: dict[str, list[str]] = {
 
 _extra_workspaces_path = ROOT / "data" / "scope_workspaces.json"
 
+# Cache of the parsed extra-workspaces file, keyed on its mtime. list_workspaces()
+# runs on every scoped file check; re-reading + parsing each time is wasteful.
+# Any write below bumps the mtime and forces a re-read (safe across processes).
+_extra_workspaces_cache: tuple[int, list[str]] | None = None
+
 
 def _plat():
     return get_platform()
@@ -60,16 +65,30 @@ def _config_workspaces() -> list[Path]:
     return out
 
 
-def _load_extra_workspaces() -> list[Path]:
-    if not _extra_workspaces_path.exists():
-        return []
+def _read_extra_workspace_paths() -> list[str]:
+    """Raw workspace path strings from disk, cached on the file's mtime."""
+    global _extra_workspaces_cache
+    path = _extra_workspaces_path
     try:
-        data = json.loads(_extra_workspaces_path.read_text(encoding="utf-8"))
+        mtime = path.stat().st_mtime_ns
+    except OSError:
+        return []
+    if _extra_workspaces_cache is not None and _extra_workspaces_cache[0] == mtime:
+        return _extra_workspaces_cache[1]
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
         paths = data.get("workspaces", [])
     except (json.JSONDecodeError, OSError):
         return []
+    if not isinstance(paths, list):
+        paths = []
+    _extra_workspaces_cache = (mtime, paths)
+    return paths
+
+
+def _load_extra_workspaces() -> list[Path]:
     out: list[Path] = []
-    for item in paths:
+    for item in _read_extra_workspace_paths():
         p = _plat().normalize(item)
         if p:
             out.append(p)
@@ -115,6 +134,8 @@ def add_workspace(path: str) -> str:
         json.dumps({"workspaces": extras}, indent=2),
         encoding="utf-8",
     )
+    global _extra_workspaces_cache
+    _extra_workspaces_cache = None
     return f"Added workspace: {p}"
 
 
@@ -131,6 +152,8 @@ def remove_workspace(path: str) -> str:
         json.dumps({"workspaces": new}, indent=2),
         encoding="utf-8",
     )
+    global _extra_workspaces_cache
+    _extra_workspaces_cache = None
     return f"Removed workspace: {p}"
 
 

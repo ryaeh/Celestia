@@ -31,12 +31,19 @@ touches only the session it changes. On-disk format unchanged (backward-compatib
 ## Commit 4 — Tier 2 caching
 **Files:** `celestia_core/security.py`, `celestia_core/scope.py`,
 `celestia_core/shell_server.py`
-- `get_mode()` / scope workspaces re-read state files on every call. Cache keyed on
-  file mtime (re-read only when the file changes — safe across tray/CLI/shell).
-- `/status` re-runs all preflight checks per request → short TTL.
-- `/audit/tail` reads the whole JSONL to return last N lines → seek from end.
-- Memory CRUD endpoints refetch the full 200-entry list after one edit → return only
-  the changed entry.
+- ✅ `get_mode()` / scope workspaces re-read state files on every call. Now cached
+  keyed on file mtime (re-read only when the file changes — safe across
+  tray/CLI/shell, since any write bumps the mtime).
+- ✅ `/status` re-ran all preflight checks (incl. an Ollama probe) per request →
+  now a 2s TTL cache.
+- ✅ `/audit/tail` read the whole JSONL to return last N lines → now seeks from the
+  end and reads only the trailing blocks.
+- ⏸ Memory CRUD endpoints refetch the full 200-entry list after one edit. **Deferred:**
+  returning only the changed entry is a response-shape contract change that also
+  requires coordinated edits to `shell/src/api.ts` + `Memory.tsx`, which can't be
+  type-checked/built in this environment (no `node_modules`, network-gated). It is a
+  manual-UI path, not a per-turn hot path, so the win is marginal and the breakage
+  risk is real. Revisit alongside frontend work.
 
 ## Commit 5 — cleanup
 **Files:** `run_celestia.py`, `celestia_core/shell_ptt.py`, `skills/stt/engine.py`,

@@ -142,14 +142,32 @@ class VisionAnalyzeBody(BaseModel):
 # Shared helpers (unchanged from original)
 # ---------------------------------------------------------------------------
 
+def _tail_lines(path: Path, n: int) -> list[str]:
+    """Last n lines of a file, read from the end so the whole log isn't loaded."""
+    if n <= 0:
+        return []
+    with open(path, "rb") as f:
+        f.seek(0, 2)
+        size = f.tell()
+        block = 4096
+        data = b""
+        pos = size
+        # Read backwards in blocks until we have n+1 newlines or hit the start.
+        while pos > 0 and data.count(b"\n") <= n:
+            step = min(block, pos)
+            pos -= step
+            f.seek(pos)
+            data = f.read(step) + data
+    return data.decode("utf-8", errors="replace").splitlines()[-n:]
+
+
 def tail_audit(n: int = 20) -> list[dict[str, Any]]:
     rel = get("security.audit_log", "logs/tool_audit.jsonl")
     path = Path(rel) if Path(rel).is_absolute() else ROOT / rel
     if not path.is_file():
         return []
-    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     out: list[dict[str, Any]] = []
-    for line in lines[-n:]:
+    for line in _tail_lines(path, n):
         try:
             out.append(json.loads(line))
         except json.JSONDecodeError:
@@ -213,9 +231,21 @@ def _memory_activity_payload(n: int = 30) -> dict[str, Any]:
 # Routes — GET
 # ---------------------------------------------------------------------------
 
+# /status runs the full preflight suite (incl. an Ollama probe). The frontend
+# polls it, so cache the result briefly to avoid re-probing on every request.
+_status_cache: tuple[float, dict[str, Any]] | None = None
+_STATUS_TTL = 2.0  # seconds
+
+
 @app.get("/status")
 def get_status():
-    return build_status()
+    global _status_cache
+    now = time.monotonic()
+    if _status_cache is not None and now - _status_cache[0] < _STATUS_TTL:
+        return _status_cache[1]
+    data = build_status()
+    _status_cache = (now, data)
+    return data
 
 
 @app.get("/prefs")
