@@ -5,6 +5,9 @@ each doc is a self-contained brief. This index does the cross-feature analysis:
 what they share, how they reinforce each other, and the order that unlocks the most
 with the least rework.
 
+**Delivery plan + tracking issues:** [`ROADMAP.md`](ROADMAP.md) sequences these into phases
+(epics [#94–#104](https://github.com/ryaeh/Celestia/issues)).
+
 ## The four pillars (why these features and not generic ones)
 
 Celestia's structural advantages over a cloud chatbot:

@@ -32,6 +32,12 @@ PC_TOOLS_SAFE_BLOCK = frozenset(
 
 _session_mode: Mode | None = None
 
+# Cache of the parsed state file, keyed on its mtime. get_mode() is called on
+# every gate/audit; re-reading + parsing the JSON each time is wasteful. The
+# mtime key keeps it correct across tray/CLI/shell processes — any write (here
+# or elsewhere) bumps the mtime and forces a re-read.
+_state_cache: tuple[int, dict[str, Any]] | None = None
+
 
 def _state_path() -> Path:
     return ROOT / "data" / "security_state.json"
@@ -44,19 +50,28 @@ def _use_shared_state() -> bool:
 
 
 def _read_state() -> dict[str, Any]:
+    global _state_cache
     path = _state_path()
-    if not path.exists():
-        return {}
     try:
-        return json.loads(path.read_text(encoding="utf-8")) or {}
+        mtime = path.stat().st_mtime_ns
+    except OSError:
+        return {}
+    if _state_cache is not None and _state_cache[0] == mtime:
+        return _state_cache[1]
+    try:
+        data = json.loads(path.read_text(encoding="utf-8")) or {}
     except (json.JSONDecodeError, OSError):
         return {}
+    _state_cache = (mtime, data)
+    return data
 
 
 def _write_state(data: dict[str, Any]) -> None:
+    global _state_cache
     data["updated"] = _now_iso()
     _state_path().parent.mkdir(parents=True, exist_ok=True)
     _state_path().write_text(json.dumps(data, indent=2), encoding="utf-8")
+    _state_cache = None  # invalidate; next read re-stats the freshly written file
 
 
 def _default_mode() -> Mode:

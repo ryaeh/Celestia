@@ -31,19 +31,30 @@ touches only the session it changes. On-disk format unchanged (backward-compatib
 ## Commit 4 — Tier 2 caching
 **Files:** `celestia_core/security.py`, `celestia_core/scope.py`,
 `celestia_core/shell_server.py`
-- `get_mode()` / scope workspaces re-read state files on every call. Cache keyed on
-  file mtime (re-read only when the file changes — safe across tray/CLI/shell).
-- `/status` re-runs all preflight checks per request → short TTL.
-- `/audit/tail` reads the whole JSONL to return last N lines → seek from end.
-- Memory CRUD endpoints refetch the full 200-entry list after one edit → return only
-  the changed entry.
+- ✅ `get_mode()` / scope workspaces re-read state files on every call. Now cached
+  keyed on file mtime (re-read only when the file changes — safe across
+  tray/CLI/shell, since any write bumps the mtime).
+- ✅ `/status` re-ran all preflight checks (incl. an Ollama probe) per request →
+  now a 2s TTL cache.
+- ✅ `/audit/tail` read the whole JSONL to return last N lines → now seeks from the
+  end and reads only the trailing blocks.
+- ⏸ Memory CRUD endpoints refetch the full 200-entry list after one edit. **Deferred:**
+  returning only the changed entry is a response-shape contract change that also
+  requires coordinated edits to `shell/src/api.ts` + `Memory.tsx`, which can't be
+  type-checked/built in this environment (no `node_modules`, network-gated). It is a
+  manual-UI path, not a per-turn hot path, so the win is marginal and the breakage
+  risk is real. Revisit alongside frontend work.
 
-## Commit 5 — cleanup
+## ✅ Commit 5 — DONE: cleanup
 **Files:** `run_celestia.py`, `celestia_core/shell_ptt.py`, `skills/stt/engine.py`,
 `skills/tts/orpheus_local.py`
-- Dedup near-identical record→transcribe→reply in `_run_listen` / `_run_voice_loop`.
-- `shell_ptt`: move phase mutation inside the lock (TOCTOU).
-- STT/TTS idle-unload calls `time.time()` twice — read once.
+- ✅ Deduped the record→transcribe→reply block in `_run_listen` / `_run_voice_loop`
+  into a shared `_voice_reply()` helper (each caller keeps its own source/speak).
+- ✅ `shell_ptt`: the two `_set_phase()` calls in `ptt_finish` ran outside `_lock`
+  (racing `ptt_status()`); both now mutate under the lock. `_set_phase` documents
+  the lock precondition.
+- ✅ STT/TTS idle-unload read `time.time()` and the idle limit twice; both now read
+  once before the double-checked unload.
 
 ## Explicitly NOT changing (audit over-flagged)
 - `config.yaml` parsing — already cached via `load_config`.

@@ -42,10 +42,12 @@ def _maybe_unload():
     global _model, _last_used
     if _model is None:
         return
-    if (time.time() - _last_used) < _idle_minutes() * 60:
+    idle_limit = _idle_minutes() * 60
+    now = time.time()
+    if (now - _last_used) < idle_limit:
         return
     with _lock:
-        if _model is not None and (time.time() - _last_used) >= _idle_minutes() * 60:
+        if _model is not None and (now - _last_used) >= idle_limit:
             _model = None
             print("[stt] model unloaded (idle)")
 

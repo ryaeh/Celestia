@@ -251,7 +251,8 @@ def _known_user_ids() -> list[str]:
     ]
 
 
-def _user_for_id(memory_id: str) -> str | None:
+def _find_entry(memory_id: str) -> tuple[str | None, dict[str, Any] | None]:
+    """Locate the (user_id, entry) owning a memory id in a single pass per user."""
     m = _get_memory()
     for uid in _known_user_ids():
         try:
@@ -259,11 +260,11 @@ def _user_for_id(memory_id: str) -> str | None:
             items = raw.get("results", raw) if isinstance(raw, dict) else raw
             if isinstance(items, list):
                 for it in items:
-                    if it.get("id") == memory_id:
-                        return uid
+                    if it.get("id") == memory_id and _extract_text(it):
+                        return uid, _entry_from_item(it)
         except Exception:
             continue
-    return None
+    return None, None
 
 
 def update_entry(
@@ -273,16 +274,33 @@ def update_entry(
     kind: str | None = None,
     user_id: str | None = None,
 ) -> str:
-    uid = user_id or _user_for_id(memory_id)
-    if not uid:
+    # Resolve the entry. With a known user_id, one scan finds it; otherwise
+    # _find_entry locates the owning user and entry together in a single pass.
+    if user_id:
+        entry = next(
+            (e for e in get_all_entries(user_id, 200) if e["id"] == memory_id), None
+        )
+        uid = user_id if entry else None
+    else:
+        uid, entry = _find_entry(memory_id)
+    if not uid or not entry:
         return "Memory not found."
-    entries = get_all_entries(uid, 200)
-    entry = next((e for e in entries if e["id"] == memory_id), None)
-    if not entry:
-        return "Memory not found."
+
     new_text = (text or entry["text"]).strip()
     new_kind = normalize_kind(kind) if kind else entry["kind"]
     m = _get_memory()
+
+    # In-place text update is atomic — no window where the memory is deleted but
+    # not yet re-added. A kind change touches metadata (not updatable in place),
+    # so it still requires a rewrite.
+    if new_kind == entry["kind"] and hasattr(m, "update"):
+        try:
+            m.update(memory_id, data=new_text)
+            _invalidate_instruction_cache(uid)
+            return "Updated."
+        except Exception:
+            return "Update failed."
+
     try:
         m.delete(memory_id)
     except Exception:

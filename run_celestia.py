@@ -140,6 +140,18 @@ def _run_screen(args) -> int:
     return 0
 
 
+def _voice_reply(text: str, *, tag: str, speak: bool, source: str) -> None:
+    """Print the transcript and emit the reply (session send or direct turn)."""
+    print(f"[you] {text}")
+    if get("chat.session_enabled", True):
+        from celestia_core.shell_chat import send_message
+        result = send_message(text, source="voice")
+        print(f"{tag}>", result.get("reply", ""))
+    else:
+        reply, _ = run_turn(text, speak=speak, source=source)
+        print(f"{tag}>", reply)
+
+
 def _run_voice_loop(args) -> int:
     if not get("voice.stt.enabled", True):
         print("Enable voice.stt.enabled in config.yaml", file=sys.stderr)
@@ -154,14 +166,7 @@ def _run_voice_loop(args) -> int:
             text = record_and_transcribe(seconds=args.seconds)
             if not text:
                 continue
-            print(f"[you] {text}")
-            if get("chat.session_enabled", True):
-                from celestia_core.shell_chat import send_message
-                result = send_message(text, source="voice")
-                print(f"{tag}>", result.get("reply", ""))
-            else:
-                reply, _ = run_turn(text, speak=speak or True, source="cli")
-                print(f"{tag}>", reply)
+            _voice_reply(text, tag=tag, speak=speak or True, source="cli")
     except KeyboardInterrupt:
         print()
     return 0
@@ -176,14 +181,7 @@ def _run_listen(args) -> int:
     speak = args.speak or get("voice.always_speak", False)
     tag = _prompt_tag()
     text = record_and_transcribe(seconds=args.seconds)
-    print(f"[you] {text}")
-    if get("chat.session_enabled", True):
-        from celestia_core.shell_chat import send_message
-        result = send_message(text, source="voice")
-        print(f"{tag}>", result.get("reply", ""))
-    else:
-        reply, _ = run_turn(text, speak=speak, source="voice")
-        print(f"{tag}>", reply)
+    _voice_reply(text, tag=tag, speak=speak, source="voice")
     return 0
 
 
