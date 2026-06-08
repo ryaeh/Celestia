@@ -30,6 +30,8 @@ at once. Anything a cloud assistant could do equally well is out of scope.
 | [07](07-universal-read-hotkey.md) | Universal "read screen" hotkey | Sees | vision + hotkey |
 | [08](08-privacy-guardian.md) | Local privacy guardian | Sees · Acts · Local | watcher loop + security |
 | [09](09-adaptive-test-time-compute.md) | Adaptive test-time compute | Local | agent turn loop |
+| [10](10-temporal-knowledge-graph.md) | Temporal knowledge-graph memory | Remembers · Local · Sees | new memory substrate |
+| [11](11-operating-modes.md) | Operating modes | Local · Acts | new control plane (modes) |
 
 `09` is a **horizontal enhancer**, not a user-facing companion feature: it makes every
 other feature reason better at a fixed model size by spending more inference compute only
@@ -37,6 +39,14 @@ on hard turns. It's listed apart from the 8×8 matrix below for that reason — 
 with all of them rather than competing. Strongest payoff with **04 Autonomy** (better
 plans) and **03 RAG** (reasoning over retrieved context); cheap to pair with **01 Ambient**
 (rare nudges can afford deep compute).
+
+`10` and `11` are **substrates**, not single features. `10 Temporal knowledge-graph memory`
+replaces the ad-hoc stores the memory cluster (`02`/`03`/`06`) implies with one structured,
+time-aware graph — those features become *consumers* of it. `11 Operating modes` is the
+control plane that makes the whole on-device stack affordable: it budgets VRAM, toggles which
+features (and the memory extraction pass) are live, sets the ingestion tier `10` records, and
+fixes proactivity + default security per context. Both sit apart from the 8×8 matrix because
+nearly everything else rides on them.
 
 ## Shared building blocks
 
@@ -50,8 +60,11 @@ Building a block once pays off across every feature that depends on it.
 | **Episodic store** (timeline entries in Chroma + retrieval) | new on memory | 02, 03, 06 |
 | **Scheduler / cron** (time + event triggers) | new | 01, 02, 05 |
 | **Multi-step executor** (plan → approve → run with live checklist) | new on agent | 04, 05, 08 |
-| **Security modes** (`safe`/`scoped`/`armed`) | exists | 01, 04, 05, 08 |
-| **Global hotkey infra** (`shell_ptt.py`) | exists | 07, 04 |
+| **Security modes** (`safe`/`scoped`/`armed`) | exists | 01, 04, 05, 08, 11 |
+| **Global hotkey infra** (`shell_ptt.py`) | exists | 07, 04, 11 |
+| **Temporal knowledge graph** (nodes/edges + valid_from/until, hybrid retrieval) | new on memory | 02, 03, 06, 10 |
+| **Mode control plane** (residency/VRAM + feature toggles + ingestion + behavior per mode) | new | 01, 04, 10, 11 |
+| **Entity extraction + resolution** (inline-light + deep-bg, embedding-prefilter + LLM canonicalize) | new on `session_consolidate` | 10 |
 
 Three natural clusters fall out of this:
 
@@ -114,6 +127,15 @@ quiet-hours/scheduler from `05`. Highest payoff, but depends on the most substra
 
 **Phase 5 — Specializations:** `06 Affect` (reads `02`), `08 Guardian` (reuses `01`).
 Thin layers on top of everything already built.
+
+**Substrate note (10 + 11):** these two re-shape the order above rather than slotting in at
+the end. `10 Temporal knowledge-graph memory` *is* the Phase-2 memory substrate — build it
+there and `02`/`03`/`06` become consumers of the graph instead of separate stores. `11
+Operating modes` is best built once `10` exists (two of its four axes — ingestion tier and
+the deep extraction pass — only matter with the graph), but before `01 Ambient`, since the
+ambient daemon should come up already governed by a mode's feature/VRAM budget rather than
+being retrofitted under one later. Revised spine: `07 → 10 → (02/03) → 11 → 04/05 → 01 →
+06/08`.
 
 ```
 07 ── vision/OCR ──┐
