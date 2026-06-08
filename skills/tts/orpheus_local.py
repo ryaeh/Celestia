@@ -144,10 +144,12 @@ def unload_if_idle():
     global _llama, _last_used
     if _llama is None:
         return
-    if (time.time() - _last_used) < _idle_minutes() * 60:
+    idle_limit = _idle_minutes() * 60
+    now = time.time()
+    if (now - _last_used) < idle_limit:
         return
     with _lock:
-        if _llama is not None and (time.time() - _last_used) >= _idle_minutes() * 60:
+        if _llama is not None and (now - _last_used) >= idle_limit:
             print("[tts] unloading Orpheus LLM (idle)")
             del _llama
             _llama = None

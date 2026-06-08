@@ -45,12 +45,16 @@ touches only the session it changes. On-disk format unchanged (backward-compatib
   manual-UI path, not a per-turn hot path, so the win is marginal and the breakage
   risk is real. Revisit alongside frontend work.
 
-## Commit 5 — cleanup
+## ✅ Commit 5 — DONE: cleanup
 **Files:** `run_celestia.py`, `celestia_core/shell_ptt.py`, `skills/stt/engine.py`,
 `skills/tts/orpheus_local.py`
-- Dedup near-identical record→transcribe→reply in `_run_listen` / `_run_voice_loop`.
-- `shell_ptt`: move phase mutation inside the lock (TOCTOU).
-- STT/TTS idle-unload calls `time.time()` twice — read once.
+- ✅ Deduped the record→transcribe→reply block in `_run_listen` / `_run_voice_loop`
+  into a shared `_voice_reply()` helper (each caller keeps its own source/speak).
+- ✅ `shell_ptt`: the two `_set_phase()` calls in `ptt_finish` ran outside `_lock`
+  (racing `ptt_status()`); both now mutate under the lock. `_set_phase` documents
+  the lock precondition.
+- ✅ STT/TTS idle-unload read `time.time()` and the idle limit twice; both now read
+  once before the double-checked unload.
 
 ## Explicitly NOT changing (audit over-flagged)
 - `config.yaml` parsing — already cached via `load_config`.

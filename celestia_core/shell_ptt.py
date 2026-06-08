@@ -47,6 +47,7 @@ def ptt_status() -> dict[str, Any]:
 
 
 def _set_phase(phase: str, *, error: str | None = None) -> None:
+    """Mutate the phase/error state. Callers MUST hold _lock."""
     global _phase, _error
     _phase = phase
     _error = error
@@ -132,7 +133,8 @@ def ptt_finish(*, session_id: str | None = None) -> dict[str, Any]:
             _set_phase("idle")
             return {"error": "no speech detected"}
 
-    _set_phase("transcribing")
+    with _lock:
+        _set_phase("transcribing")
     try:
         # CC-115: use pipelined streaming TTS when voice output is enabled.
         # This lets Celestia start speaking after the first sentence rather
@@ -143,7 +145,8 @@ def ptt_finish(*, session_id: str | None = None) -> dict[str, Any]:
         return send_message(text, session_id=session_id, source="voice", voice_mode=True)
     except Exception as e:
         err = str(e)
-        _set_phase("idle", error=err)
+        with _lock:
+            _set_phase("idle", error=err)
         return {"error": err}
     finally:
         with _lock:
