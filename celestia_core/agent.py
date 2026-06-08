@@ -24,10 +24,6 @@ def _ollama_client() -> ollama.Client:
         _ollama_client_cache[key] = ollama.Client(host=host, timeout=timeout)
     return _ollama_client_cache[key]
 
-_GREETING_ONLY = re.compile(
-    r"^(hi|hello|hey|yo|sup|howdy|good\s+(morning|afternoon|evening)|what'?s\s+up)[\s!.,?]*$",
-    re.I,
-)
 _FALSE_SUCCESS = re.compile(
     r"\b(i\s+)?(have\s+)?(opened|launched|started|visited|navigated to)\b",
     re.I,
@@ -40,45 +36,6 @@ _FAKE_NARRATION = re.compile(
 
 def _user_id() -> str:
     return get("app.user_id", "atlas_user")
-
-
-def _needs_memory(query: str) -> bool:
-    mode = get("memory.inject", "smart").lower()
-    if mode == "always":
-        return not _GREETING_ONLY.match(query.strip())
-    if mode == "off":
-        return False
-
-    q = query.strip().lower()
-    if _GREETING_ONLY.match(q):
-        return False
-    if any(
-        k in q
-        for k in (
-            "remember",
-            "memory",
-            "memories",
-            "favorite",
-            "prefer",
-            "what is my",
-            "what's my",
-            "what do you know",
-            "recall",
-            "forget",
-            "delete",
-            "update",
-            "change my",
-            "my color",
-            "my theme",
-            "about me",
-            "stored",
-            "you know",
-        )
-    ):
-        return True
-    if "?" in q and any(k in q for k in ("my ", "me ", "i ", "mine")):
-        return True
-    return False
 
 
 def _memory_context(query: str) -> str:
@@ -287,8 +244,11 @@ def _strip_ephemeral(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return result
 
 
-def _build_fresh_messages(user_message: str) -> list[dict[str, Any]]:
-    mem_ctx = _memory_context(user_message)
+def _build_fresh_messages(
+    user_message: str, mem_ctx: str | None = None
+) -> list[dict[str, Any]]:
+    if mem_ctx is None:
+        mem_ctx = _memory_context(user_message)
     messages: list[dict[str, Any]] = [{"role": "system", "content": build_system_prompt()}]
     messages.extend(_pc_control_hints(user_message))
     if mem_ctx:
@@ -340,18 +300,19 @@ def run_turn(
             messages.append({"role": "system", "content": _VOICE_CAP_HINT})
         messages.append({"role": "user", "content": user_message})
     else:
-        messages = _build_fresh_messages(user_message)
+        messages = _build_fresh_messages(user_message, mem_ctx)
         if voice_mode and get("voice.reply_cap_voice", True):
             # Insert hint before the last user message
             messages.insert(-1, {"role": "system", "content": _VOICE_CAP_HINT})
 
     client = _ollama_client()
+    schemas = tool_schemas(user_message)  # deterministic per turn — build once
     for _ in range(max_tool_rounds):
         try:
             response = client.chat(
                 model=model,
                 messages=messages,
-                tools=tool_schemas(user_message),
+                tools=schemas,
                 options={"num_predict": 1024},
             )
         except Exception as e:
@@ -435,18 +396,19 @@ def run_turn_stream(
             messages.append({"role": "system", "content": _VOICE_CAP_HINT})
         messages.append({"role": "user", "content": user_message})
     else:
-        messages = _build_fresh_messages(user_message)
+        messages = _build_fresh_messages(user_message, mem_ctx)
         if voice_mode and get("voice.reply_cap_voice", True):
             messages.insert(-1, {"role": "system", "content": _VOICE_CAP_HINT})
 
     client = _ollama_client()
+    schemas = tool_schemas(user_message)  # deterministic per turn — build once
 
     # --- Round 1: stream the first response ---------------------------------
     try:
         stream = client.chat(
             model=model,
             messages=messages,
-            tools=tool_schemas(user_message),
+            tools=schemas,
             options={"num_predict": 1024},
             stream=True,
         )
@@ -517,7 +479,7 @@ def run_turn_stream(
             response = client.chat(
                 model=model,
                 messages=messages,
-                tools=tool_schemas(user_message),
+                tools=schemas,
                 options={"num_predict": 1024},
             )
         except Exception as e:
