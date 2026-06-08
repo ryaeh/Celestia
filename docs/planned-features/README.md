@@ -29,6 +29,14 @@ at once. Anything a cloud assistant could do equally well is out of scope.
 | [06](06-affective-continuity.md) | Affective continuity | Remembers | memory + personalities |
 | [07](07-universal-read-hotkey.md) | Universal "read screen" hotkey | Sees | vision + hotkey |
 | [08](08-privacy-guardian.md) | Local privacy guardian | Sees · Acts · Local | watcher loop + security |
+| [09](09-adaptive-test-time-compute.md) | Adaptive test-time compute | Local | agent turn loop |
+
+`09` is a **horizontal enhancer**, not a user-facing companion feature: it makes every
+other feature reason better at a fixed model size by spending more inference compute only
+on hard turns. It's listed apart from the 8×8 matrix below for that reason — it composes
+with all of them rather than competing. Strongest payoff with **04 Autonomy** (better
+plans) and **03 RAG** (reasoning over retrieved context); cheap to pair with **01 Ambient**
+(rare nudges can afford deep compute).
 
 ## Shared building blocks
 
