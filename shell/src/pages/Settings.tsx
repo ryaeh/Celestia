@@ -32,8 +32,11 @@ import {
   ClipboardList,
   AlertTriangle,
   Camera,
+  Palette,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTheme, THEMES } from "../theme";
 
 const MODES = [
   { label: "Safe",   value: "safe",   color: "var(--safe)",   desc: "Read-only tools only" },
@@ -251,7 +254,8 @@ export default function Settings({ onNavigate }: SettingsProps) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [openSection, setOpenSection] = useState<string | null>("security");
+  const [openSection, setOpenSection] = useState<string | null>("appearance");
+  const [theme, setTheme] = useTheme();
   const [wsInput, setWsInput] = useState("");
   const [wsMsg, setWsMsg] = useState<string | null>(null);
   const wsInputRef = useRef<HTMLInputElement>(null);
@@ -356,6 +360,44 @@ export default function Settings({ onNavigate }: SettingsProps) {
 
       <div className="settings-list">
 
+        {/* ── Appearance ───────────────────────────────────────────────── */}
+        <Section
+          icon={<Palette size={16} />}
+          title="Appearance"
+          subtitle="Theme and accent colors for the whole app"
+          expanded={openSection === "appearance"}
+          onToggle={() => toggle("appearance")}
+          badge={
+            <Badge variant="secondary" className="text-[0.68rem] bg-[var(--bg-panel)] border-[var(--border-light)]">
+              {THEMES.find((t) => t.id === theme)?.label ?? "Aurora"}
+            </Badge>
+          }
+        >
+          <div className="theme-grid">
+            {THEMES.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className={cn("theme-card", theme === t.id && "theme-active")}
+                onClick={() => setTheme(t.id)}
+                aria-pressed={theme === t.id}
+              >
+                <span
+                  className="theme-swatch"
+                  style={{ background: `linear-gradient(135deg, ${t.swatch[1]}, ${t.swatch[2]})` }}
+                />
+                <span className="theme-meta">
+                  <span className="theme-name">{t.label}</span>
+                  <span className="theme-hint">{t.hint}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+          <p className="text-[0.72rem] text-[var(--text-muted)] mt-3 opacity-70">
+            Saved in this app only (browser storage) — applies instantly, no restart.
+          </p>
+        </Section>
+
         {/* ── Security ─────────────────────────────────────────────────── */}
         <Section
           icon={<Shield size={16} />}
@@ -454,7 +496,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
 
         {/* ── Personality ───────────────────────────────────────────────── */}
         <Section
-          icon={<span className="text-sm">✦</span>}
+          icon={<Sparkles size={16} />}
           title="Personality"
           subtitle="Tone, style and behaviour preset — edit personalities/ YAML to change"
           badge={

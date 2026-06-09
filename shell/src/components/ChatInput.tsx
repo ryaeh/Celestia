@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Mic, MicOff, ArrowUp, Camera } from "lucide-react";
+import { Mic, MicOff, ArrowUp, Camera, ScanEye, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ChatInputProps = {
@@ -14,6 +14,8 @@ type ChatInputProps = {
   onPttCancel?: () => void;
   visionEnabled?: boolean;
   onVisionCapture?: () => void;
+  readScreenEnabled?: boolean;
+  onReadScreen?: () => void;
 };
 
 export default function ChatInput({
@@ -26,6 +28,8 @@ export default function ChatInput({
   onPttStop,
   visionEnabled = false,
   onVisionCapture,
+  readScreenEnabled = false,
+  onReadScreen,
 }: ChatInputProps) {
   const locked = disabled || busy;
 
@@ -52,7 +56,7 @@ export default function ChatInput({
           input.value = "";
         }}
       >
-        <span className="chat-input-icon" aria-hidden>✦</span>
+        <span className="chat-input-icon" aria-hidden><Sparkles size={16} /></span>
         <Input
           type="search"
           name="celestia-chat-query"
@@ -106,6 +110,20 @@ export default function ChatInput({
             <Camera size={16} />
           </Button>
         )}
+        {readScreenEnabled && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="chat-ptt h-8 w-8 shrink-0"
+            disabled={locked || pttListening}
+            aria-label="Read screen"
+            title="Read screen (auto-analyze active window)"
+            onClick={() => onReadScreen?.()}
+          >
+            <ScanEye size={16} />
+          </Button>
+        )}
         <Button
           type="submit"
           variant="ghost"
@@ -120,6 +138,7 @@ export default function ChatInput({
       <p className="chat-disclaimer">
         Click <span className="chat-ptt-hint">mic</span> to start, click again to send.
         {visionEnabled && <> · <span className="chat-ptt-hint">Camera</span> to capture screen.</>}
+        {readScreenEnabled && <> · <span className="chat-ptt-hint">Eye</span> to read active window.</>}
         {" "}Celestia may make mistakes.
       </p>
     </div>

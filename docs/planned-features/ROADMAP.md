@@ -70,6 +70,35 @@ Not a phase. Layer in once the turn loop is stable.
 |---|---------|-------|------------|--------|
 | 09 | Adaptive test-time compute | [#104](https://github.com/ryaeh/Celestia/issues/104) | turn loop; capped per mode (11) | Planned |
 
+## UI surfaces (Tauri shell)
+
+<!-- UI NOTE (added Jun 2026): Every planned feature lands a surface in the
+     desktop shell (`shell/src`). The shell design-system overhaul gave these a
+     shared substrate — reuse it, don't reinvent per feature:
+       • Aura presence — `shell/src/components/Aura.tsx` (state-driven:
+         idle / thinking / listening / speaking; colors from theme --aura-* tokens)
+       • Theme engine — `shell/src/theme.ts` + `[data-theme]` blocks in App.css
+       • Panel / Section / card patterns + tokens in `App.css`
+     Sequence per feature: ship the feature → add its UI surface on this substrate
+     → defer a cohesive "UI overhaul v2" polish pass until AFTER this cluster lands. -->
+
+Each epic below needs a shell surface. Build it on the existing design system so the
+look stays cohesive as features land:
+
+| # | Feature | Shell UI surface to build |
+|---|---------|---------------------------|
+| 07 | Universal read hotkey | Capture HUD / overlay + result card in chat (input button already exists) |
+| 10 | Temporal knowledge graph | New page: entity + timeline graph view; "what do you know about X" inspector |
+| 02 | Time machine / episodic | Timeline scrubber / "rewind" view over past sessions |
+| 03 | Local RAG | Source/document index page + inline citations in replies |
+| 11 | Operating modes | Mode switcher in top bar + per-mode HUD; modes can drive the active **theme** |
+| 04 | Scoped autonomy | Live plan panel — visible steps, approve / pause / undo |
+| 05 | Macros / rituals | Macro library + recorder page |
+| 01 | Ambient proactivity | Quiet, dismissible nudge cards / toast center |
+| 06 | Affective continuity | Aura reflects mood (reuse Aura state + --aura-* colors) |
+| 08 | Privacy guardian | Privacy dashboard + incognito toggle + redaction badges |
+| 09 | Adaptive test-time compute | "Thinking harder" intensity on the Aura `thinking` state |
+
 ## How this relates to existing issues
 
 Several of these epics consolidate or build on older issues rather than replacing them:

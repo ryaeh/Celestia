@@ -8,7 +8,7 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Camera, X, Send, Loader2 } from "lucide-react";
-import Avatar from "./Avatar";
+import Aura from "./Aura";
 
 type VisionPreviewProps = {
   captureId: string;
@@ -20,9 +20,7 @@ type VisionPreviewProps = {
 };
 
 export default function VisionPreview({
-  captureId,
   base64,
-  agentName,
   busy,
   onConfirm,
   onCancel,
@@ -38,8 +36,8 @@ export default function VisionPreview({
   return (
     <div className="vision-preview-wrap">
       {/* Screenshot bubble */}
-      <article className="chat-bubble chat-bubble-user vision-bubble">
-        <div className="chat-bubble-body">
+      <div className="msg msg-user vision-bubble">
+        <div className="msg-user-body">
           <div className="vision-img-wrap">
             <img
               src={`data:image/png;base64,${base64}`}
@@ -52,12 +50,12 @@ export default function VisionPreview({
             </span>
           </div>
         </div>
-      </article>
+      </div>
 
       {/* Confirm prompt */}
-      <article className="chat-bubble vision-confirm-bubble">
-        <Avatar name={agentName} size="sm" />
-        <div className="chat-bubble-body">
+      <div className="msg msg-assistant vision-confirm-bubble">
+        <Aura className="msg-aura" size="chat" state={busy ? "thinking" : "idle"} />
+        <div className="msg-assistant-body">
           {busy ? (
             <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
               <Loader2 size={14} className="animate-spin" />
@@ -103,7 +101,7 @@ export default function VisionPreview({
             </>
           )}
         </div>
-      </article>
+      </div>
     </div>
   );
 }

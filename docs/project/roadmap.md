@@ -29,6 +29,19 @@ High-level delivery phases. **Planned work and ideas** live in [backlog.md](back
 |-------|--------|
 | **4 — Product UI** | Tauri shell, Memory page, shell PTT, activity log, quiet UI |
 
+<!-- UI NOTE (Jun 2026): shell got a design-system overhaul — the Aura presence
+     (`shell/src/components/Aura.tsx`), a 6-theme engine (`shell/src/theme.ts`,
+     Settings → Appearance), companion-voice chat layout, and all-lucide icons.
+     This is the *substrate* for upcoming feature UIs, not the final polish.
+     Strategy: features first → each lands its UI surface on this substrate →
+     a dedicated "UI overhaul v2" pass after the planned-features cluster lands.
+     Per-feature UI surfaces are mapped in planned-features/ROADMAP.md (UI surfaces). -->
+
+> **UI strategy:** Build features first; each feature lands a small UI surface on the
+> shell design system (Aura + themes + panels). A cohesive **UI overhaul v2** polish
+> pass is deferred until after the planned-features cluster. Surface-per-feature map:
+> [`planned-features/ROADMAP.md`](../planned-features/ROADMAP.md) → *UI surfaces*.
+
 ---
 
 ## Next cycle (CC-88–CC-113)

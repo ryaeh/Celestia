@@ -1,9 +1,10 @@
 import { useState } from "react";
-import Avatar from "./Avatar";
+import Aura from "./Aura";
 import type { Status } from "../api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 type StatusHeaderProps = {
   status: Status | null;
@@ -34,7 +35,7 @@ export default function StatusHeader({ status }: StatusHeaderProps) {
   return (
     <>
       <div className="top-bar">
-        <Avatar name={name} size="xs" />
+        <Aura size="mark" state="idle" />
         <span className="top-bar-name">{name}</span>
         <span className="top-bar-divider" aria-hidden />
 
@@ -79,7 +80,7 @@ export default function StatusHeader({ status }: StatusHeaderProps) {
           aria-expanded={expanded}
           title={expanded ? "Hide status" : "Show status"}
         >
-          {expanded ? "▲" : "▼"}
+          {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
         </Button>
       </div>
 

@@ -7,10 +7,11 @@ import {
 } from "../api";
 import { usePersistedState } from "../hooks/usePersistedState";
 import type { Route } from "../App";
-import { Button } from "@/components/ui/button";
+import Aura from "./Aura";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { Plus, Activity as ActivityIcon, Brain, Settings, ChevronLeft, ChevronRight } from "lucide-react";
 
 type SidebarProps = {
   route: Route;
@@ -56,14 +57,14 @@ export default function Sidebar({
         <div className="sidebar-inner flex flex-col h-full">
           {/* Brand */}
           <div className="brand">
-            <div className="brand-mark" aria-hidden>◆</div>
+            <Aura size="brand" state="idle" />
             <strong>{displayName}</strong>
           </div>
 
           {/* New chat */}
-          <Button
-            variant="default"
-            className="sidebar-new-chat w-full justify-start gap-2 bg-[var(--accent-bright)] hover:bg-[var(--accent-dim)] text-white border-0 mb-2"
+          <button
+            type="button"
+            className="sidebar-new-chat"
             onClick={async () => {
               const id = await createChatSession();
               await loadSessions();
@@ -71,8 +72,8 @@ export default function Sidebar({
               onNewChat(id);
             }}
           >
-            + New Chat
-          </Button>
+            <Plus size={16} /> New chat
+          </button>
 
           <Separator className="bg-[var(--border-light)] my-1" />
 
@@ -112,15 +113,30 @@ export default function Sidebar({
 
           {/* Footer nav */}
           <div className="sidebar-footer">
-            <Button
+            <button
               type="button"
-              variant="ghost"
-              className={cn("sidebar-foot-btn w-full justify-start gap-2", route === "settings" && "active")}
+              className={cn("sidebar-foot-btn", route === "activity" && "active")}
+              onClick={() => onNavigate("activity")}
+            >
+              <span className="foot-icon"><ActivityIcon size={15} /></span>
+              Activity
+            </button>
+            <button
+              type="button"
+              className={cn("sidebar-foot-btn", route === "memory" && "active")}
+              onClick={() => onNavigate("memory")}
+            >
+              <span className="foot-icon"><Brain size={15} /></span>
+              Memory
+            </button>
+            <button
+              type="button"
+              className={cn("sidebar-foot-btn", route === "settings" && "active")}
               onClick={() => onNavigate("settings")}
             >
-              <span className="foot-icon">⚙</span>
+              <span className="foot-icon"><Settings size={15} /></span>
               Settings
-            </Button>
+            </button>
           </div>
         </div>
       </aside>
@@ -133,7 +149,7 @@ export default function Sidebar({
         aria-label={open ? "Hide sidebar" : "Show sidebar"}
         title={open ? "Hide sidebar" : "Show sidebar"}
       >
-        {open ? "‹" : "›"}
+        {open ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
       </button>
     </>
   );

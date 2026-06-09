@@ -7,6 +7,7 @@ import {
   pttStart,
   pttStop,
   streamChatMessage,
+  triggerReadScreen,
   visionCapture,
   visionAnalyze,
   type ChatMessage,
@@ -15,11 +16,17 @@ import {
 } from "../api";
 import StatusHeader from "../components/StatusHeader";
 import ChatInput from "../components/ChatInput";
-import Avatar from "../components/Avatar";
+import Aura from "../components/Aura";
 import VisionPreview from "../components/VisionPreview";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
+
+const STARTER_CHIPS = [
+  "What can you do?",
+  "Read my screen",
+  "Help me focus today",
+  "Remember something for me",
+];
 
 type HomeProps = {
   sessionId: string;
@@ -140,6 +147,23 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
     }
   }
 
+  async function onReadScreen() {
+    if (chatBusy || pttListening) return;
+    setChatBusy(true);
+    setError(null);
+    try {
+      const result = await triggerReadScreen(sessionId);
+      if (result.messages) {
+        setMessages(result.messages);
+        onSidebarRefresh?.();
+      }
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setChatBusy(false);
+    }
+  }
+
   async function onVisionConfirm(question: string) {
     if (!visionPending) return;
     setVisionBusy(true);
@@ -214,9 +238,7 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
   const name = status?.display_name ?? "Celestia";
   const visionEnabled = status?.vision_enabled ?? false;
   const showWelcome = messages.length === 0 && !chatBusy && !sessionLoading && !pttListening && !visionPending;
-  const welcomeText = !statusReady
-    ? "Connecting…"
-    : `Hi — I'm ${name}. Ask me anything; your chats appear in the sidebar.`;
+  const lastIdx = messages.length - 1;
 
   return (
     <div className="home-view flex flex-col h-full overflow-hidden">
@@ -243,36 +265,61 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
         <div className="chat-main px-4 py-3">
           {sessionLoading && messages.length === 0 ? (
             <div className="chat-loading muted text-sm">Loading chat…</div>
+          ) : showWelcome ? (
+            <div className="chat-welcome" key={threadAnim}>
+              <div className="welcome-aura-wrap">
+                <Aura state="idle" size="hero" />
+              </div>
+              <h1 className="welcome-title">
+                {statusReady ? `Hi, I'm ${name}.` : "Connecting…"}
+              </h1>
+              <p className="welcome-sub">
+                Your on-device companion — chat, memory, voice, and screen awareness,
+                all running locally. What's on your mind?
+              </p>
+              <div className="welcome-chips">
+                {STARTER_CHIPS.map((chip) => (
+                  <button
+                    key={chip}
+                    type="button"
+                    className="welcome-chip"
+                    onClick={() => onSend(chip)}
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+            </div>
           ) : (
             <div className="chat-thread chat-thread-enter" key={threadAnim}>
-              {showWelcome && (
-                <article className="chat-bubble">
-                  <Avatar name={name} size="sm" />
-                  <div className="chat-bubble-body">
-                    <p>{welcomeText}</p>
+              {messages.map((msg, i) =>
+                msg.role === "user" ? (
+                  <div key={`${i}-user-${msg.content.slice(0, 24)}`} className="msg msg-user">
+                    <div className="msg-user-body">
+                      <p>{msg.content}</p>
+                    </div>
                   </div>
-                </article>
+                ) : (
+                  <div key={`${i}-asst-${msg.content.slice(0, 24)}`} className="msg msg-assistant">
+                    <Aura
+                      className="msg-aura"
+                      size="chat"
+                      state={i === lastIdx && streamingTokens ? "speaking" : "idle"}
+                    />
+                    <div className="msg-assistant-body">
+                      <p>{msg.content}</p>
+                    </div>
+                  </div>
+                ),
               )}
 
-              {messages.map((msg, i) => (
-                <article
-                  key={`${i}-${msg.role}-${msg.content.slice(0, 24)}`}
-                  className={cn("chat-bubble", msg.role === "user" && "chat-bubble-user")}
-                >
-                  {msg.role === "assistant" && <Avatar name={name} size="sm" />}
-                  <div className="chat-bubble-body">
-                    <p>{msg.content}</p>
-                  </div>
-                </article>
-              ))}
-
               {pttListening && (
-                <article className="chat-bubble chat-bubble-listening">
-                  <Avatar name={name} size="sm" />
-                  <div className="chat-bubble-body">
-                    <p className="muted">Listening… click mic again to send</p>
+                <div className="msg msg-assistant msg-listening">
+                  <Aura className="msg-aura" size="chat" state="listening" />
+                  <div className="msg-assistant-body">
+                    <p>Listening… click the mic again to send.</p>
                   </div>
-                </article>
+                </div>
               )}
 
               {visionPending && (
@@ -287,14 +334,14 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
               )}
 
               {chatBusy && !pttListening && !streamingTokens && !visionPending && (
-                <article className="chat-bubble">
-                  <Avatar name={name} size="sm" />
-                  <div className="chat-bubble-body">
+                <div className="msg msg-assistant">
+                  <Aura className="msg-aura" size="chat" state="thinking" />
+                  <div className="msg-assistant-body">
                     <div className="thinking-dots">
                       <span /><span /><span />
                     </div>
                   </div>
-                </article>
+                </div>
               )}
 
               <div ref={bottomRef} />
@@ -313,6 +360,8 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
         onPttCancel={() => onPttEnd(true)}
         visionEnabled={visionEnabled}
         onVisionCapture={onVisionCapture}
+        readScreenEnabled={visionEnabled}
+        onReadScreen={onReadScreen}
       />
     </div>
   );
