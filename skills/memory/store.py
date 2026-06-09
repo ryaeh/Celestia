@@ -377,6 +377,22 @@ def build_context(query: str, user_id: str = "default") -> str:
                 lines.append(line)
                 seen.add(line)
 
+    # Feature 10 — structural recall: walk the knowledge graph from entities
+    # named in the query and inject connected facts (hybrid with similarity).
+    # Off by default; entity resolution is alias lookups, no LLM on the hot path.
+    if get("memory.graph.enabled", False) and query.strip():
+        try:
+            from skills.memory import graph_store as _graph
+
+            hops = int(get("memory.graph.walk_hops", 2))
+            for ln in _graph.recall_from_text(query, hops=hops, max_lines=4):
+                line = f"[graph] {ln}"
+                if line not in seen:
+                    lines.append(line)
+                    seen.add(line)
+        except Exception:
+            pass
+
     lines = _dedupe_lines(lines)[:max_lines]
     if not lines:
         return ""

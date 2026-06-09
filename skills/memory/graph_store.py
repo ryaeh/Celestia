@@ -411,12 +411,15 @@ def walk(names: list[str] | str, hops: int = 2, *, at: float | None = None) -> l
     """
     if isinstance(names, str):
         names = [names]
-    frontier: list[str] = []
-    for n in names:
-        nid = resolve_node(n)
-        if nid:
-            frontier.append(nid)
+    start_ids = [nid for n in names if (nid := resolve_node(n))]
+    return walk_from_ids(start_ids, hops, at=at)
 
+
+def walk_from_ids(
+    start_ids: list[str], hops: int = 2, *, at: float | None = None
+) -> list[dict[str, Any]]:
+    """Graph-walk from resolved node ids (skips the name-resolution step)."""
+    frontier: list[str] = list(dict.fromkeys(start_ids))
     seen_nodes: set[str] = set(frontier)
     seen_edges: set[str] = set()
     out: list[dict[str, Any]] = []
@@ -450,6 +453,58 @@ def relation_text(edge: dict[str, Any]) -> str:
 def recall(names: list[str] | str, hops: int = 2, *, at: float | None = None) -> list[str]:
     """Graph-walk recall as plain text lines, for injection into the turn context."""
     return [relation_text(e) for e in walk(names, hops, at=at)]
+
+
+def resolve_mentions(text: str, *, max_terms: int = 8) -> list[str]:
+    """Find graph nodes mentioned in free text — cheap, no LLM (hot-path safe).
+
+    Generates 1-3 word n-grams from the query and resolves each against the
+    alias table, preferring longer (more specific) matches first. Only entities
+    already in the graph can match, so this is a handful of indexed lookups.
+    """
+    norm = _norm(text)
+    tokens = re.findall(r"[a-z0-9]+", norm)
+    if not tokens:
+        return []
+    seen: set[str] = set()
+    ids: list[str] = []
+    n = len(tokens)
+    for size in (3, 2, 1):  # longer n-grams first → 'llama 3' before 'llama'
+        for i in range(n - size + 1):
+            gram = " ".join(tokens[i : i + size])
+            nid = resolve_node(gram)
+            if nid and nid not in seen:
+                seen.add(nid)
+                ids.append(nid)
+                if len(ids) >= max_terms:
+                    return ids
+    return ids
+
+
+def recall_from_text(
+    text: str, hops: int = 2, *, at: float | None = None, max_lines: int = 4
+) -> list[str]:
+    """Graph-walk recall driven by entities mentioned in ``text``.
+
+    Resolves mentions, walks the graph, and returns ranked relation lines:
+    current edges before past ones, otherwise breadth-first discovery order.
+    Returns [] when the query names no known entity.
+    """
+    mentions = resolve_mentions(text)
+    if not mentions:
+        return []
+    edges = walk_from_ids(mentions, hops, at=at)
+    edges.sort(key=lambda e: e["valid_until"] is not None)  # stable: current first
+    lines: list[str] = []
+    seen: set[str] = set()
+    for e in edges:
+        ln = relation_text(e)
+        if ln not in seen:
+            seen.add(ln)
+            lines.append(ln)
+        if len(lines) >= max_lines:
+            break
+    return lines
 
 
 def stats() -> dict[str, int]:

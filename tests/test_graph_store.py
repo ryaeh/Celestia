@@ -214,3 +214,65 @@ def test_persists_across_reconnect(graph, tmp_path, monkeypatch) -> None:
     graph.reset_connection()  # drop cached handle; reopen same file
     reached = {e["object"] for e in graph.walk("Doruk", hops=1)}
     assert reached == {"Celestia"}
+
+
+# ---------------------------------------------------------------------------
+# resolve_mentions / recall_from_text — hot-path entity recall (A3)
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_mentions_finds_single_word(graph) -> None:
+    graph.add_relation("Doruk", "works_on", "Celestia")
+    ids = graph.resolve_mentions("what does Celestia depend on?")
+    assert graph.resolve_node("Celestia") in ids
+
+
+def test_resolve_mentions_finds_multiword_entity(graph) -> None:
+    graph.set_relation("Ollama", "runs", "Llama 3")
+    ids = graph.resolve_mentions("are we still on Llama 3 or did we switch?")
+    assert graph.resolve_node("Llama 3") in ids
+
+
+def test_resolve_mentions_unknown_is_empty(graph) -> None:
+    graph.add_relation("Doruk", "works_on", "Celestia")
+    assert graph.resolve_mentions("tell me about the weather") == []
+
+
+def test_resolve_mentions_empty_text(graph) -> None:
+    assert graph.resolve_mentions("") == []
+
+
+def test_recall_from_text_returns_connected_facts(graph) -> None:
+    graph.add_relation("Doruk", "works_on", "Celestia")
+    graph.add_relation("Celestia", "uses", "Ollama")
+    lines = graph.recall_from_text("what is Celestia?", hops=2)
+    assert "Celestia uses Ollama" in lines
+
+
+def test_recall_from_text_no_mention_empty(graph) -> None:
+    graph.add_relation("Doruk", "works_on", "Celestia")
+    assert graph.recall_from_text("unrelated question") == []
+
+
+def test_recall_surfaces_only_current_truth(graph) -> None:
+    graph.set_relation("Ollama", "runs", "Llama 3", valid_from=100.0)
+    graph.set_relation("Ollama", "runs", "Qwen", valid_from=200.0)
+    # Live recall injects only the current truth; the superseded fact stays in
+    # history (queryable via history()/time-travel) but never clutters context.
+    lines = graph.recall_from_text("what does Ollama run?", hops=1, max_lines=5)
+    assert lines == ["Ollama runs Qwen"]
+
+
+def test_recall_time_travel_marks_past(graph) -> None:
+    graph.set_relation("Ollama", "runs", "Llama 3", valid_from=100.0)
+    graph.set_relation("Ollama", "runs", "Qwen", valid_from=200.0)
+    # As-of a past time, the then-current edge surfaces and is flagged past.
+    lines = graph.recall_from_text("what did Ollama run?", hops=1, at=150.0)
+    assert lines == ["Ollama runs Llama 3 (past)"]
+
+
+def test_recall_respects_max_lines(graph) -> None:
+    for tool in ["Ollama", "Chroma", "Whisper", "Orpheus", "Tauri"]:
+        graph.add_relation("Celestia", "uses", tool)
+    lines = graph.recall_from_text("Celestia", hops=1, max_lines=3)
+    assert len(lines) == 3
