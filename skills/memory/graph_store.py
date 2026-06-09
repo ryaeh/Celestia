@@ -516,3 +516,13 @@ def stats() -> dict[str, int]:
         "SELECT COUNT(*) AS c FROM edges WHERE valid_until IS NULL"
     ).fetchone()["c"]
     return {"nodes": nodes, "edges": edges, "current_edges": current}
+
+
+def current_relations(limit: int = 50) -> list[str]:
+    """All current relations as text lines, newest first — for inspection / UI."""
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT * FROM edges WHERE valid_until IS NULL ORDER BY valid_from DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    return [relation_text(_edge_dict(conn, r)) for r in rows]

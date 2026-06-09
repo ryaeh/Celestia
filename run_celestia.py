@@ -121,6 +121,14 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="Show last N lines of tool audit log (default 20)",
     )
+    parser.add_argument(
+        "--graph",
+        type=int,
+        nargs="?",
+        const=50,
+        metavar="N",
+        help="Inspect the knowledge graph: stats + last N current relations (Feature 10)",
+    )
     return parser
 
 
@@ -472,6 +480,19 @@ def main() -> int:
         rel = get("security.audit_log", "logs/tool_audit.jsonl")
         path = Path(rel) if Path(rel).is_absolute() else ROOT / rel
         print(_tail_jsonl(path, int(args.logs)))
+        return 0
+
+    if args.graph is not None:
+        from skills.memory import graph_store as graph
+        s = graph.stats()
+        print(f"[graph] {s['nodes']} nodes · {s['edges']} edges · {s['current_edges']} current")
+        rels = graph.current_relations(int(args.graph))
+        if rels:
+            print("\nCurrent relations (newest first):")
+            for line in rels:
+                print(f"  • {line}")
+        else:
+            print("\n(no relations yet — enable memory.graph.enabled and have a chat)")
         return 0
 
     if args.arm:

@@ -209,6 +209,22 @@ def test_stats_counts(graph) -> None:
     assert s["edges"] == 3
 
 
+def test_current_relations_lists_current_only(graph) -> None:
+    graph.add_relation("Doruk", "works_on", "Celestia")
+    graph.set_relation("Ollama", "runs", "Llama 3")
+    graph.set_relation("Ollama", "runs", "Qwen")  # supersedes Llama 3
+    rels = graph.current_relations()
+    assert "Ollama runs Qwen" in rels
+    assert "Doruk works on Celestia" in rels
+    assert "Ollama runs Llama 3" not in rels  # superseded → not current
+
+
+def test_current_relations_respects_limit(graph) -> None:
+    for tool in ["Ollama", "Chroma", "Whisper", "Orpheus"]:
+        graph.add_relation("Celestia", "uses", tool)
+    assert len(graph.current_relations(limit=2)) == 2
+
+
 def test_persists_across_reconnect(graph, tmp_path, monkeypatch) -> None:
     graph.add_relation("Doruk", "works_on", "Celestia")
     graph.reset_connection()  # drop cached handle; reopen same file
