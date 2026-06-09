@@ -307,7 +307,12 @@ def _maybe_consolidate(state: dict[str, Any], *, end: bool = False) -> list[str]
         return []
 
     uid = get("app.user_id", "atlas_user")
-    new_start, stored = consolidate_session_messages(history, uid, start_index=start)
+    # Graph extraction is a background-only deep pass — never block session
+    # finalize (new chat / switch chat) on the extra LLM call. The background
+    # consolidation pass handles graph relations during active chatting.
+    new_start, stored = consolidate_session_messages(
+        history, uid, start_index=start, extract_graph=False
+    )
     state["consolidate_from"] = new_start
     return stored
 

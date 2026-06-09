@@ -172,9 +172,14 @@ def consolidate_session_messages(
     user_id: str,
     *,
     start_index: int = 0,
+    extract_graph: bool = True,
 ) -> tuple[int, list[str]]:
     """
     Store typed memories. Returns (new_start_index, lines for optional verbose log).
+
+    ``extract_graph`` runs the knowledge-graph relation pass (an extra LLM call).
+    It is on for the background pass but disabled on the synchronous
+    end-of-session finalize so creating/switching a chat never blocks on it.
     """
     if not should_run_consolidation(messages, start_index=start_index):
         return len(messages), []
@@ -249,8 +254,10 @@ def consolidate_session_messages(
                 stored_lines.append(f"(failed [{kind}] '{text[:40]}': {e})")
 
     # Feature 10 — deep background pass: extract relations into the temporal
-    # knowledge graph. Gated and isolated so it never affects typed-memory flow.
-    if get("memory.graph.enabled", False) and str(get("memory.graph.deep_pass", "background")) != "off":
+    # knowledge graph. Gated and isolated so it never affects typed-memory flow,
+    # and skipped on the synchronous finalize path (extract_graph=False) so
+    # creating/switching a chat never blocks on the extra LLM call.
+    if extract_graph and get("memory.graph.enabled", False) and str(get("memory.graph.deep_pass", "background")) != "off":
         try:
             from skills.memory.graph_extract import extract_and_store
 
