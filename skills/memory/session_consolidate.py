@@ -248,4 +248,14 @@ def consolidate_session_messages(
             except Exception as e:
                 stored_lines.append(f"(failed [{kind}] '{text[:40]}': {e})")
 
+    # Feature 10 — deep background pass: extract relations into the temporal
+    # knowledge graph. Gated and isolated so it never affects typed-memory flow.
+    if get("memory.graph.enabled", False) and str(get("memory.graph.deep_pass", "background")) != "off":
+        try:
+            from skills.memory.graph_extract import extract_and_store
+
+            stored_lines += extract_and_store(excerpt, user_id=user_id, source="chat", model=model)
+        except Exception as e:
+            stored_lines.append(f"(graph extract failed: {e})")
+
     return len(messages), stored_lines
