@@ -85,10 +85,13 @@ vision:
   enabled: true
   hotkey: ctrl+shift+s
   default_mode: region
-  max_edge_px: 2048
-  max_tokens: 4096
+  max_edge_px: 1280          # downscale screenshots — fewer image tokens, less VRAM
+  max_tokens: 1536           # cap general-description length
   transcribe_tokens: 4096
   temperature: 0.0
+  keep_alive: "30s"          # unload the vision model this long after use (frees VRAM)
+  unload_chat_model: true    # drop the chat LLM before a vision load so the two
+                             # big models never co-reside and oversubscribe the GPU
   text_model: qwen2.5vl:7b
   two_pass_text: true
   preprocess_text: true

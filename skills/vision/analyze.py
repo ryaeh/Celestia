@@ -87,6 +87,9 @@ def _chat_vision(model: str, image_path: Path, prompt: str, *, num_predict: int,
             }
         ],
         options={"temperature": temperature, "num_predict": num_predict},
+        # Unload the vision model soon after so VRAM frees up for the chat model
+        # to reload on the next turn (prevents two big models co-resident).
+        keep_alive=get("vision.keep_alive", "30s"),
     )
     return (response["message"].get("content") or "").strip()
 
