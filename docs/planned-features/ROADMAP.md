@@ -33,7 +33,7 @@ becomes consumers of it.
 
 | # | Feature | Issue | Depends on | Status |
 |---|---------|-------|------------|--------|
-| 10 | Temporal knowledge-graph memory | [#95](https://github.com/ryaeh/Celestia/issues/95) | — (substrate) | Planned |
+| 10 | Temporal knowledge-graph memory | [#95](https://github.com/ryaeh/Celestia/issues/95) | — (substrate) | **Substrate built** — A1 store · A2 extract · A3 hybrid recall. Interim surface: `--graph` CLI. A4 (visual graph viewer/editor) folded into **UI V2**. |
 | 02 | Time machine / episodic memory | [#96](https://github.com/ryaeh/Celestia/issues/96) | 10 | Planned |
 | 03 | Local RAG over your stuff | [#97](https://github.com/ryaeh/Celestia/issues/97) | 10 | Planned |
 
@@ -88,7 +88,7 @@ look stays cohesive as features land:
 | # | Feature | Shell UI surface to build |
 |---|---------|---------------------------|
 | 07 | Universal read hotkey | Capture HUD / overlay + result card in chat (input button already exists) |
-| 10 | Temporal knowledge graph | New page: entity + timeline graph view; "what do you know about X" inspector |
+| 10 | Temporal knowledge graph | New page: entity + timeline graph view; "what do you know about X" inspector. **This is A4 — deferred to UI V2; `--graph`/`--graph-extract` CLI is the interim surface.** |
 | 02 | Time machine / episodic | Timeline scrubber / "rewind" view over past sessions |
 | 03 | Local RAG | Source/document index page + inline citations in replies |
 | 11 | Operating modes | Mode switcher in top bar + per-mode HUD; modes can drive the active **theme** |
