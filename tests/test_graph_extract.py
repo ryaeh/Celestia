@@ -151,3 +151,29 @@ def test_extract_no_relations_no_writes(graph_db, monkeypatch) -> None:
     out = ge.extract_and_store("User: just chatting about the weather today, nothing to store.", user_id="u1")
     assert out == []
     assert graph_db.stats()["edges"] == 0
+
+
+def test_extract_defers_when_gpu_busy(graph_db, monkeypatch) -> None:
+    import threading
+    import celestia_core.gpu as gpu
+
+    _stub_ollama(monkeypatch, {"relations": [{"subject": "A", "predicate": "uses", "object": "B"}]})
+    held = threading.Event()
+    release = threading.Event()
+
+    def _holder():
+        with gpu.gpu_task("vision"):
+            held.set()
+            release.wait(timeout=5)
+
+    t = threading.Thread(target=_holder, daemon=True)
+    t.start()
+    assert held.wait(timeout=5)
+
+    # Another thread holds the GPU → the background extraction must skip.
+    out = ge.extract_and_store("User: a long enough excerpt about projects and tools here.", user_id="u1")
+    release.set()
+    t.join(timeout=5)
+
+    assert out == ["graph extract deferred: gpu busy"]
+    assert graph_db.stats()["edges"] == 0

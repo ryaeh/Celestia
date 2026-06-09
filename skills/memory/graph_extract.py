@@ -139,6 +139,16 @@ def extract_and_store(
         or get("llm.chat_model", "llama3.2:3b")
     )
 
+    # Background pass: never contend with a foreground GPU op (vision / STT).
+    from celestia_core.gpu import gpu_task
+
+    with gpu_task("graph-extract", blocking=False) as got:
+        if not got:
+            return ["graph extract deferred: gpu busy"]
+        return _extract_with_model(excerpt, use_model, source)
+
+
+def _extract_with_model(excerpt: str, use_model: str, source: str) -> list[str]:
     try:
         resp = ollama.chat(
             model=use_model,

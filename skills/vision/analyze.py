@@ -143,6 +143,15 @@ def _two_pass_text(image_path: Path, question: str) -> str:
 
 
 def analyze_image(image_path: Path, question: str) -> str:
+    # Hold the GPU for the whole vision op so it can't overlap STT / a background
+    # graph-extraction pass and oversubscribe VRAM.
+    from celestia_core.gpu import gpu_task
+
+    with gpu_task("vision"):
+        return _analyze_image_impl(image_path, question)
+
+
+def _analyze_image_impl(image_path: Path, question: str) -> str:
     text_mode = _is_text_task(question)
     if text_mode:
         print("[vision] text mode")
