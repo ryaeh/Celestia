@@ -46,6 +46,16 @@ memory:
   qdrant:
     host: localhost
     port: 6333
+  # Temporal knowledge-graph memory (Feature 10) — structural, time-aware recall
+  # alongside vector similarity. SQLite-backed, on-device. Default off until the
+  # extraction + retrieval passes land.
+  graph:
+    enabled: false
+    active_graph: default        # named graphs live in data/memory/graph/<name>.db
+    walk_hops: 2                 # graph-walk depth during recall
+    retain_history: true         # never delete; versioned supersede
+    inline_extraction: light     # light | off — cheap per-turn entity capture
+    deep_pass: background        # background | off — full relation extraction (mode may override)
 
 voice:
   push_to_talk_hotkey: ctrl+alt+v
