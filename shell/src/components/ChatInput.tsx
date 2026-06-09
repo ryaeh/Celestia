@@ -1,5 +1,5 @@
+import { useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Mic, MicOff, ArrowUp, Camera, ScanEye, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +32,24 @@ export default function ChatInput({
   onReadScreen,
 }: ChatInputProps) {
   const locked = disabled || busy;
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  function autosize() {
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${Math.min(ta.scrollHeight, 168)}px`;
+  }
+
+  function submit() {
+    const ta = taRef.current;
+    if (!ta) return;
+    const text = ta.value.trim();
+    if (!text || locked || pttListening) return;
+    onSend(text);
+    ta.value = "";
+    autosize();
+  }
 
   function handleMicClick() {
     if (pttListening) {
@@ -48,24 +66,16 @@ export default function ChatInput({
         autoComplete="off"
         onSubmit={(e) => {
           e.preventDefault();
-          const form = e.currentTarget;
-          const input = form.elements.namedItem("celestia-chat-query") as HTMLInputElement;
-          const text = input.value.trim();
-          if (!text || locked) return;
-          onSend(text);
-          input.value = "";
+          submit();
         }}
       >
         <span className="chat-input-icon" aria-hidden><Sparkles size={16} /></span>
-        <Input
-          type="search"
+        <textarea
+          ref={taRef}
           name="celestia-chat-query"
           id="celestia-chat-query"
-          className={cn(
-            "chat-input",
-            "border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0",
-            "text-[var(--text)] placeholder:text-[var(--text-dim)]",
-          )}
+          rows={1}
+          className={cn("chat-input", "text-[var(--text)] placeholder:text-[var(--text-dim)]")}
           placeholder={
             pttListening ? "Listening… click mic to send" : busy ? "Thinking…" : "Ask Celestia anything…"
           }
@@ -75,9 +85,14 @@ export default function ChatInput({
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
-          data-form-type="other"
-          data-lpignore="true"
-          data-1p-ignore="true"
+          onInput={autosize}
+          onKeyDown={(e) => {
+            // Enter sends; Shift+Enter inserts a newline.
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              submit();
+            }
+          }}
         />
         {pttEnabled && (
           <Button

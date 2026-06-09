@@ -493,7 +493,7 @@ body {
 .chat-input-wrap { flex-shrink: 0; padding: 0.6rem 1rem 0.85rem; }
 
 .chat-input-form {
-  display: flex; align-items: center; gap: 0.5rem;
+  display: flex; align-items: flex-end; gap: 0.5rem;
   max-width: 720px; margin: 0 auto;
   background: color-mix(in oklab, var(--bg-panel) 80%, transparent);
   backdrop-filter: blur(12px);
@@ -507,9 +507,19 @@ body {
   box-shadow: 0 0 0 3px var(--accent-glow), 0 10px 30px -18px rgba(0,0,0,0.7);
 }
 
-.chat-input-icon { display: grid; place-items: center; color: var(--accent-bright); flex-shrink: 0; padding-left: 0.2rem; }
+.chat-input-icon { display: grid; place-items: center; color: var(--accent-bright); flex-shrink: 0; padding-left: 0.2rem; height: 2.15rem; }
 
-.chat-input { flex: 1; border: none; background: transparent; color: var(--text); font: inherit; font-size: 0.94rem; outline: none; }
+.chat-input {
+  flex: 1; min-width: 0;
+  border: none; background: transparent; color: var(--text);
+  font: inherit; font-size: 0.94rem; outline: none;
+  /* Auto-growing multi-line: wraps and grows down instead of scrolling right. */
+  resize: none; overflow-y: auto;
+  line-height: 1.5;
+  padding: 0.45rem 0;
+  max-height: 168px;
+  field-sizing: content; /* progressive enhancement where supported */
+}
 .chat-input::placeholder { color: var(--text-dim); }
 .chat-input:disabled { cursor: not-allowed; }
 
