@@ -26,7 +26,7 @@ the "sees" pillar — and the on-ramp for the whole perception cluster.
 read_hotkey:
   enabled: true
   hotkey: "ctrl+alt+space"
-  scope: active_window       # active_window | full_screen
+  scope: active_window       # active_window | fullscreen
   speak_answer: false
 ```
 

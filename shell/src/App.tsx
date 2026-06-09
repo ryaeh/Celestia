@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchChatSessions, initialRoute } from "./api";
 import Sidebar from "./components/Sidebar";
+import Activity from "./pages/Activity";
 import Home from "./pages/Home";
 import Memory from "./pages/Memory";
 import Placeholder from "./pages/Placeholder";
@@ -30,12 +31,7 @@ function SecondaryPage({ route, onNavigate }: { route: Route; onNavigate: (r: Ro
         />
       );
     case "activity":
-      return (
-        <Placeholder
-          title="Activity"
-          blurb="Quiet system lines and tool activity — coming later."
-        />
-      );
+      return <Activity />;
     default:
       return null;
   }

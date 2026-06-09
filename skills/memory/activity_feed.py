@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import queue
 import threading
 import time
 from pathlib import Path
@@ -12,6 +13,25 @@ from celestia_core.config import ROOT, get
 
 _lock = threading.Lock()
 _MAX = 80
+
+# SSE subscriber queues — one per connected /activity/stream client.
+_subs: list[queue.SimpleQueue[dict[str, Any]]] = []
+_subs_lock = threading.Lock()
+
+
+def subscribe() -> queue.SimpleQueue[dict[str, Any]]:
+    q: queue.SimpleQueue[dict[str, Any]] = queue.SimpleQueue()
+    with _subs_lock:
+        _subs.append(q)
+    return q
+
+
+def unsubscribe(q: queue.SimpleQueue[dict[str, Any]]) -> None:
+    with _subs_lock:
+        try:
+            _subs.remove(q)
+        except ValueError:
+            pass
 
 
 def _feed_path() -> Path:
@@ -40,6 +60,13 @@ def append_event(
         with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
         _trim_file(path)
+    # Broadcast to all connected SSE subscribers.
+    with _subs_lock:
+        for q in list(_subs):
+            try:
+                q.put_nowait(row)
+            except Exception:
+                pass
 
 
 def _trim_file(path: Path) -> None:

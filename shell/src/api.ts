@@ -519,3 +519,79 @@ export async function refreshLastSession(): Promise<LastSessionNote> {
     updated_at: data.updated_at ?? 0,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Activity feed (CC-99 / Feature 07)
+// ---------------------------------------------------------------------------
+
+export type ActivityEvent = {
+  ts: number;
+  action: string;
+  kind: string;
+  text: string;
+  source: string;
+};
+
+export async function fetchActivityFeed(n = 30): Promise<ActivityEvent[]> {
+  const r = await apiFetch(`/memory/activity?n=${n}`);
+  if (!r.ok) throw new Error(`activity ${r.status}`);
+  const data = await r.json();
+  return data.events ?? [];
+}
+
+/**
+ * Opens an SSE connection to /activity/stream and calls onEvent for each
+ * new event. Returns a cleanup function (call it to close the stream).
+ */
+export function subscribeActivityStream(
+  onEvent: (e: ActivityEvent) => void,
+): () => void {
+  let closed = false;
+  let es: EventSource | null = null;
+
+  acquireToken().then((token) => {
+    if (closed) return;
+    const url = `${apiBase()}/activity/stream`;
+    // EventSource doesn't support custom headers natively; pass token as query param
+    // for the SSE connection only (the token is already localhost-scoped).
+    const src = new EventSource(
+      token ? `${url}?token=${encodeURIComponent(token)}` : url,
+    );
+    es = src;
+    src.onmessage = (ev) => {
+      if (!ev.data || ev.data.startsWith(":")) return;
+      try {
+        onEvent(JSON.parse(ev.data) as ActivityEvent);
+      } catch {
+        /* malformed — skip */
+      }
+    };
+    src.onerror = () => {
+      src.close();
+    };
+  });
+
+  return () => {
+    closed = true;
+    es?.close();
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Read screen (Feature 07)
+// ---------------------------------------------------------------------------
+
+export async function triggerReadScreen(
+  sessionId?: string,
+): Promise<{ session_id: string; messages: ChatMessage[] }> {
+  const r = await apiFetch("/read-screen/trigger", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId }),
+  });
+  if (!r.ok) {
+    const d = await r.json().catch(() => ({}));
+    throw new Error((d as { error?: string }).error ?? `read-screen ${r.status}`);
+  }
+  return r.json();
+}

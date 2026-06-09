@@ -117,6 +117,13 @@ ui:
   shell_ptt_hotkey: ctrl+alt+shift+v   # hold = talk; empty = mic button only (tray uses ctrl+alt+v)
   shell_ptt_max_seconds: 45
 
+read_hotkey:
+  enabled: true
+  hotkey: "ctrl+alt+space"
+  scope: active_window       # active_window | fullscreen
+  speak_answer: false
+  question: "What is on screen? Describe what you see concisely."
+
 automation:
   n8n_enabled: false
   n8n_url: http://localhost:5678

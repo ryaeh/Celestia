@@ -138,6 +138,10 @@ class VisionAnalyzeBody(BaseModel):
     session_id: str | None = None
 
 
+class ReadScreenBody(BaseModel):
+    session_id: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Shared helpers (unchanged from original)
 # ---------------------------------------------------------------------------
@@ -373,6 +377,50 @@ def get_memory_activity(n: int = 30):
     return _memory_activity_payload(n)
 
 
+@app.get("/activity/stream")
+def get_activity_stream():
+    """SSE feed of activity events — one JSON object per data line (CC-99)."""
+    import queue as _queue
+    from skills.memory.activity_feed import subscribe, tail, unsubscribe
+
+    def _generate():
+        q = subscribe()
+        # Seed the stream with the most recent events so the client doesn't
+        # start with an empty panel.
+        for event in reversed(tail(10)):
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        try:
+            while True:
+                try:
+                    event = q.get(timeout=30)
+                    yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                except _queue.Empty:
+                    yield ": keepalive\n\n"
+        finally:
+            unsubscribe(q)
+
+    return StreamingResponse(
+        _generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.get("/read-screen/status")
+def get_read_screen_status():
+    from celestia_core.shell_read_hotkey import read_screen_status
+    return read_screen_status()
+
+
+@app.post("/read-screen/trigger")
+def post_read_screen_trigger(body: ReadScreenBody):
+    from celestia_core.shell_read_hotkey import trigger_read_screen
+    result = trigger_read_screen(session_id=body.session_id)
+    if "error" in result:
+        return JSONResponse(status_code=400, content=result)
+    return result
+
+
 @app.get("/memory/{memory_id}")
 def get_memory_entry(memory_id: str):
     from skills.memory.store import get_all_entries
@@ -604,6 +652,12 @@ def start_server(port: int | None = None, *, daemon: bool = True) -> int:
     except Exception as e:
         print(f"[shell-ptt] hotkey listener skipped: {e}")
 
+    try:
+        from celestia_core.shell_read_hotkey import start_read_hotkey_listener
+        start_read_hotkey_listener()
+    except Exception as e:
+        print(f"[read-screen] hotkey listener skipped: {e}")
+
     return p
 
 
@@ -625,4 +679,9 @@ def run_server_forever(port: int | None = None) -> None:
         start_global_hotkey_listener()
     except Exception as e:
         print(f"[shell-ptt] hotkey listener skipped: {e}")
+    try:
+        from celestia_core.shell_read_hotkey import start_read_hotkey_listener
+        start_read_hotkey_listener()
+    except Exception as e:
+        print(f"[read-screen] hotkey listener skipped: {e}")
     uvicorn.run(app, host="127.0.0.1", port=p, log_level="error", access_log=False)
