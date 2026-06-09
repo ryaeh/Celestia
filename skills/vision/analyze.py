@@ -66,7 +66,15 @@ def _text_models() -> list[str]:
 
 
 def _fallback_models() -> list[str]:
-    models = _text_models()
+    # A fast general model (e.g. moondream) is tried first for plain screenshots;
+    # heavier models are kept as escalation fallbacks on failure / OOM.
+    models: list[str] = []
+    general = get("vision.general_model", "")
+    if general:
+        models.append(general)
+    for m in _text_models():
+        if m not in models:
+            models.append(m)
     for m in (
         get("llm.vision_model", "llama3.2-vision:11b"),
         get("llm.vision_fast_model", "moondream"),
@@ -175,8 +183,9 @@ def analyze_image(image_path: Path, question: str) -> str:
             )
         except ResponseError as e:
             last_err = e
-            err = str(e).lower()
-            if i < len(models) - 1 and ("memory" in err or "status code: 500" in err):
+            # Escalate to the next (heavier) model on any error — OOM, 500, or a
+            # missing fast model — so a fast-default never hard-fails the request.
+            if i < len(models) - 1:
                 print(f"[vision] {model} failed ({e}), trying {models[i + 1]}...")
                 free_for_vision()
                 continue
