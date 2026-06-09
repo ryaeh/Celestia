@@ -377,18 +377,60 @@ def _finalize_session(state: dict[str, Any]) -> None:
         pass
 
 
+def _run_finalize_bg(sid: str, history: list[dict[str, Any]], start: int) -> None:
+    """Background end-of-session finalize: last-session note + consolidation
+    (typed memory + knowledge graph). Kept off the create_session path so
+    starting a new chat returns immediately instead of blocking on the LLM.
+    """
+    try:
+        from skills.memory.last_session import update_from_messages
+
+        update_from_messages(history)
+    except Exception:
+        pass
+
+    try:
+        from skills.memory.session_consolidate import consolidate_session_messages
+
+        uid = get("app.user_id", "atlas_user")
+        new_start, _ = consolidate_session_messages(
+            history, uid, start_index=start, end=True, extract_graph=True
+        )
+    except Exception:
+        return
+
+    with _store_lock():
+        state = _read_session(sid)
+        if state is not None and new_start != int(state.get("consolidate_from") or 0):
+            state["consolidate_from"] = new_start
+            _write_session(sid, state)
+
+
 def create_session(*, finalize_active: bool = True) -> str:
+    finalize_sid: str | None = None
+    finalize_history: list[dict[str, Any]] = []
+    finalize_start = 0
     with _store_lock():
         active_id = _resolve_active()
         if finalize_active and active_id:
             state = _read_session(active_id)
-            if state is not None:
-                _finalize_session(state)
-                _write_session(active_id, state)
+            if state is not None and state.get("history"):
+                finalize_sid = active_id
+                finalize_history = list(state["history"])
+                finalize_start = int(state.get("consolidate_from") or 0)
         sid = str(uuid.uuid4())
         _write_session(sid, _new_session_state())
         _write_active(sid)
-        return sid
+
+    # Finalize the previous chat in the background so the new chat is instant.
+    if finalize_sid:
+        threading.Thread(
+            target=_run_finalize_bg,
+            args=(finalize_sid, finalize_history, finalize_start),
+            name="finalize-session",
+            daemon=True,
+        ).start()
+    return sid
 
 
 def get_history(session_id: str | None = None) -> list[dict[str, str]]:

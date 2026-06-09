@@ -129,6 +129,11 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="Inspect the knowledge graph: stats + last N current relations (Feature 10)",
     )
+    parser.add_argument(
+        "--graph-extract",
+        action="store_true",
+        help="Extract relations from the active chat into the knowledge graph now (Feature 10)",
+    )
     return parser
 
 
@@ -493,6 +498,39 @@ def main() -> int:
                 print(f"  • {line}")
         else:
             print("\n(no relations yet — enable memory.graph.enabled and have a chat)")
+        return 0
+
+    if args.graph_extract:
+        from celestia_core import shell_chat
+        from skills.memory.session_consolidate import _dialog_excerpt
+        from skills.memory.graph_extract import extract_and_store
+        from skills.memory import graph_store as graph
+
+        if not get("memory.graph.enabled", False):
+            print("[graph] memory.graph.enabled is false — enable it in config.yaml first.")
+            return 1
+        excerpt = _dialog_excerpt(shell_chat.get_history(), 0)
+        if len(excerpt.strip()) < 30:
+            # Active chat is empty (e.g. a new chat was just started) — fall back
+            # to the most recently updated session that actually has content.
+            for row in shell_chat.list_sessions():
+                ex = _dialog_excerpt(shell_chat.get_history(row["id"]), 0)
+                if len(ex.strip()) >= 30:
+                    excerpt = ex
+                    print(f"[graph] active chat is empty; using most recent chat: {row['title']!r}")
+                    break
+        if len(excerpt.strip()) < 30:
+            print("[graph] no chat with enough content to extract from yet.")
+            return 0
+        print("[graph] extracting relations (one LLM pass)...")
+        lines = extract_and_store(excerpt, source="manual")
+        if lines:
+            for ln in lines:
+                print(f"  + {ln.removeprefix('[graph] ')}")
+        else:
+            print("  (model found no clear relations in this chat)")
+        s = graph.stats()
+        print(f"[graph] now {s['nodes']} nodes · {s['current_edges']} current relations")
         return 0
 
     if args.arm:

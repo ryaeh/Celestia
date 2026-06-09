@@ -173,15 +173,17 @@ def consolidate_session_messages(
     *,
     start_index: int = 0,
     extract_graph: bool = True,
+    end: bool = False,
 ) -> tuple[int, list[str]]:
     """
     Store typed memories. Returns (new_start_index, lines for optional verbose log).
 
     ``extract_graph`` runs the knowledge-graph relation pass (an extra LLM call).
-    It is on for the background pass but disabled on the synchronous
-    end-of-session finalize so creating/switching a chat never blocks on it.
+    ``end`` applies end-of-session consolidation rules (e.g. consolidate even on
+    a short session). Both the typed and graph passes are meant to run off the
+    chat hot-path (background thread), never blocking new-chat / switch-chat.
     """
-    if not should_run_consolidation(messages, start_index=start_index):
+    if not should_run_consolidation(messages, start_index=start_index, end=end):
         return len(messages), []
 
     excerpt = _dialog_excerpt(messages, start_index)
