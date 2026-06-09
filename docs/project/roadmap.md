@@ -42,6 +42,11 @@ High-level delivery phases. **Planned work and ideas** live in [backlog.md](back
 > pass is deferred until after the planned-features cluster. Surface-per-feature map:
 > [`planned-features/ROADMAP.md`](../planned-features/ROADMAP.md) → *UI surfaces*.
 
+> **Performance & QoL backlog:** real-use findings (GPU/VRAM model orchestration, the
+> screenshot Fullscreen/Area chooser, markdown rendering, etc.) are tracked in
+> [`perf-and-qol-backlog.md`](perf-and-qol-backlog.md). The model-residency manager there
+> is the substrate for **Feature 11 (operating modes)**.
+
 ---
 
 ## Next cycle (CC-88–CC-113)
