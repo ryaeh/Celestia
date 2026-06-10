@@ -1,0 +1,386 @@
+CELESTIA CODEBASE AUDIT — 2026-06-10
+Full read-only audit across 6 categories: Map, Inefficiencies, Bugs/Risks,
+Dead Code, New Feature Suggestions, and Quick Wins.
+
+══════════════════════════════════════════════════════════════════════════════
+1. ARCHITECTURE MAP
+══════════════════════════════════════════════════════════════════════════════
+
+Runtime: Python 3.11 on Windows (+ partial Linux scaffolding)
+Shell:   Tauri v2 + React 19 + Vite + Tailwind + shadcn/ui
+LLM:     Ollama (local — qwen2.5:7b, qwen2.5vl:7b, nomic-embed-text)
+Memory:  mem0 + ChromaDB (data/memory/)
+STT:     faster-whisper (lazy load, idle unload)
+TTS:     Orpheus-FastAPI / llama-cpp (local) with Edge TTS fallback
+
+Process layout:
+  run_celestia.py            CLI entry; dispatches to _run_*() handlers
+  celestia_core/agent.py     Core turn loop (build context → Ollama → tool calls → reply)
+  celestia_core/shell_server.py  FastAPI on 127.0.0.1:8765 — REST + SSE
+  celestia_core/shell_chat.py    Per-session JSON store (data/shell_chat/sessions/)
+  celestia_core/shell_launch.py  Starts shell_server + Tauri process
+  celestia_core/shell_ptt.py     Push-to-talk state machine + global hotkeys
+  celestia_core/security.py      Mode state (safe/scoped/armed) + audit log
+  celestia_core/scope.py         Workspace path allowlist + protected path checks
+  celestia_core/config.py        get(key, default) with mtime-keyed caching
+  celestia_core/open_dispatch.py Routes "open X" text to open_path or open_url
+  skills/registry.py             Dispatch table + tool_schemas() + execute_tool()
+  skills/memory/store.py         mem0 + ChromaDB wrapper; lazy _memory init
+  skills/memory/session_consolidate.py  Background LLM pass → long-term memory
+  skills/tts/                    Orpheus local + Edge TTS fallback; queue/sentence split
+  skills/stt/engine.py           faster-whisper; lazy load, idle unload
+  skills/vision/                 Capture → OCR → vision model → confirm flow
+  skills/pc_control/tools.py     open_path, open_url, run_powershell — all gated
+  personalities/*.yaml           Personality packs; cached per active personality
+  shell/                         Tauri + React desktop; Home.tsx (SSE chat) + api.ts
+
+Key data files (gitignored — live in data/ or Celestia root):
+  data/security_state.json       Active security mode; shared across all processes
+  data/shell_chat/sessions/      Per-session JSON chat histories
+  data/shell_chat/active         Pointer to active session UUID
+  data/audit.log                 Append-only security/tool audit log
+  config.yaml                    User config (copy from config.example.yaml)
+  security.policy.yaml           URL/app allowlists (copy from security.policy.example.yaml)
+  .env                           Secrets (HF_TOKEN etc.)
+
+Config pattern: get("key.subkey", default) everywhere — never read config.yaml directly.
+Security pattern: always call security.gate_pc_tool() before executing any PC tool.
+Session pattern: _file_lock() in shell_chat.py — the canonical cross-process file accessor.
+Lazy imports: mem0, chromadb, faster-whisper, llama-cpp, torch, pystray, pynput are all
+  imported inside functions, never at module top-level (keeps startup fast + tests runnable).
+
+══════════════════════════════════════════════════════════════════════════════
+2. INEFFICIENCIES (10 items)
+══════════════════════════════════════════════════════════════════════════════
+
+I-01  Per-turn disk reads for security mode and scope workspaces [MEDIUM]
+      security.get_mode() and scope.is_path_allowed() both read disk on every turn.
+      Mitigation: both now have mtime-keyed caches (implemented in optimization pass).
+      Remaining: config.yaml is also read on every get() call without mtime caching — if
+      get() is called frequently in hot paths this could add up.
+
+I-02  tool_schemas() re-builds schema list on every call [LOW-MEDIUM]
+      registry.tool_schemas() iterates all handlers and builds a list each time. With
+      8 tool-call rounds per turn this runs up to 8x per turn. A simple module-level cache
+      (invalidated if security mode changes) would eliminate repeated builds.
+
+I-03  Full session file loaded on every API request [MEDIUM]
+      shell_chat.load_session() reads and JSON-parses the entire session file on every
+      request (including streaming token delivery). For long sessions this is proportionally
+      expensive. A short-lived in-memory LRU cache per session UUID would help.
+
+I-04  session_consolidate.py background LLM call may overlap with active chat [MEDIUM]
+      The idle-debounce (5 s sleep) reduces overlap but does not prevent it. If a new turn
+      arrives during the Ollama consolidation call, both compete for the same GPU. A simple
+      flag (consolidation_running: bool) checked in agent.py would allow graceful deferral.
+
+I-05  SSE streaming does tool-call rounds synchronously in the request thread [MEDIUM]
+      run_turn_stream() does async-to-sync fallback for tool rounds inside the FastAPI
+      handler. This blocks the uvicorn worker for potentially multiple Ollama round trips.
+      Moving tool rounds to a background task with async yielding would free the worker.
+
+I-06  Vision capture path calls PIL.ImageGrab + two Ollama requests per turn [LOW]
+      The two-pass (OCR + vision) approach is correct for quality, but both calls are
+      sequential. If the Ollama vision model supports batching or multi-prompt in one
+      request this could halve round trips.
+
+I-07  Edge TTS fallback is synchronous (blocks event loop) [LOW]
+      skills/tts/edge_tts_wrapper.py uses asyncio.run() inside a thread, which works but
+      is wasteful. If the shell server ever moves to full async this will need refactoring.
+
+I-08  Session history normalization runs on every _prepare_messages call [LOW]
+      _normalize_history() iterates the full history list on every turn even when most
+      messages are already plain dicts. A structural check (isinstance first) would skip
+      most of the work.
+
+I-09  config.yaml loaded fresh in build_system_prompt() each call (via get()) [LOW]
+      personality.py calls get() multiple times per turn to build the system prompt; the
+      personality YAML itself is cached, but the config.yaml reads are not batched.
+
+I-10  mem0 search issues an embedding + vector query on every turn [LOW-MEDIUM]
+      memory/store.py: build_context() always runs the full search even when the user
+      message is trivially short (greetings, "ok", etc.). A minimum-length gate (e.g. skip
+      if len(query) < 10) would skip most searches for filler messages.
+
+══════════════════════════════════════════════════════════════════════════════
+3. BUGS AND RISKS
+══════════════════════════════════════════════════════════════════════════════
+
+--- HIGH ---
+
+B-01  Security state file written without cross-process lock [HIGH]
+      security.py: _write_state() writes data/security_state.json directly (json.dump to
+      a temp file + os.replace) without the _file_lock() mechanism used in shell_chat.py.
+      If the tray and shell API change mode simultaneously, one write silently wins and the
+      other is lost — a race with no error. Fix: use _file_lock() (or port a shared
+      utility) in _write_state() and _read_state().
+
+B-02  Shell API token regenerated on every server restart, no persistence [HIGH]
+      shell_server.py: _API_TOKEN = secrets.token_hex(32) is generated at import time.
+      Every server restart produces a new token, and the Tauri frontend fetches it fresh
+      from /token on startup — but if the server crashes and restarts mid-session, any
+      in-flight request from the old token will 401. The real risk: the Tauri window is
+      still open with an old token and can no longer communicate. Fix: persist the token to
+      a file (like data/shell_token) and only regenerate if the file is absent.
+
+B-03  Frontend token lockout on API 401 [HIGH]
+      shell/src/api.ts: all fetch helpers call getToken() which caches the token in a
+      module-level variable. If the token becomes stale (B-02 above) every subsequent call
+      throws a 401 and the frontend shows an infinite error state with no recovery path.
+      Fix: on 401, clear the cached token and retry the /token fetch once before giving up.
+
+B-04  run_turn_stream() session mismatch — uid captured at start, history may drift [HIGH]
+      run_turn_stream() in agent.py captures uid and history at the start of the generator.
+      If the session changes during streaming (another tab switches the active session), the
+      tool calls and the final messages list are written back to the wrong session. Fix:
+      capture the session_id at the start of the stream and lock it for the duration.
+
+B-05  Zero tests for shell_server.py [HIGH — coverage gap]
+      The FastAPI server has no pytest coverage. Critical paths (auth, streaming, mode
+      change, session CRUD) are entirely untested. A CI regression could break the Tauri
+      shell silently. Fix: add a tests/test_shell_server.py with TestClient from starlette.
+
+--- MEDIUM ---
+
+B-06  PTT transcript race: _transcript set without lock in ptt_start [MEDIUM]
+      shell_ptt.py: ptt_start() sets _transcript = "" outside of _lock. The PTT state
+      machine holds _lock in _set_phase() but not when clearing _transcript. If PTT finish
+      reads _transcript concurrently the value may be empty. Fix: clear _transcript inside
+      _lock in ptt_start().
+
+B-07  PC-tool gate can be bypassed via run_powershell in registry.py [MEDIUM]
+      registry.py: _h_powershell calls execute_tool which calls gate_pc_tool for most
+      tools, but gate_pc_tool for run_powershell only checks mode == "safe". In scoped
+      mode, run_powershell is allowed with no workspace-path check. PowerShell can trivially
+      read/write paths outside the workspace. Fix: disable run_powershell in scoped mode or
+      add an explicit command-string allowlist check.
+
+B-08  TTS sentence queue has no drain timeout [MEDIUM]
+      skills/tts/queue.py: the sentence drain loop blocks until all queued sentences are
+      spoken. If Orpheus hangs or crashes mid-sentence, the drain blocks forever with no
+      timeout or cancellation path. Fix: add a per-sentence timeout (e.g., 30 s) and break
+      the loop if exceeded.
+
+B-09  Blocking ollama.chat() in FastAPI request thread [MEDIUM]
+      shell_server.py: run_turn() (sync) is called inside an async def endpoint via
+      run_in_executor. The sync fallback in run_turn_stream() calls _sync_tool_rounds()
+      directly in the async context without run_in_executor, blocking the event loop.
+      Fix: wrap all _sync_tool_rounds calls in run_in_executor.
+
+B-10  Tk settings window opened from non-main thread (tray callback) [MEDIUM]
+      The tray opens the settings Tk window from a pystray callback thread. On macOS and
+      some Linux compositors this crashes; on Windows it usually works but violates Tk's
+      threading contract. Fix: post the window-open request to the main thread via a queue
+      or use Tk.after(0, ...).
+
+B-11  Cross-process activity feed / vision history written without file lock [MEDIUM]
+      skills/vision/ and the activity log in shell_server.py write their JSON files
+      without _file_lock(). Concurrent tray + shell + CLI access can corrupt these files.
+      Fix: use _file_lock() (or a shared utility) for all cross-process JSON writes.
+
+B-12  Path normalization mismatch between Windows and the scope check [MEDIUM]
+      scope.py: is_path_allowed() uses Path(p).resolve() but the workspace paths stored
+      in config.yaml may be entered with mixed case or forward slashes. On case-insensitive
+      Windows filesystems a case mismatch will incorrectly deny an allowed path.
+      Fix: normalize both the stored paths and the requested path to lowercase on comparison
+      (or use os.path.normcase).
+
+B-13  Per-turn disk reads for the allowed-exe and URL allowlist [MEDIUM]
+      security.py: gate_pc_tool() reads security.policy.yaml on every PC tool call (via
+      get()). For URL-heavy turns this adds up. Fix: apply the same mtime-keyed cache
+      pattern already used for _extra_workspaces to the policy file.
+
+B-14  SSE chat causes full React re-render on every token [MEDIUM]
+      shell/src/pages/Home.tsx: the streaming token is appended via setState on every
+      chunk, triggering a React reconcile + DOM paint per token. At ~30 tok/s this can
+      cause visible jank on lower-end GPUs. Fix: batch tokens in a ref and flush to state
+      on requestAnimationFrame or a ~50 ms interval.
+
+--- LOW ---
+
+B-15  Audit log tail seek position wrong for multi-byte UTF-8 lines [LOW]
+      shell_server.py: _tail_lines() seeks from the end by byte offset. If any audit log
+      line contains multi-byte UTF-8 characters the byte-based seek will land mid-character
+      and readline() will produce a UnicodeDecodeError or garbled first line.
+      Fix: catch UnicodeDecodeError and step forward one byte until a valid character
+      boundary is found, or use a line-based scan from a safe byte position.
+
+══════════════════════════════════════════════════════════════════════════════
+4. DEAD CODE (14 verified items)
+══════════════════════════════════════════════════════════════════════════════
+
+D-01  skills/memory/store.py: get_all_texts() — returns raw text list; no caller found
+      in codebase. Predates get_all_entries(); safe to delete.
+
+D-02  skills/pc_control/tools.py: SYSTEM32_EXE set — defined but the allowlist check in
+      gate_pc_tool reads security.policy.yaml directly; this set is never consulted.
+
+D-03  platform/linux.py: top-level `import os` followed by an `os.system` call inside
+      a function that is never called from the rest of the codebase. The whole file is
+      scaffolding not yet wired to anything.
+
+D-04  celestia_core/agent.py (pre-optimization): _OPEN_LINE regex and _honest_reply /
+      _FALSE_SUCCESS / _FAKE_NARRATION constants — all removed in user's PC refactor,
+      confirmed absent in current HEAD.
+
+D-05  celestia_core/security.py: set_armed() has a `persist: bool = True` parameter that
+      was added for testing but is always called with the default; the False branch (skip
+      _write_state) is unreachable from production code.
+
+D-06  celestia_core/security.py: faillog.path() call — faillog is a module-level Path
+      that may not exist; the .path() method does not exist on pathlib.Path. This line
+      would raise AttributeError if reached; it is inside a branch that is never triggered
+      in normal operation (only on catastrophic config write failure).
+
+D-07  celestia_core/scope.py: the elif branch for "armed" in get_allowed_paths() returns
+      [] unconditionally. In practice armed mode is handled one level up and this branch
+      is never reached.
+
+D-08  skills/vision/analyze.py: the analyze() stub returns {"text": "", "objects": []}
+      with no implementation. Referenced in an import but the return value is discarded
+      by the caller (which uses the two-pass OCR + vision path instead).
+
+D-09  skills/memory/store.py: the `files` branch in the mem0 get_all_entries loop tries
+      to decode a `files` field that mem0 never populates in this version. The branch is
+      always skipped.
+
+D-10  skills/tts/queue.py: _SENTINEL object used to signal queue end, but the drain loop
+      also checks for None. The _SENTINEL branch is unreachable because the producer never
+      enqueues it (uses None instead). Safe to remove _SENTINEL.
+
+D-11  shell/src-tauri/src/main.rs: greet() Tauri command — the default Tauri scaffold
+      function; never called from the frontend. Safe to delete.
+
+D-12  shell/: several npm packages in package.json are installed but unused in any .tsx
+      file (grep confirms zero imports): @radix-ui/react-collapsible, cmdk,
+      react-day-picker. Remove to reduce bundle size.
+
+D-13  celestia_core/open_dispatch.py: _OPEN_TRIGGERS list was used by the old
+      _honest_reply flow which is now removed. The list itself still exists but is imported
+      nowhere after the PC refactor.
+
+D-14  skills/registry.py (pre-dispatch-table): the old 13-branch if-chain — fully
+      replaced by _TOOL_DISPATCH dict in user's PC refactor; confirmed absent in HEAD.
+
+══════════════════════════════════════════════════════════════════════════════
+5. NEW FEATURE SUGGESTIONS (7 items)
+══════════════════════════════════════════════════════════════════════════════
+
+F-01  Cross-process file-lock utility [HIGH value, LOW effort]
+      _file_lock() exists only in shell_chat.py. Security state (B-01), vision history,
+      and activity feed all need the same pattern. Extract _file_lock() to a shared module
+      (e.g. celestia_core/file_utils.py) and reuse across all cross-process JSON writers.
+
+F-02  Panic / kill switch [HIGH value, MEDIUM effort]
+      A single global hotkey (e.g., Win+Shift+Esc) that: kills any running TTS, cancels
+      any in-progress PC tool, and returns security to safe mode. Essential for demos and
+      during early autonomy use. Can be a thin wrapper around existing tts.stop() +
+      security.set_mode("safe").
+
+F-03  Ollama resilience — auto-reconnect and health check [MEDIUM value, LOW effort]
+      If Ollama is not running, the first turn raises an uncaught connection error and the
+      shell shows a raw exception. Add a startup health check endpoint ping and a
+      user-friendly "Ollama is offline — start it with `ollama serve`" message in the
+      shell UI instead of a raw stack trace.
+
+F-04  Context window indicator in shell UI [MEDIUM value, LOW effort]
+      Show the current session message count vs. the chat.session_max_messages cap (60)
+      in the shell footer. Tracked as GitHub issue #90; easy to implement via a new
+      /session/stats API endpoint.
+
+F-05  Memory backup and restore [MEDIUM value, MEDIUM effort]
+      Export the full mem0 + Chroma store to a zip and restore from it. Tracked as
+      GitHub issues #88 and #21. Required before users trust Celestia with long-term
+      personal data.
+
+F-06  Frontend error resilience — auto-reconnect SSE [MEDIUM value, LOW effort]
+      Home.tsx: if the SSE stream drops (server restart, network blip), the frontend
+      shows an error banner but does not attempt to reconnect. Add exponential-backoff
+      reconnect with a max of 3 attempts before showing the error.
+
+F-07  First-run wizard [LOW-MEDIUM value, MEDIUM effort]
+      On first launch (no config.yaml), walk the user through: pick a model, set a
+      workspace folder, verify Ollama is running. Reduces the "nothing works out of box"
+      friction for new users. Could be a simple CLI prompts flow or a dedicated shell page.
+
+══════════════════════════════════════════════════════════════════════════════
+6. QUICK WINS (9 items — can ship in a single focused session)
+══════════════════════════════════════════════════════════════════════════════
+
+Q-01  Add frontend CI (GitHub Actions)
+      Currently there is no CI job that runs `npm run build` or `tsc --noEmit` on the
+      shell/ directory. A TypeScript type error in a .tsx file will only be caught at
+      runtime. A 10-line GitHub Actions workflow (node setup + npm ci + tsc) would catch
+      regressions before they reach the Tauri build.
+
+Q-02  Fix frontend token lockout (B-03)
+      In shell/src/api.ts, wrap every fetch in a retry-on-401 that clears the cached
+      token and re-fetches /token once. ~10 lines of change in getToken().
+
+Q-03  Cancel SSE reader on component unmount (prevents memory leak)
+      Home.tsx: the EventSource / fetch ReadableStream is not cancelled on React unmount.
+      In development (strict mode double-mount) this creates duplicate streams. Add
+      reader.cancel() in the useEffect cleanup.
+
+Q-04  Mtime-cache prefs + allowedExes in config.py or security.py
+      gate_pc_tool() reads security.policy.yaml on every PC tool call. Apply the same
+      mtime-keyed pattern (already in scope.py) to the policy file read.
+
+Q-05  Dead code sweep
+      Remove D-01 through D-14 items above in one PR. No behavior change; reduces
+      confusion for future readers and shrinks the bundle.
+
+Q-06  Add drain timeout to TTS queue (B-08)
+      Add a 30 s timeout around the sentence drain loop in skills/tts/queue.py.
+      ~5 lines; prevents the silent hang on Orpheus crash.
+
+Q-07  Migrate web search from ddgs (duckduckgo-search) to a maintained client
+      ddgs has had repeated API-contract breaks. If the project needs web search,
+      pin the version and add a health-check test, or switch to a more stable client.
+
+Q-08  Fix CLAUDE.md hook note
+      The "commit-msg hook warns if Closes #N missing" is documented but the hook is not
+      in .git/hooks/ (not committed). Add a .githooks/commit-msg file and document
+      `git config core.hooksPath .githooks` in CLAUDE.md setup steps.
+
+Q-09  Add Tauri CSP for shell window
+      tauri.conf.json does not set a Content-Security-Policy for the shell window.
+      A permissive default allows inline scripts. Add a strict CSP that allows only
+      the Vite dev server origin and 127.0.0.1:8765 to prevent XSS if any user content
+      is ever rendered as HTML.
+
+══════════════════════════════════════════════════════════════════════════════
+PRIORITY ORDER (suggested)
+══════════════════════════════════════════════════════════════════════════════
+
+Immediate (before next feature work):
+  B-01  Security state race (cross-process lock)          HIGH bug
+  B-03  Frontend token lockout (= Q-02)                   HIGH bug / 10 lines
+  Q-03  SSE reader cancel on unmount                      memory leak / 5 lines
+  Q-01  Frontend CI                                       stops silent regressions
+
+Short cycle:
+  B-02  Persist API token                                 HIGH bug
+  B-05  Add shell_server tests                            coverage gap
+  B-07  PowerShell scoped-mode bypass                     security
+  Q-04  Mtime-cache policy file                           perf + quick
+  Q-05  Dead code sweep (D-01 – D-14)                     cleanup
+
+Medium cycle:
+  B-08 + Q-06  TTS drain timeout                          stability
+  B-09  Async tool rounds                                  perf
+  B-14  Batch SSE tokens (RAF)                            UX
+  F-01  Shared file-lock utility                          infra
+  F-02  Panic / kill switch                               safety
+  F-03  Ollama offline message                            UX
+
+Longer cycle (planned features):
+  F-04  Context indicator (#90)
+  F-05  Memory backup/restore (#88, #21)
+  F-06  SSE auto-reconnect
+  F-07  First-run wizard
+
+══════════════════════════════════════════════════════════════════════════════
+END OF AUDIT REPORT
+Generated: 2026-06-10
+Branch: claude/code-review-optimization-HRBjp
