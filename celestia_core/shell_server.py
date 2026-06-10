@@ -12,9 +12,11 @@ import secrets
 import threading
 import time
 from pathlib import Path
-from typing import Any, Generator
+from typing import TYPE_CHECKING, Any, Generator
 
-import uvicorn
+if TYPE_CHECKING:
+    import uvicorn
+
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -616,6 +618,8 @@ def ping(port: int | None = None, *, timeout: float = 0.4) -> bool:
 
 def start_server(port: int | None = None, *, daemon: bool = True) -> int:
     """Start FastAPI server in a background thread; returns bound port."""
+    import uvicorn
+
     global _uvicorn_server, _server_thread
     load_config()
     _write_token_file()
@@ -670,6 +674,8 @@ def stop_server() -> None:
 
 
 def run_server_forever(port: int | None = None) -> None:
+    import uvicorn
+
     load_config()
     _write_token_file()
     p = port if port is not None else default_port()

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from celestia_core.config import ROOT, get
+from celestia_core.file_utils import atomic_write_text, file_lock
 
 _lock = threading.Lock()
 _MAX = 80
@@ -57,9 +58,12 @@ def append_event(
     }
     with _lock:
         path = _feed_path()
-        with open(path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
-        _trim_file(path)
+        # _lock serializes threads in this process; file_lock serializes the
+        # append + rewrite against the tray/CLI processes that share the feed.
+        with file_lock(path.parent / ".activity_feed.lock"):
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            _trim_file(path)
     # Broadcast to all connected SSE subscribers.
     with _subs_lock:
         for q in list(_subs):
@@ -80,7 +84,7 @@ def _trim_file(path: Path) -> None:
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     if len(lines) <= _MAX:
         return
-    path.write_text("\n".join(lines[-_MAX:]) + "\n", encoding="utf-8")
+    atomic_write_text(path, "\n".join(lines[-_MAX:]) + "\n")
 
 
 def tail(n: int = 30) -> list[dict[str, Any]]:

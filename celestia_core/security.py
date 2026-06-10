@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from celestia_core.config import ROOT, get, load_config
+from celestia_core.file_utils import atomic_write_text, file_lock
 
 Mode = Literal["safe", "scoped", "armed"]
 
@@ -43,6 +44,10 @@ def _state_path() -> Path:
     return ROOT / "data" / "security_state.json"
 
 
+def _state_lock_path() -> Path:
+    return ROOT / "data" / ".security_state.lock"
+
+
 def _use_shared_state() -> bool:
     if get("security.shared_armed_state", True):
         return True
@@ -69,8 +74,11 @@ def _read_state() -> dict[str, Any]:
 def _write_state(data: dict[str, Any]) -> None:
     global _state_cache
     data["updated"] = _now_iso()
-    _state_path().parent.mkdir(parents=True, exist_ok=True)
-    _state_path().write_text(json.dumps(data, indent=2), encoding="utf-8")
+    # The security mode gates all PC control and is shared across tray/shell/CLI
+    # processes — serialize writes with a cross-process lock and write atomically
+    # so a concurrent or crashed write can neither be lost nor corrupt the file.
+    with file_lock(_state_lock_path()):
+        atomic_write_text(_state_path(), json.dumps(data, indent=2))
     _state_cache = None  # invalidate; next read re-stats the freshly written file
 
 
@@ -164,7 +172,7 @@ def is_armed() -> bool:
     return get_mode() == "armed"
 
 
-def set_armed(value: bool, *, persist: bool | None = None, source: str | None = None) -> None:
+def set_armed(value: bool, *, source: str | None = None) -> None:
     set_mode("armed" if value else "safe", source=source)
 
 

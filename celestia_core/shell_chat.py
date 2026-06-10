@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import sys
 import threading
 import time
 import uuid
@@ -13,6 +12,7 @@ from typing import Any, Generator, Iterator
 
 from celestia_core.agent import run_turn, run_turn_stream
 from celestia_core.config import ROOT, get, load_config
+from celestia_core.file_utils import file_lock
 
 _thread_lock = threading.Lock()
 _last_turn_time: float = 0.0
@@ -69,30 +69,8 @@ def _migrate_legacy() -> None:
 @contextmanager
 def _file_lock() -> Iterator[None]:
     """Exclusive lock shared across tray, shell API, and CLI processes."""
-    lock_path = _lock_path()
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(lock_path, "a+b") as lock_file:
-        if sys.platform == "win32":
-            import msvcrt
-
-            lock_file.seek(0)
-            msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
-        else:
-            import fcntl
-
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            if sys.platform == "win32":
-                import msvcrt
-
-                lock_file.seek(0)
-                msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
-            else:
-                import fcntl
-
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+    with file_lock(_lock_path()):
+        yield
 
 
 @contextmanager
