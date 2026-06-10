@@ -150,10 +150,6 @@ def add(
     return result
 
 
-def get_all_texts(user_id: str, limit: int = 100) -> list[str]:
-    return [e["text"] for e in get_all_entries(user_id, limit)]
-
-
 def get_entries_by_kind(user_id: str, kind: str, limit: int = 50) -> list[dict[str, Any]]:
     k = normalize_kind(kind)
     return [e for e in get_all_entries(user_id, limit) if e["kind"] == k]

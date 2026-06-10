@@ -13,9 +13,11 @@ import uuid
 from pathlib import Path
 
 from celestia_core.config import ROOT
+from celestia_core.file_utils import atomic_write_text, file_lock
 
 _HIST_DIR = ROOT / "data" / "vision_history"
 _HIST_JSON = _HIST_DIR / "index.json"
+_HIST_LOCK = _HIST_DIR / ".index.lock"
 MAX_ENTRIES = 20
 
 
@@ -30,7 +32,7 @@ def _load() -> list[dict]:
 
 def _save(entries: list[dict]) -> None:
     _HIST_DIR.mkdir(parents=True, exist_ok=True)
-    _HIST_JSON.write_text(json.dumps(entries, indent=2), encoding="utf-8")
+    atomic_write_text(_HIST_JSON, json.dumps(entries, indent=2))
 
 
 def push(img_path: Path) -> str:
@@ -40,21 +42,24 @@ def push(img_path: Path) -> str:
     dest = _HIST_DIR / f"{entry_id}.png"
     shutil.copy2(img_path, dest)
 
-    entries = _load()
-    entries.append({
-        "id": entry_id,
-        "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        "path": str(dest),
-    })
+    # The index is a read-modify-write shared across tray + shell + CLI; hold the
+    # cross-process lock so concurrent captures can't lose each other's entries.
+    with file_lock(_HIST_LOCK):
+        entries = _load()
+        entries.append({
+            "id": entry_id,
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "path": str(dest),
+        })
 
-    while len(entries) > MAX_ENTRIES:
-        old = entries.pop(0)
-        try:
-            Path(old["path"]).unlink(missing_ok=True)
-        except Exception:
-            pass
+        while len(entries) > MAX_ENTRIES:
+            old = entries.pop(0)
+            try:
+                Path(old["path"]).unlink(missing_ok=True)
+            except Exception:
+                pass
 
-    _save(entries)
+        _save(entries)
     return entry_id
 
 

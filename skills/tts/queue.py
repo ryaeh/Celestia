@@ -18,8 +18,6 @@ from __future__ import annotations
 import queue
 import threading
 
-_SENTINEL = object()
-
 
 class SpeakQueue:
     """Thread-safe FIFO queue that speaks sentences on a single background thread.
@@ -30,7 +28,7 @@ class SpeakQueue:
     """
 
     def __init__(self) -> None:
-        self._q: queue.Queue[str | object] = queue.Queue()
+        self._q: queue.Queue[str] = queue.Queue()
         self._thread = threading.Thread(
             target=self._worker, name="tts-speak-queue", daemon=True
         )
@@ -67,9 +65,6 @@ class SpeakQueue:
     def _worker(self) -> None:
         while True:
             item = self._q.get()
-            if item is _SENTINEL:
-                self._q.task_done()
-                return
             try:
                 from skills.tts.manager import speak
 
