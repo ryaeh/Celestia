@@ -11,8 +11,9 @@ see [`README.md`](README.md).
 ## The spine
 
 ```
-07 ──► 10 ──► 02 / 03 ──► 11 ──► 04 / 05 ──► 01 ──► 06 / 08
+07 ──► 10 ──► 02 / 03 ──► 11 ──► 04 / 05 ──► 01 ──► 06 / 08 / 12
                                                   (09 = horizontal, composes with all)
+                                                  (12 collects signal from the moment 10 ships)
 ```
 
 Each phase stands alone *and* lays a substrate the next phase reuses.
@@ -62,6 +63,7 @@ Thin layers on top of everything already built.
 |---|---------|-------|------------|--------|
 | 06 | Affective continuity | [#102](https://github.com/ryaeh/Celestia/issues/102) | 02, 10 | Planned |
 | 08 | Local privacy guardian | [#103](https://github.com/ryaeh/Celestia/issues/103) | 01 (reuses daemon) | Planned |
+| 12 | Adaptive user model (living portrait) | [#105](https://github.com/ryaeh/Celestia/issues/105) | 10 (store + UI), 11 (ingestion gates); **needs weeks of signal — start collecting as soon as 10 ships** | Planned |
 
 ### Horizontal — composes with all phases
 Not a phase. Layer in once the turn loop is stable.
@@ -112,6 +114,7 @@ Several of these epics consolidate or build on older issues rather than replacin
 | 01 Ambient proactivity | #30 (proactive nudges), #40 (habit memory), #29 (focus/DND) |
 | 03 Local RAG | #86 (conversation search) |
 | 09 Adaptive compute | #19 (model routing), #80 (`llm.max_tokens`) |
+| 12 Adaptive user model | #40 (Memory v3), #55–#58 (habit signals/rollup/kind/router), absorbs `06` substrate |
 
 ## Cross-cutting concerns
 

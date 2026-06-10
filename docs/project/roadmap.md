@@ -97,7 +97,7 @@ Build spine: `07 → 10 → 02/03 → 11 → 04/05 → 01 → 06/08` (with `09` 
 | **F2 — Memory substrate** | 10 Temporal knowledge graph → 02 Time machine, 03 Local RAG | [#95](https://github.com/ryaeh/Celestia/issues/95) · [#96](https://github.com/ryaeh/Celestia/issues/96) · [#97](https://github.com/ryaeh/Celestia/issues/97) |
 | **F3 — Control + autonomy** | 11 Operating modes → 04 Scoped autonomy, 05 Macros | [#98](https://github.com/ryaeh/Celestia/issues/98) · [#99](https://github.com/ryaeh/Celestia/issues/99) · [#100](https://github.com/ryaeh/Celestia/issues/100) |
 | **F4 — Ambient layer** | 01 Ambient proactivity | [#101](https://github.com/ryaeh/Celestia/issues/101) |
-| **F5 — Specializations** | 06 Affective continuity, 08 Privacy guardian | [#102](https://github.com/ryaeh/Celestia/issues/102) · [#103](https://github.com/ryaeh/Celestia/issues/103) |
+| **F5 — Specializations** | 06 Affective continuity, 08 Privacy guardian, 12 Adaptive user model | [#102](https://github.com/ryaeh/Celestia/issues/102) · [#103](https://github.com/ryaeh/Celestia/issues/103) · [#105](https://github.com/ryaeh/Celestia/issues/105) |
 | **Horizontal** | 09 Adaptive test-time compute | [#104](https://github.com/ryaeh/Celestia/issues/104) |
 
 The flagship is **10 — temporal knowledge-graph memory** (layered semantic/episodic/procedural
