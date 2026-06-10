@@ -35,6 +35,7 @@ at once. Anything a cloud assistant could do equally well is out of scope.
 | [09](09-adaptive-test-time-compute.md) | Adaptive test-time compute | Local | agent turn loop |
 | [10](10-temporal-knowledge-graph.md) | Temporal knowledge-graph memory | Remembers · Local · Sees | new memory substrate |
 | [11](11-operating-modes.md) | Operating modes | Local · Acts | new control plane (modes) |
+| [12](12-adaptive-user-model.md) | Adaptive user model (living portrait) | Remembers · Local · Sees | rides the `10` graph |
 
 `09` is a **horizontal enhancer**, not a user-facing companion feature: it makes every
 other feature reason better at a fixed model size by spending more inference compute only
@@ -50,6 +51,12 @@ control plane that makes the whole on-device stack affordable: it budgets VRAM, 
 features (and the memory extraction pass) are live, sets the ingestion tier `10` records, and
 fixes proactivity + default security per context. Both sit apart from the 8×8 matrix because
 nearly everything else rides on them.
+
+`12 Adaptive user model` is the personalization layer on top of `10`: where the graph models
+the user's *world*, `12` models the *user* — graded tastes, daily rhythms, and reaction
+learning (how the user responds to Celestia tunes her behavior). It stores its portrait as
+graph entries, so `10`'s supersede/history/inspect-UI mechanics come for free; it absorbs
+`06`'s substrate and supplies `01` with "is this a good moment" judgment.
 
 ## Shared building blocks
 
