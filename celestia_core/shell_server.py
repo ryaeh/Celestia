@@ -592,6 +592,20 @@ def post_memory_last_session_refresh():
     return {"ok": True, **_memory_last_session_payload()}
 
 
+@app.post("/memory/decay")
+def post_memory_decay(dry_run: bool = False):
+    """Run the memory decay sweep now (manual trigger, bypasses the throttle).
+
+    ``dry_run=true`` returns the ids that *would* be removed without deleting —
+    for a "preview what gets cleaned" UI. Respects memory.decay.enabled.
+    """
+    from skills.memory.decay import sweep_decay
+    result = sweep_decay(_memory_user_id(), dry_run=dry_run, force=True)
+    if dry_run or result.get("deleted"):
+        result.update(_memory_list_payload())
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Routes — PATCH / DELETE
 # ---------------------------------------------------------------------------

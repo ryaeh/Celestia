@@ -367,21 +367,30 @@ def _run_finalize_bg(sid: str, history: list[dict[str, Any]], start: int) -> Non
     except Exception:
         pass
 
+    uid = get("app.user_id", "atlas_user")
     try:
         from skills.memory.session_consolidate import consolidate_session_messages
 
-        uid = get("app.user_id", "atlas_user")
         new_start, _ = consolidate_session_messages(
             history, uid, start_index=start, end=True, extract_graph=True
         )
+        with _store_lock():
+            state = _read_session(sid)
+            if state is not None and new_start != int(state.get("consolidate_from") or 0):
+                state["consolidate_from"] = new_start
+                _write_session(sid, state)
     except Exception:
-        return
+        pass
 
-    with _store_lock():
-        state = _read_session(sid)
-        if state is not None and new_start != int(state.get("consolidate_from") or 0):
-            state["consolidate_from"] = new_start
-            _write_session(sid, state)
+    # Memory lifecycle step 3: throttled decay-delete of memories that earned no
+    # keep. Internally gated by memory.decay.enabled + a once-per-interval throttle,
+    # so this is a cheap no-op when disabled or recently swept.
+    try:
+        from skills.memory.decay import sweep_decay
+
+        sweep_decay(uid)
+    except Exception:
+        pass
 
 
 def create_session(*, finalize_active: bool = True) -> str:
