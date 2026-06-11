@@ -92,10 +92,28 @@ def bump_recall(memory_ids: list[str], *, now: float | None = None) -> None:
 
 
 def prune_stats(valid_ids: set[str]) -> None:
-    """Drop access stats for memories that no longer exist (called by decay)."""
+    """Keep only stats whose memory id is in ``valid_ids`` (whole-universe prune).
+
+    Caller must pass the *complete* set of live ids — use ``drop_stats`` instead
+    when you only know which ids were removed.
+    """
     with file_lock(_lock_path()):
         stats = load_stats()
         trimmed = {mid: rec for mid, rec in stats.items() if mid in valid_ids}
+        if len(trimmed) != len(stats):
+            atomic_write_text(
+                _stats_path(), json.dumps(trimmed, ensure_ascii=False, indent=2)
+            )
+
+
+def drop_stats(memory_ids: list[str]) -> None:
+    """Remove access stats for specific deleted memory ids (decay cleanup)."""
+    ids = {m for m in memory_ids if m}
+    if not ids:
+        return
+    with file_lock(_lock_path()):
+        stats = load_stats()
+        trimmed = {mid: rec for mid, rec in stats.items() if mid not in ids}
         if len(trimmed) != len(stats):
             atomic_write_text(
                 _stats_path(), json.dumps(trimmed, ensure_ascii=False, indent=2)
@@ -190,6 +208,7 @@ __all__ = [
     "recall_for",
     "bump_recall",
     "prune_stats",
+    "drop_stats",
     "rank_score",
     "rank_order",
 ]

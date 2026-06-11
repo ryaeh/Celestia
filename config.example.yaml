@@ -53,6 +53,17 @@ memory:
     weight_recall: 0.15
     weight_recency: 0.10
     recency_halflife_days: 30
+  # Decay-delete (memory lifecycle, step 3): periodically remove memories that
+  # earned no keep — low importance, NEVER recalled, older than ttl_days.
+  # Protected kinds and any ever-recalled memory are never deleted. OFF by
+  # default because it deletes data — set enabled: true (then --trust-config).
+  decay:
+    enabled: false
+    ttl_days: 30
+    min_importance: 0.5       # entries at/above this importance are kept regardless of age
+    protect_kinds: [instruction]
+    min_interval_hours: 24    # at most one automatic sweep per this many hours
+    scan_limit: 500
   vector_store: chroma
   chroma:
     path: data/chroma
