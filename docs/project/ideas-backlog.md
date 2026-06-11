@@ -78,6 +78,12 @@ Each idea notes a rough **value/effort** read. "Tiny/Low/Medium/High."
 | **Live voice feedback** | Medium / Medium | While PTT held: live partial transcript + aura pulse; while she speaks: subtle waveform. Voice is a black box between key-down and reply today. |
 | **Session search + auto-titles** | Medium / Medium | Auto-title each session from its first exchange (one cheap LLM call at consolidation) + a sidebar search over titles/content. Bridges to Feature 03 / #86. |
 | **Mode pill in the header** | Medium / Low | Security mode (later operating mode) as a colored pill; click to cycle, glows red while armed (pairs with auto-decay above). Becomes Feature 11's HUD anchor. |
+| **Expand the Settings page (ongoing)** | High / Medium | Treat Settings as a growing home for customization, not a fixed panel. Surface the knobs that already live in `config.yaml` (vision model/general_model, reply caps, TTS voice/speed, PTT hotkey, consolidation cadence, read-screen scope/question, security `armed_ttl`, etc.) as real controls. **Convention for every new toggle:** a `config.yaml` key read via `get()` → a Settings control that writes it back → `--trust-config` re-hash; secrets stay in `.env`. Pairs with the *Personality editor* (Personality section) and the *Mode pill*; the model pickers from the UI V2 plan land here too. |
+
+> **Settings = the customization surface.** As features ship, their config knobs should
+> graduate from `config.yaml`-only into the Settings page. The rule is uniform: config key
+> via `get()` → Settings control → `--trust-config`. This keeps "make it mine" in one place
+> instead of scattered YAML edits.
 
 ## Wildcards
 
