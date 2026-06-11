@@ -92,8 +92,7 @@ def _extract_kind(item: dict) -> MemoryKind:
     return DEFAULT_KIND
 
 
-def _extract_updated(item: dict) -> float:
-    ts = item.get("updated_at") or item.get("created_at") or ""
+def _parse_ts(ts: Any) -> float:
     if not ts:
         return 0.0
     try:
@@ -107,12 +106,39 @@ def _extract_updated(item: dict) -> float:
         return 0.0
 
 
+def _extract_updated(item: dict) -> float:
+    return _parse_ts(item.get("updated_at") or item.get("created_at"))
+
+
+def _extract_importance(item: dict) -> float:
+    from skills.memory.ranking import default_importance
+
+    meta = item.get("metadata") or {}
+    if isinstance(meta, dict) and meta.get("importance") is not None:
+        try:
+            return float(meta["importance"])
+        except (TypeError, ValueError):
+            pass
+    return default_importance(_extract_kind(item))
+
+
+def _extract_created(item: dict) -> float:
+    meta = item.get("metadata") or {}
+    if isinstance(meta, dict) and meta.get("created_at") is not None:
+        ts = _parse_ts(meta.get("created_at"))
+        if ts:
+            return ts
+    return _extract_updated(item)
+
+
 def _entry_from_item(item: dict) -> dict[str, Any]:
     return {
         "id": item.get("id", ""),
         "text": _extract_text(item),
         "kind": _extract_kind(item),
         "updated_at": _extract_updated(item),
+        "importance": _extract_importance(item),
+        "created_at": _extract_created(item),
     }
 
 
@@ -136,13 +162,17 @@ def add(
     *,
     kind: str | MemoryKind = DEFAULT_KIND,
     infer: bool = False,
+    importance: float | None = None,
 ) -> dict[str, Any]:
+    from skills.memory.ranking import default_importance
+
     m = _get_memory()
     k = normalize_kind(str(kind))
+    imp = float(importance) if importance is not None else default_importance(k)
     result = m.add(
         content,
         user_id=user_id,
-        metadata={"kind": k},
+        metadata={"kind": k, "importance": imp, "created_at": time.time()},
         infer=infer,
     )
     if k == "instruction":
@@ -364,14 +394,33 @@ def build_context(query: str, user_id: str = "default") -> str:
             lines.append(line)
             seen.add(line)
 
-    # Semantic search covers facts, tasks, summaries, and relevant instructions
+    # Semantic search covers facts, tasks, summaries, and relevant instructions.
+    # Blend similarity with importance + recall + recency so one-off lookups sink
+    # and genuinely useful memories float up; bump access stats on what we inject.
     if query.strip():
         hits = search(query, user_id, limit=6)
+        if get("memory.ranking.enabled", True):
+            try:
+                from skills.memory.ranking import rank_order
+
+                hits = rank_order(hits)
+            except Exception:
+                pass
+        injected_ids: list[str] = []
         for h in hits[:4]:
             line = f"[{h['kind']}] {h['text']}"
             if line not in seen:
                 lines.append(line)
                 seen.add(line)
+                if h.get("id"):
+                    injected_ids.append(str(h["id"]))
+        if injected_ids and get("memory.ranking.enabled", True):
+            try:
+                from skills.memory.ranking import bump_recall
+
+                bump_recall(injected_ids)
+            except Exception:
+                pass
 
     # Feature 10 — structural recall: walk the knowledge graph from entities
     # named in the query and inject connected facts (hybrid with similarity).
