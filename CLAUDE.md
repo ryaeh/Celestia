@@ -60,6 +60,10 @@ skills/
   registry.py             # tool_schemas() + execute_tool() — the single dispatch layer for all LLM tool calls
   memory/store.py         # mem0 + ChromaDB wrapper; _memory is lazily initialized (None at import)
   memory/session_consolidate.py  # Background LLM pass that distills chat history into long-term memory
+  memory/ranking.py       # Memory lifecycle: importance-by-kind, recall-stats sidecar, blended recall ranking, keeper pins
+  memory/decay.py         # Memory lifecycle: TTL decay-delete of low-importance, never-recalled, old entries (off by default)
+  memory/graph_store.py   # Temporal knowledge graph (Feature 10): SQLite nodes/edges with versioned-supersede + multi-hop walk
+  memory/graph_extract.py # Background LLM pass: chat excerpt → (subject,predicate,object) triples into graph_store
   tts/                    # Orpheus (llama-cpp local) or Edge TTS; queue.py handles sentence streaming
   stt/engine.py           # faster-whisper; model lazily loaded, idle-unloaded after N minutes
   vision/                 # Capture → preprocess → Ollama vision model → optional confirm flow
@@ -84,6 +88,8 @@ tests/                    # pytest; all heavy deps (Ollama, Chroma, mem0, Whispe
 **Skills / tools**: To add a new LLM-callable tool: (1) define schema + function in `skills/<name>/tools.py`, (2) import and add to `registry.py` in both `tool_schemas()` and `execute_tool()`. The security gate in `execute_tool()` calls `security.gate_pc_tool()` before running any PC-touching tool.
 
 **Heavy deps are lazy**: `mem0`, `chromadb`, `faster-whisper`, `llama-cpp`, `torch`, `pystray`, `pynput` are all imported inside functions — never at module top-level. This keeps startup fast and lets tests run without installing them.
+
+**Memory lifecycle** (`skills/memory/ranking.py` + `decay.py`): memories are *saved* freely (auto-consolidation), then **ranked and decayed** so one-offs don't crowd recall. Each entry gets a write-time `importance` (by kind: instruction 1.0 > fact 0.7 > task 0.4 > summary 0.3); `recall_count`/`last_recalled`/`keep` live in a JSON **sidecar** (`data/memory/recall_stats.json`) keyed by memory id, so a recall never rewrites a vector. `build_context` blends similarity with importance+recall+recency (`rank_order`) and bumps recall on injected entries. `decay.sweep_decay()` deletes only unprotected, low-importance, **never-recalled**, old entries (ever-recalled or pinned = exempt) — off by default (`memory.decay.enabled`), throttled, run on session-finalize + `POST /memory/decay`. The two GPU model tiers split here: cheap 3B heuristics on the hot path, a bigger model on a future GPU-idle pass for smarter re-scoring + graph entity-resolution.
 
 ## Configuration files
 
