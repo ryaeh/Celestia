@@ -119,6 +119,7 @@ class MemoryBody(BaseModel):
 class MemoryPatch(BaseModel):
     text: str | None = None
     kind: str | None = None
+    keep: bool | None = None
 
 
 class PttStopBody(BaseModel):
@@ -220,7 +221,16 @@ def _memory_user_id() -> str:
 
 def _memory_list_payload() -> dict[str, Any]:
     from skills.memory.store import get_all_entries
-    return {"entries": get_all_entries(_memory_user_id(), limit=200)}
+    from skills.memory.ranking import is_kept, load_stats, recall_for
+    entries = get_all_entries(_memory_user_id(), limit=200)
+    stats = load_stats()
+    for e in entries:
+        mid = str(e.get("id", ""))
+        recall_count, last = recall_for(stats, mid)
+        e["recall_count"] = recall_count
+        e["last_recalled"] = last
+        e["keep"] = is_kept(stats, mid)
+    return {"entries": entries}
 
 
 def _memory_last_session_payload() -> dict[str, Any]:
@@ -613,15 +623,26 @@ def post_memory_decay(dry_run: bool = False):
 @app.patch("/memory/{memory_id}")
 def patch_memory(memory_id: str, body: MemoryPatch):
     from skills.memory.store import update_entry
-    result = update_entry(
-        memory_id,
-        text=body.text.strip() if body.text else None,
-        kind=body.kind.strip() if body.kind else None,
-        user_id=_memory_user_id(),
-    )
-    if result == "Memory not found.":
-        return JSONResponse(status_code=404, content={"error": result})
-    return {"ok": True, "message": result, **_memory_list_payload()}
+
+    message = "Updated."
+    # Pin/unpin (keeper) — a sidecar flag, independent of the text/kind edit.
+    if body.keep is not None:
+        from skills.memory.ranking import set_keep
+        set_keep(memory_id, body.keep)
+        message = "Pinned." if body.keep else "Unpinned."
+
+    if body.text is not None or body.kind is not None:
+        result = update_entry(
+            memory_id,
+            text=body.text.strip() if body.text else None,
+            kind=body.kind.strip() if body.kind else None,
+            user_id=_memory_user_id(),
+        )
+        if result == "Memory not found.":
+            return JSONResponse(status_code=404, content={"error": result})
+        message = result
+
+    return {"ok": True, "message": message, **_memory_list_payload()}
 
 
 @app.delete("/memory/{memory_id}")

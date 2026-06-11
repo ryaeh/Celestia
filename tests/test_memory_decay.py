@@ -61,6 +61,11 @@ def test_keeps_ever_recalled() -> None:
     assert _candidates([_entry("a")], stats) == []
 
 
+def test_keeps_pinned_entry() -> None:
+    # A user-pinned keeper never decays, even when otherwise eligible.
+    assert _candidates([_entry("a")], {"a": {"keep": True}}) == []
+
+
 def test_keeps_too_young() -> None:
     assert _candidates([_entry("a", age_days=5.0)]) == []
 
