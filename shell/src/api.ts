@@ -583,21 +583,7 @@ export function subscribeActivityStream(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Read screen (Feature 07)
-// ---------------------------------------------------------------------------
-
-export async function triggerReadScreen(
-  sessionId?: string,
-): Promise<{ session_id: string; messages: ChatMessage[] }> {
-  const r = await apiFetch("/read-screen/trigger", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ session_id: sessionId }),
-  });
-  if (!r.ok) {
-    const d = await r.json().catch(() => ({}));
-    throw new Error((d as { error?: string }).error ?? `read-screen ${r.status}`);
-  }
-  return r.json();
-}
+// Read screen (Feature 07): the in-chat "eye" button now goes through the
+// regular vision capture + confirm flow (visionCapture("active_window")).
+// The instant, no-confirm POST /read-screen/trigger path is reserved for the
+// global hotkey, which calls the backend directly.

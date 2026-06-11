@@ -7,7 +7,6 @@ import {
   pttStart,
   pttStop,
   streamChatMessage,
-  triggerReadScreen,
   visionCapture,
   visionAnalyze,
   type ChatMessage,
@@ -148,21 +147,12 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
     }
   }
 
-  async function onReadScreen() {
-    if (chatBusy || pttListening) return;
-    setChatBusy(true);
-    setError(null);
-    try {
-      const result = await triggerReadScreen(sessionId);
-      if (result.messages) {
-        setMessages(result.messages);
-        onSidebarRefresh?.();
-      }
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setChatBusy(false);
-    }
+  // Read screen = capture the active window, but through the same preview +
+  // confirm flow as the camera menu (you see the shot and can add a question
+  // before it's analyzed). The instant, no-confirm path lives in the global
+  // read-screen hotkey (Feature 07), not on an in-chat button.
+  function onReadScreen() {
+    return onVisionCapture("active_window");
   }
 
   async function onVisionConfirm(question: string) {
