@@ -9,6 +9,9 @@ app:
 chat:
   session_enabled: true
   session_max_messages: 60
+  consolidate_before_delete: true  # when deleting a chat, distill it into long-term
+                                    # memory first so what she learned survives — only
+                                    # the raw transcript is removed (false = hard delete)
 
 personality:
   active: default

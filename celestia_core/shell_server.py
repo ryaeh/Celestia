@@ -524,6 +524,25 @@ def post_chat_select(body: SelectSessionBody):
     return {"ok": True, "session_id": sid, "messages": get_history(sid)}
 
 
+@app.post("/chat/delete")
+def post_chat_delete(body: SelectSessionBody):
+    from celestia_core.shell_chat import delete_session, get_history
+    sid = body.session_id.strip()
+    if not sid:
+        return JSONResponse(status_code=400, content={"error": "session_id required"})
+    result = delete_session(sid)
+    if not result.get("deleted"):
+        return JSONResponse(
+            status_code=400, content={"error": result.get("error", "delete failed")}
+        )
+    active_id = result.get("active_id") or ""
+    return {
+        "ok": True,
+        "active_id": active_id,
+        "messages": get_history(active_id) if active_id else [],
+    }
+
+
 @app.post("/chat/ptt/start")
 def post_ptt_start():
     from celestia_core.shell_ptt import ptt_start
