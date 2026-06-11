@@ -177,8 +177,8 @@ export default function ChatInput({
             size="icon"
             className="chat-ptt h-8 w-8 shrink-0"
             disabled={locked || pttListening}
-            aria-label="Read screen"
-            title="Read screen (auto-analyze active window)"
+            aria-label="Read active window"
+            title="Read active window (preview, then confirm)"
             onClick={() => onReadScreen?.()}
           >
             <ScanEye size={16} />
