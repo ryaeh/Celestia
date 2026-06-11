@@ -346,6 +346,24 @@ export async function selectChatSession(sessionId: string): Promise<{
   return r.json();
 }
 
+/**
+ * Delete a chat. Celestia consolidates it into long-term memory first (when
+ * chat.consolidate_before_delete is on), so what she learned survives — only
+ * the transcript is removed. Returns the active session to fall back to.
+ */
+export async function deleteChatSession(sessionId: string): Promise<{
+  active_id: string;
+  messages: ChatMessage[];
+}> {
+  const r = await apiFetch("/chat/delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId }),
+  });
+  if (!r.ok) throw new Error(`chat/delete ${r.status}`);
+  return r.json();
+}
+
 /** @deprecated use createChatSession */
 export async function clearChatSession(): Promise<string> {
   return createChatSession();

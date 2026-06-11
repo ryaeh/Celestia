@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   createChatSession,
+  deleteChatSession,
   fetchChatSessions,
   selectChatSession,
   type ChatSession,
@@ -11,7 +12,7 @@ import Aura from "./Aura";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { Plus, Activity as ActivityIcon, Brain, Settings, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Activity as ActivityIcon, Brain, Settings, ChevronLeft, ChevronRight, Trash2, Check, X } from "lucide-react";
 
 type SidebarProps = {
   route: Route;
@@ -34,6 +35,7 @@ export default function Sidebar({
 }: SidebarProps) {
   const [open, setOpen] = usePersistedState("celestia.shell.sidebarOpen", true);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -43,6 +45,23 @@ export default function Sidebar({
       setSessions([]);
     }
   }, []);
+
+  const confirmDelete = useCallback(
+    async (item: ChatSession) => {
+      setPendingDelete(null);
+      try {
+        const res = await deleteChatSession(item.id);
+        await loadSessions();
+        // If we deleted the chat we were viewing, follow the server's fallback.
+        if (item.id === activeSessionId && res.active_id) {
+          onSelectSession(res.active_id);
+        }
+      } catch {
+        await loadSessions();
+      }
+    },
+    [activeSessionId, loadSessions, onSelectSession],
+  );
 
   useEffect(() => {
     loadSessions();
@@ -86,7 +105,7 @@ export default function Sidebar({
                   <li className="muted sidebar-empty">No chats yet</li>
                 ) : (
                   sessions.map((item) => (
-                    <li key={item.id}>
+                    <li key={item.id} className="group relative">
                       <button
                         type="button"
                         className={cn(
@@ -102,6 +121,47 @@ export default function Sidebar({
                         <span className="history-title">{item.title}</span>
                         <span className="history-when">{item.when}</span>
                       </button>
+                      {pendingDelete === item.id ? (
+                        <span className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-md bg-[var(--bg-panel)] px-1 py-0.5 shadow">
+                          <button
+                            type="button"
+                            title="Delete — keeps what Celestia learned"
+                            aria-label={`Confirm delete: ${item.title}`}
+                            className="grid h-6 w-6 place-items-center rounded text-red-400 hover:bg-[var(--bg-input)]"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              confirmDelete(item);
+                            }}
+                          >
+                            <Check size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            title="Cancel"
+                            aria-label="Cancel delete"
+                            className="grid h-6 w-6 place-items-center rounded text-[var(--text-muted)] hover:bg-[var(--bg-input)]"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPendingDelete(null);
+                            }}
+                          >
+                            <X size={13} />
+                          </button>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          title="Delete chat — keeps what Celestia learned"
+                          aria-label={`Delete chat: ${item.title}`}
+                          className="absolute right-1 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-[var(--text-muted)] opacity-0 transition-opacity hover:bg-[var(--bg-input)] hover:text-red-400 focus:opacity-100 group-hover:opacity-100"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPendingDelete(item.id);
+                          }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </li>
                   ))
                 )}
