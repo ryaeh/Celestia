@@ -157,8 +157,14 @@ export type VisionHistoryEntry = {
   base64: string;
 };
 
-export async function visionCapture(): Promise<VisionCapture> {
-  const r = await apiFetch("/vision/capture", { method: "POST" });
+export type VisionCaptureMode = "fullscreen" | "region" | "active_window";
+
+export async function visionCapture(
+  mode: VisionCaptureMode = "fullscreen",
+): Promise<VisionCapture> {
+  const r = await apiFetch(`/vision/capture?mode=${encodeURIComponent(mode)}`, {
+    method: "POST",
+  });
   if (!r.ok) {
     const d = await r.json().catch(() => ({}));
     throw new Error((d as { error?: string }).error ?? `vision/capture ${r.status}`);

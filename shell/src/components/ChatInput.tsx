@@ -1,7 +1,15 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, ArrowUp, Camera, ScanEye, Sparkles } from "lucide-react";
+import { Mic, MicOff, ArrowUp, Camera, ScanEye, Sparkles, Monitor, Crop, AppWindow } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+type CaptureMode = "fullscreen" | "region" | "active_window";
+
+const CAPTURE_MODES: { mode: CaptureMode; label: string; Icon: typeof Monitor }[] = [
+  { mode: "fullscreen", label: "Full screen", Icon: Monitor },
+  { mode: "region", label: "Select region", Icon: Crop },
+  { mode: "active_window", label: "Active window", Icon: AppWindow },
+];
 
 type ChatInputProps = {
   onSend: (message: string) => void;
@@ -13,7 +21,7 @@ type ChatInputProps = {
   onPttStop?: () => void;
   onPttCancel?: () => void;
   visionEnabled?: boolean;
-  onVisionCapture?: () => void;
+  onVisionCapture?: (mode: CaptureMode) => void;
   readScreenEnabled?: boolean;
   onReadScreen?: () => void;
 };
@@ -33,6 +41,7 @@ export default function ChatInput({
 }: ChatInputProps) {
   const locked = disabled || busy;
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const [captureMenu, setCaptureMenu] = useState(false);
 
   function autosize() {
     const ta = taRef.current;
@@ -112,18 +121,54 @@ export default function ChatInput({
           </Button>
         )}
         {visionEnabled && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="chat-ptt h-8 w-8 shrink-0"
-            disabled={locked || pttListening}
-            aria-label="Capture screenshot"
-            title="Capture screenshot"
-            onClick={() => onVisionCapture?.()}
-          >
-            <Camera size={16} />
-          </Button>
+          <div className="relative shrink-0">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn("chat-ptt h-8 w-8", captureMenu && "chat-ptt-active")}
+              disabled={locked || pttListening}
+              aria-label="Capture screenshot"
+              aria-haspopup="menu"
+              aria-expanded={captureMenu}
+              title="Capture screenshot"
+              onClick={() => setCaptureMenu((v) => !v)}
+            >
+              <Camera size={16} />
+            </Button>
+            {captureMenu && (
+              <>
+                {/* click-away backdrop */}
+                <button
+                  type="button"
+                  aria-hidden
+                  className="fixed inset-0 z-40 cursor-default"
+                  tabIndex={-1}
+                  onClick={() => setCaptureMenu(false)}
+                />
+                <div
+                  role="menu"
+                  className="absolute bottom-full right-0 mb-2 z-50 min-w-[168px] rounded-lg border border-[var(--border-light)] bg-[var(--bg-panel)] p-1 shadow-lg"
+                >
+                  {CAPTURE_MODES.map(({ mode, label, Icon }) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      role="menuitem"
+                      className="flex w-full items-center gap-2 rounded px-3 py-1.5 text-left text-sm text-[var(--text)] hover:bg-[var(--bg-input)]"
+                      onClick={() => {
+                        setCaptureMenu(false);
+                        onVisionCapture?.(mode);
+                      }}
+                    >
+                      <Icon size={14} className="shrink-0 text-[var(--text-muted)]" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         )}
         {readScreenEnabled && (
           <Button

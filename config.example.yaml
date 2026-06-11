@@ -92,8 +92,9 @@ vision:
   keep_alive: "30s"          # unload the vision model this long after use (frees VRAM)
   unload_chat_model: true    # drop the chat LLM before a vision load so the two
                              # big models never co-reside and oversubscribe the GPU
-  general_model: moondream   # fast default for plain screenshots; escalates to
-                             # text_model / vision_model on failure (blank = off)
+  general_model: qwen2.5vl:7b  # capable VLM for general screenshots; moondream is
+                               # faster but hallucinates. Escalates to vision_model on
+                               # failure (blank = off)
   text_model: qwen2.5vl:7b
   two_pass_text: true
   preprocess_text: true

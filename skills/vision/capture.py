@@ -37,9 +37,34 @@ def _save(img: Image.Image) -> Path:
     return out
 
 
+def _monitor_under_cursor(sct) -> dict:
+    """The single monitor the mouse is on; falls back to the primary display.
+
+    sct.monitors[0] is the union of ALL monitors — capturing it on a multi-head
+    setup yields a huge stitched image that downsizes to mush and makes the
+    vision model hallucinate. We want just the screen the user is looking at.
+    """
+    monitors = sct.monitors
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        pt = wintypes.POINT()
+        ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
+        for mon in monitors[1:]:
+            if (
+                mon["left"] <= pt.x < mon["left"] + mon["width"]
+                and mon["top"] <= pt.y < mon["top"] + mon["height"]
+            ):
+                return mon
+    except Exception:
+        pass
+    return monitors[1] if len(monitors) > 1 else monitors[0]
+
+
 def capture_fullscreen() -> Path:
     with mss.mss() as sct:
-        mon = sct.monitors[0]
+        mon = _monitor_under_cursor(sct)
         shot = sct.grab(mon)
         img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
     return _save(img)
