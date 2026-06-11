@@ -106,6 +106,30 @@ def prune_stats(valid_ids: set[str]) -> None:
             )
 
 
+def is_kept(stats: dict[str, dict[str, Any]], memory_id: str) -> bool:
+    """True if the user pinned this memory as a keeper (never decays)."""
+    return bool((stats.get(memory_id) or {}).get("keep"))
+
+
+def set_keep(memory_id: str, keep: bool) -> None:
+    """Pin/unpin a memory as a keeper. Stored alongside recall stats so it
+    survives without rewriting the vector or changing the memory id."""
+    if not memory_id:
+        return
+    with file_lock(_lock_path()):
+        stats = load_stats()
+        rec = stats.get(memory_id) or {}
+        if keep:
+            rec["keep"] = True
+        else:
+            rec.pop("keep", None)
+        if rec:
+            stats[memory_id] = rec
+        else:
+            stats.pop(memory_id, None)
+        atomic_write_text(_stats_path(), json.dumps(stats, ensure_ascii=False, indent=2))
+
+
 def drop_stats(memory_ids: list[str]) -> None:
     """Remove access stats for specific deleted memory ids (decay cleanup)."""
     ids = {m for m in memory_ids if m}
@@ -209,6 +233,8 @@ __all__ = [
     "bump_recall",
     "prune_stats",
     "drop_stats",
+    "is_kept",
+    "set_keep",
     "rank_score",
     "rank_order",
 ]

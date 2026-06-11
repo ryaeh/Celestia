@@ -17,7 +17,7 @@ from typing import Any
 
 from celestia_core.config import ROOT, get
 from celestia_core.file_utils import atomic_write_text
-from skills.memory.ranking import drop_stats, load_stats, recall_for
+from skills.memory.ranking import drop_stats, is_kept, load_stats, recall_for
 from skills.memory.types import normalize_kind
 
 
@@ -44,6 +44,8 @@ def decay_candidates(
     for e in entries:
         mid = str(e.get("id", ""))
         if not mid:
+            continue
+        if is_kept(stats, mid):  # user-pinned keeper
             continue
         if normalize_kind(e.get("kind")) in protect_kinds:
             continue

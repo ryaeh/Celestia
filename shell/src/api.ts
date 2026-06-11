@@ -472,6 +472,19 @@ export type MemoryEntry = {
   text: string;
   kind: MemoryKind | string;
   updated_at: number;
+  importance?: number;
+  recall_count?: number;
+  keep?: boolean;
+};
+
+export type DecayResult = {
+  enabled: boolean;
+  ids: string[];
+  scanned?: number;
+  deleted?: number;
+  dry_run?: boolean;
+  throttled?: boolean;
+  entries?: MemoryEntry[];
 };
 
 export type LastSessionNote = {
@@ -527,6 +540,27 @@ export async function deleteMemoryEntry(id: string): Promise<MemoryEntry[]> {
     method: "DELETE",
   });
   return memoryPayload(r);
+}
+
+/** Pin/unpin a memory as a keeper (exempt from decay, ranks high). */
+export async function setMemoryKeep(id: string, keep: boolean): Promise<MemoryEntry[]> {
+  const r = await apiFetch(`/memory/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keep }),
+  });
+  return memoryPayload(r);
+}
+
+/** Decay sweep. dry_run=true previews the ids that would be removed. */
+export async function memoryDecay(dryRun: boolean): Promise<DecayResult> {
+  const r = await apiFetch(`/memory/decay?dry_run=${dryRun ? "true" : "false"}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  if (!r.ok) throw new Error(`memory/decay ${r.status}`);
+  return r.json();
 }
 
 export async function refreshLastSession(): Promise<LastSessionNote> {

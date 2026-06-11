@@ -154,3 +154,27 @@ def test_prune_stats_drops_unknown_ids(stats_tmp) -> None:
     stats = ranking.load_stats()
     assert "keep" in stats
     assert "drop" not in stats
+
+
+# ---------------------------------------------------------------------------
+# Keeper pin
+# ---------------------------------------------------------------------------
+
+
+def test_set_keep_marks_and_unmarks(stats_tmp) -> None:
+    ranking.set_keep("m1", True)
+    assert ranking.is_kept(ranking.load_stats(), "m1") is True
+    ranking.set_keep("m1", False)
+    assert ranking.is_kept(ranking.load_stats(), "m1") is False
+
+
+def test_set_keep_preserves_recall_stats(stats_tmp) -> None:
+    ranking.bump_recall(["m1"], now=5.0)
+    ranking.set_keep("m1", True)
+    stats = ranking.load_stats()
+    count, last = ranking.recall_for(stats, "m1")
+    assert count == 1 and last == 5.0 and ranking.is_kept(stats, "m1")
+
+
+def test_is_kept_false_for_missing(stats_tmp) -> None:
+    assert ranking.is_kept({}, "nope") is False

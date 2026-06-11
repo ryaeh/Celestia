@@ -4,8 +4,11 @@ import {
   deleteMemoryEntry,
   fetchLastSession,
   fetchMemoryEntries,
+  memoryDecay,
   refreshLastSession,
+  setMemoryKeep,
   updateMemoryEntry,
+  type DecayResult,
   type LastSessionNote,
   type MemoryEntry,
   type MemoryKind,
@@ -16,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { Star, Sparkles } from "lucide-react";
 
 const KINDS: MemoryKind[] = ["instruction", "fact", "summary", "task"];
 const KIND_LABELS: Record<MemoryKind, string> = {
@@ -43,6 +47,7 @@ export default function Memory() {
   const [editText, setEditText] = useState("");
   const [editKind, setEditKind] = useState<MemoryKind>("fact");
   const [busy, setBusy] = useState(false);
+  const [decay, setDecay] = useState<DecayResult | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -118,15 +123,95 @@ export default function Memory() {
     }
   }
 
+  async function togglePin(entry: MemoryEntry) {
+    setBusy(true);
+    try {
+      setEntries(await setMemoryKeep(entry.id, !entry.keep));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function previewDecay() {
+    setBusy(true);
+    setError(null);
+    try {
+      setDecay(await memoryDecay(true));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runDecay() {
+    setBusy(true);
+    try {
+      const res = await memoryDecay(false);
+      setDecay(null);
+      if (res.entries) setEntries(res.entries);
+      else await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="memory-page">
       <header className="memory-head">
-        <h1>Memory</h1>
-        <p className="muted">
-          Long-term facts, instructions, summaries, and tasks. Auto-saved in the
-          background from chat.
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1>Memory</h1>
+            <p className="muted">
+              Long-term facts, instructions, summaries, and tasks. Auto-saved in the
+              background from chat.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={busy}
+            onClick={previewDecay}
+            className="shrink-0 gap-1.5"
+            title="Preview which never-recalled, low-importance memories would be cleaned up"
+          >
+            <Sparkles size={14} /> Clean up
+          </Button>
+        </div>
       </header>
+
+      {/* Decay preview / confirm */}
+      {decay && (
+        <div className="memory-card flex items-center justify-between gap-3 border-[var(--border-light)]">
+          <p className="text-sm m-0">
+            {!decay.enabled ? (
+              <>Decay is off — set <code>memory.decay.enabled: true</code> in config to clean up automatically.</>
+            ) : decay.ids.length === 0 ? (
+              <>Nothing to clean up — every memory is pinned, important, or still in use.</>
+            ) : (
+              <>
+                <strong>{decay.ids.length}</strong> {decay.ids.length === 1 ? "memory was" : "memories were"} never
+                recalled and have low importance. Remove {decay.ids.length === 1 ? "it" : "them"}?
+              </>
+            )}
+          </p>
+          <span className="flex gap-1 shrink-0">
+            {decay.enabled && decay.ids.length > 0 && (
+              <Button type="button" variant="destructive" size="sm" disabled={busy} onClick={runDecay}>
+                Remove {decay.ids.length}
+              </Button>
+            )}
+            <Button type="button" variant="ghost" size="sm" onClick={() => setDecay(null)}>
+              {decay.enabled && decay.ids.length > 0 ? "Cancel" : "Dismiss"}
+            </Button>
+          </span>
+        </div>
+      )}
 
       {error && <p className="memory-error">{error}</p>}
       {loading && <p className="muted">Loading…</p>}
@@ -241,8 +326,30 @@ export default function Memory() {
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 w-full">
-                        <span className="memory-text flex-1">{entry.text}</span>
-                        <span className="memory-actions flex gap-1 shrink-0">
+                        <div className="flex-1 min-w-0">
+                          <span className="memory-text">{entry.text}</span>
+                          <span className="memory-meta block text-[0.66rem] text-[var(--text-dim)] mt-0.5">
+                            importance {(entry.importance ?? 0).toFixed(2)}
+                            {entry.recall_count ? ` · recalled ${entry.recall_count}×` : ""}
+                            {entry.keep ? " · kept" : ""}
+                          </span>
+                        </div>
+                        <span className="memory-actions flex gap-1 shrink-0 items-center">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            disabled={busy}
+                            onClick={() => togglePin(entry)}
+                            aria-pressed={!!entry.keep}
+                            title={entry.keep ? "Pinned — never auto-deleted (click to unpin)" : "Keep — never auto-delete"}
+                          >
+                            <Star
+                              size={13}
+                              className={cn(entry.keep && "text-[var(--accent-bright)]")}
+                              fill={entry.keep ? "currentColor" : "none"}
+                            />
+                          </Button>
                           <Button
                             type="button"
                             variant="ghost"
