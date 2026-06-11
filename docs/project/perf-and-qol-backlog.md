@@ -4,6 +4,11 @@ Captured from real-use testing (Jun 2026). Two tracks: **Performance/GPU** (back
 designed to feed Feature 11 operating-modes) and **QoL** (most are UI → folded into the
 **UI V2** pass). Ordered by impact within each track.
 
+> **Status (Jun 2026):** perf items 1–2 are **shipped** (`gpu.py` residency manager +
+> fast-by-default vision). Items 3–7 and the whole QoL/UI-V2 track remain open. The UI V2
+> track *is* the committed UI overhaul plan referenced from [`roadmap.md`](roadmap.md);
+> additional frontend ideas live in [`ideas-backlog.md`](ideas-backlog.md).
+
 ## Performance & GPU track
 
 The root issue behind the screenshot freeze: **no VRAM budget**. Models load ad hoc on
@@ -11,16 +16,15 @@ Ollama's default 5-min `keep_alive`, so a vision model stacks on top of the resi
 model and oversubscribes the GPU → display-driver hang. The safety floor is shipped
 (`vision.unload_chat_model`, `vision.keep_alive`); the real fix is a residency policy.
 
-1. **Model-residency manager (substrate for Feature 11).** One module that owns "which
-   models may be resident, and for how long," with a process-wide **GPU lock** so vision,
-   STT (Whisper), background graph-extraction, and chat never load simultaneously. Per-model
-   `keep_alive`. Feature 11 (operating modes) then just sets the policy per mode
-   (gaming = minimal residency; work = warm chat). *This is the proper version of the
-   freeze fix — build before 01/ambient, ideally with 11.*
-2. **Fast-by-default vision, escalate on demand.** General screenshots should use
-   `moondream` (~1.6B, near-instant) by default and only escalate to `qwen2.5vl:7b` /
-   `llama3.2-vision:11b` for text-heavy or hard cases (or on a "look harder" action). Today
-   the general path loads the 7B first.
+1. ✅ **DONE — Model-residency manager (substrate for Feature 11).** Shipped as
+   `celestia_core/gpu.py`: one module owning "which models may be resident, and for how
+   long," with a process-wide **GPU lock** so vision, STT (Whisper), background
+   graph-extraction, and chat never load simultaneously. Per-model `keep_alive`. Feature 11
+   (operating modes) now just sets the policy per mode (gaming = minimal residency;
+   work = warm chat).
+2. ✅ **DONE — Fast-by-default vision, escalate on demand.** General screenshots use
+   `moondream` (~1.6B, near-instant) by default and escalate to `qwen2.5vl:7b` /
+   `llama3.2-vision:11b` only for text-heavy/hard cases (or a "look harder" action).
 3. **Whisper model is oversized.** STT is `large-v3` (~3 GB, slow). `small.en` /
    `distil-large-v3` is a large speedup + VRAM win for English PTT. Config-only change.
 4. **Batch graph extraction into the consolidation call.** A2 adds a *second* LLM call per

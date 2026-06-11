@@ -1,8 +1,12 @@
 # Companion roadmap — M phases
 
+> **Archived (Jun 2026).** The M-track is now folded into
+> [`../project/roadmap.md`](../project/roadmap.md#companion-track-m-phases); the later phases
+> (M2→M4) became the [`planned-features/`](../planned-features/) briefs. Kept for history.
+
 This is the **memory + conversation** track — how Celestia stops feeling like a command line and starts feeling like someone who knows you.
 
-It uses **M0, M1, M2…** on purpose so it doesn't clash with the main product phases in [roadmap.md](roadmap.md) (Phase 4 shell, Phase 5 installer, etc.).
+It uses **M0, M1, M2…** on purpose so it doesn't clash with the main product phases in [roadmap.md](../project/roadmap.md) (Phase 4 shell, Phase 5 installer, etc.).
 
 ---
 

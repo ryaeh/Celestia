@@ -102,4 +102,4 @@ Type `help` once you're in. Or double-click `start_shell.bat` to launch the desk
 | [docs/reference/api.md](docs/reference/api.md) | Full shell API reference |
 | [docs/testing/checklist.md](docs/testing/checklist.md) | Manual test pass |
 
-Roadmap: [docs/project/roadmap.md](docs/project/roadmap.md) · Companion track: [docs/project/companion-roadmap.md](docs/project/companion-roadmap.md)
+Roadmap: [docs/project/roadmap.md](docs/project/roadmap.md) · Planned features: [docs/planned-features/](docs/planned-features/) · Ideas: [docs/project/ideas-backlog.md](docs/project/ideas-backlog.md)

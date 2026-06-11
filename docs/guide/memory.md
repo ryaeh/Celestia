@@ -91,6 +91,9 @@ If something keeps coming back from old chats, start a **new chat** after deleti
 
 ## What's next
 
-Memory v2 is the foundation. The longer-term plan — habits, timing, “she knows your rhythm” — is **M2** in [companion-roadmap.md](../project/companion-roadmap.md) ([CC-85](https://linear.app/ryaeh/issue/CC-85/memory-v3-habit-learning-and-living-user-model) on Linear).
+Memory v2 is the foundation. The longer-term plan — habits, timing, “she knows your rhythm” —
+is the **M2** companion track in [roadmap.md](../project/roadmap.md#companion-track-m-phases),
+maturing into the [temporal knowledge graph](../planned-features/10-temporal-knowledge-graph.md)
+and [adaptive user model](../planned-features/12-adaptive-user-model.md) briefs.
 
-See also: [commands.md](commands.md) · [companion-roadmap.md](../project/companion-roadmap.md)
+See also: [commands.md](commands.md) · [roadmap.md](../project/roadmap.md)

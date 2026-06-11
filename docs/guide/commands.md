@@ -49,7 +49,7 @@ Global long-term memory (Chroma/mem0) is shared across shell, tray, and CLI. Ent
 - Agent `memory_add` / `memory_edit` — manual add or update (optional `kind` on add)
 - Shell **Memory** page — list, add, edit, delete entries; refresh last-session note
 
-Long-term plan (M phases): [companion-roadmap.md](../project/companion-roadmap.md)
+Long-term plan (M phases): [roadmap.md](../project/roadmap.md#companion-track-m-phases)
 
 ## Voice
 
