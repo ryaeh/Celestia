@@ -26,12 +26,22 @@ Everything for Celestia is under `docs/`. Start with **getting-started** if this
 - [reference/deployment.md](reference/deployment.md) — startup modes, dev workflow, fresh machine setup
 - [reference/performance.md](reference/performance.md) — VRAM profiles, model choices
 
-## Roadmap
+## Roadmap & planning
 
-- [project/roadmap.md](project/roadmap.md) — phases: what shipped and what's next
-- [project/companion-roadmap.md](project/companion-roadmap.md) — M0–M4 memory + companion track
+- [project/roadmap.md](project/roadmap.md) — phases: what shipped and what's next (includes the M0–M4 companion track)
+- [planned-features/](planned-features/) — 12 designed feature briefs + delivery [ROADMAP](planned-features/ROADMAP.md)
+- [project/perf-and-qol-backlog.md](project/perf-and-qol-backlog.md) — perf/GPU findings + the UI V2 plan
+- [project/ideas-backlog.md](project/ideas-backlog.md) — unsorted idea pool (security, personality, memory, app, frontend)
 
 Issues and planned work are tracked on [GitHub Issues](https://github.com/ryaeh/celestia/issues).
+
+## Archive
+
+Finished plans and point-in-time snapshots, kept for history:
+
+- [archive/optimization-plan.md](archive/optimization-plan.md) — the (completed) code-review optimization pass
+- [archive/audit-2026-06.txt](archive/audit-2026-06.txt) — full codebase audit snapshot (Jun 2026)
+- [archive/companion-roadmap.md](archive/companion-roadmap.md) — original standalone M-phase track (now folded into roadmap.md)
 
 ## Testing
 

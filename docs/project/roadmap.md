@@ -1,6 +1,8 @@
 # Roadmap — phases
 
-High-level delivery phases. **Planned work and ideas** live in [backlog.md](backlog.md), not here.
+High-level delivery phases. **Idea pool** lives in [ideas-backlog.md](ideas-backlog.md);
+**perf/QoL + UI V2** work in [perf-and-qol-backlog.md](perf-and-qol-backlog.md); **designed
+features** in [`planned-features/`](../planned-features/).
 
 ---
 
@@ -67,18 +69,32 @@ Execution order: Epic 1 → Epic 2 → Epics 3–5 in parallel.
 
 ## Companion track (M phases)
 
-Runs alongside the main phase roadmap. M phases focus on memory + conversation feel:
+Runs alongside the main phase roadmap. M phases focus on memory + conversation feel —
+how Celestia stops feeling like a command line and starts feeling like someone who knows
+you. M-numbering keeps it from clashing with the product phases above.
 
 | M phase | Focus | Status |
 |---------|-------|--------|
 | **M0** | Memory v2 — typed entries, auto-save, budgeted inject, shell Memory page | **Done** |
 | **M1** | Streaming voice — first audio in ~1–2s, end-of-utterance PTT, reply caps | Epic 2 above |
-| **M2** | Habit memory — signal log, weekly rollup, inject router | Epic 3 above |
+| **M2** | Habit memory — signal log, weekly rollup, inject router | Epic 3 above · matures into [12](../planned-features/12-adaptive-user-model.md) |
 | **M3a** | Dialogue manager — listen / answer / brainstorm / vent states (text first) | Backlog |
-| **M3b** | Duplex voice — barge-in, mic open while speaking | Backlog |
-| **M4** | Proactive companion — speak first on high-confidence habits | Backlog |
+| **M3b** | Duplex voice — barge-in, mic open while speaking | Backlog · folded into [11](../planned-features/11-operating-modes.md) PTT + barge-in |
+| **M4** | Proactive companion — speak first on high-confidence habits | Backlog · becomes [01](../planned-features/01-ambient-proactivity.md) |
 
-Full companion track detail: [companion-roadmap.md](companion-roadmap.md)
+The later M phases (M2→M4) have since been absorbed into the designed
+[`planned-features/`](../planned-features/) briefs noted above; the M-track remains as the
+"feel" narrative. The original standalone doc is archived at
+[`../archive/companion-roadmap.md`](../archive/companion-roadmap.md).
+
+### Model & hardware stance (locked in)
+
+| Choice | Decision |
+|--------|----------|
+| Main chat model | **qwen2.5:7b** — stay |
+| Larger 14B | **No** — RAM cost not worth it for now |
+| Embeddings | nomic-embed-text via Ollama |
+| "Human enough" bar | Short bursts, remembers rhythm, interruptible, not a help desk — achievable on 7B + architecture |
 
 ---
 

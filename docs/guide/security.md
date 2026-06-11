@@ -83,6 +83,6 @@ Running `notepad.exe` from System32 is fine — it’s on the allowlist. Using N
 
 ## Not built yet
 
-Full **activity log UI**, optional **PIN before arm**, and other polish — [backlog](../project/backlog.md).
+Full **activity log UI**, optional **PIN before arm**, and other polish — [ideas backlog](../project/ideas-backlog.md) (see *Security*).
 
 **Already shipped:** `file_write`, clipboard, `security.policy.yaml` allowlists, smart URL opens, session chat (`-i`), session memory consolidate, settings UI spike.
