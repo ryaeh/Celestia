@@ -43,6 +43,16 @@ memory:
   session_consolidate_verbose: false
   session_consolidate_max_facts: 3
   kinds_enabled: [fact, instruction, summary, task]
+  # Recall ranking (memory lifecycle, step 2): when choosing which memories to
+  # inject, blend raw similarity with each memory's importance, how often it's
+  # been recalled, and recency. One-off lookups sink; useful memories float up.
+  ranking:
+    enabled: true
+    weight_similarity: 0.5
+    weight_importance: 0.25
+    weight_recall: 0.15
+    weight_recency: 0.10
+    recency_halflife_days: 30
   vector_store: chroma
   chroma:
     path: data/chroma
