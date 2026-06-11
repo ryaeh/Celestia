@@ -13,6 +13,7 @@ import {
   type ChatMessage,
   type Status,
   type VisionCapture,
+  type VisionCaptureMode,
 } from "../api";
 import StatusHeader from "../components/StatusHeader";
 import ChatInput from "../components/ChatInput";
@@ -84,7 +85,7 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, chatBusy, pttListening]);
+  }, [messages, chatBusy, pttListening, visionPending]);
 
   useEffect(() => {
     const t = setInterval(async () => {
@@ -133,12 +134,12 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
     }
   }
 
-  async function onVisionCapture() {
+  async function onVisionCapture(mode: VisionCaptureMode = "fullscreen") {
     if (chatBusy || pttListening) return;
     setChatBusy(true);
     setError(null);
     try {
-      const cap = await visionCapture();
+      const cap = await visionCapture(mode);
       setVisionPending(cap);
     } catch (e) {
       setError(String(e));

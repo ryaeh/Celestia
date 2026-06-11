@@ -272,17 +272,32 @@ def patch_pref(body: PrefPatch):
 
 
 @app.post("/vision/capture")
-def post_vision_capture():
-    """Take a full-screen screenshot, store in ring buffer, return base64."""
+def post_vision_capture(mode: str = "fullscreen"):
+    """Capture a screenshot, store in the ring buffer, return base64.
+
+    mode: fullscreen (default) | region (drag a rectangle) | active_window.
+    """
     if not get("vision.enabled", False):
         return JSONResponse(status_code=400, content={"error": "Vision is disabled in config.yaml"})
+    mode = (mode or "fullscreen").lower()
     try:
-        from skills.vision.capture import capture_fullscreen
+        from skills.vision import capture as vcap
         from skills.vision.history import push
         import base64
         from PIL import Image
 
-        path = capture_fullscreen()
+        if mode == "region":
+            from skills.vision.selector import select_region_subprocess
+
+            bbox = select_region_subprocess()
+            if bbox is None:
+                return JSONResponse(status_code=409, content={"error": "Region selection cancelled"})
+            path = vcap.capture_bbox(*bbox)
+        elif mode == "active_window":
+            path = vcap.capture_active_window()
+        else:
+            path = vcap.capture_fullscreen()
+
         entry_id = push(path)
         b64 = base64.b64encode(path.read_bytes()).decode()
         with Image.open(path) as img:
