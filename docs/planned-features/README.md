@@ -5,8 +5,10 @@ each doc is a self-contained brief. This index does the cross-feature analysis:
 what they share, how they reinforce each other, and the order that unlocks the most
 with the least rework.
 
-**Delivery plan + tracking issues:** [`ROADMAP.md`](ROADMAP.md) sequences these into phases
-(epics [#94–#104](https://github.com/ryaeh/Celestia/issues)).
+**Build order + status:** the single project roadmap at
+[`../project/roadmap.md`](../project/roadmap.md) (tracking epics
+[#94–#105](https://github.com/ryaeh/Celestia/issues)). This README holds the analysis:
+pillars, synergies, shared substrates, UI surfaces, and the map to older issues.
 
 ## The four pillars (why these features and not generic ones)
 
@@ -155,6 +157,45 @@ being retrofitted under one later. Revised spine: `07 → 10 → (02/03) → 11 
 04 ──► 05  (shared executor)
 01 ──► 04  (observe → propose → act)
 ```
+
+## UI surfaces (Tauri shell)
+
+Every feature lands a surface in the desktop shell (`shell/src`), built on the existing
+design system so the look stays cohesive: the **Aura** presence
+(`shell/src/components/Aura.tsx`, state-driven idle/thinking/listening/speaking), the
+**theme engine** (`shell/src/theme.ts` + `[data-theme]` blocks), and the panel/card
+patterns in `App.css`. Sequence: ship the feature → land its surface on this substrate →
+the cohesive **UI V2** polish pass comes after the cluster.
+
+| # | Feature | Shell UI surface |
+|---|---------|------------------|
+| 07 | Universal read hotkey | Capture HUD / overlay + result card in chat *(shipped)* |
+| 10 | Knowledge graph | Entity + timeline graph viewer; "what do you know about X" inspector — **deferred to UI V2**; `--graph` CLI is the interim surface |
+| 02 | Time machine | Timeline scrubber / "rewind" view over past sessions |
+| 03 | Local RAG | Source index page + inline citations in replies |
+| 11 | Operating modes | Mode switcher pill in top bar + per-mode HUD; modes can drive the theme |
+| 04 | Scoped autonomy | Live plan panel — visible steps, approve / pause / undo |
+| 05 | Macros / rituals | Macro library + recorder page |
+| 01 | Ambient proactivity | Quiet, dismissible nudge cards / toast center |
+| 06 | Affective continuity | Aura reflects mood (reuse Aura state + `--aura-*` colors) |
+| 08 | Privacy guardian | Privacy dashboard + incognito toggle + redaction badges |
+| 09 | Adaptive compute | "Thinking harder" intensity on the Aura `thinking` state |
+| 12 | Adaptive user model | "About you" review page (rides the `10` memory UI) |
+
+## How this relates to older issues
+
+These epics consolidate or build on earlier issues rather than replacing them:
+
+| Epic | Folds in / builds on |
+|------|----------------------|
+| 10 Knowledge graph | #40 (Memory v3), #11 / #74 (Qdrant), #21 / #88 (export) |
+| 11 Operating modes | #12 (gaming profile), #29 (focus/DND), #19 (model routing), #18 (routine macros) |
+| 04 Scoped autonomy | #24 (undo last PC action), #35 (tool risk classes) |
+| 05 Macros / rituals | #18 (routine macros) |
+| 01 Ambient proactivity | #30 (proactive nudges), #40 (habit memory), #29 (focus/DND) |
+| 03 Local RAG | #86 (conversation search) |
+| 09 Adaptive compute | #19 (model routing), #80 (`llm.max_tokens`) |
+| 12 Adaptive user model | #40 (Memory v3), #55–#58 (habit signals/rollup/kind/router), absorbs `06` substrate |
 
 ## Cross-cutting concerns
 
