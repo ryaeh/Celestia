@@ -5,9 +5,25 @@ from __future__ import annotations
 import re
 import threading
 import time
+from contextvars import ContextVar
 from typing import Any
 
 from celestia_core.config import get
+
+# Provenance of the memory/graph entries injected by the most recent build_context
+# call, for the "why did you say that?" UI. Stored in a ContextVar so it travels
+# with the current turn (one per request context) without changing run_turn's
+# signature; the chat layer drains it after the turn via take_last_provenance().
+_last_provenance: ContextVar[list[dict[str, Any]] | None] = ContextVar(
+    "celestia_last_provenance", default=None
+)
+
+
+def take_last_provenance() -> list[dict[str, Any]]:
+    """Return and clear the provenance recorded by the last build_context call."""
+    prov = _last_provenance.get() or []
+    _last_provenance.set(None)
+    return prov
 
 from skills.memory.last_session import context_block as last_session_block, is_greeting
 from skills.memory.types import DEFAULT_KIND, MemoryKind, normalize_kind
@@ -365,6 +381,7 @@ def build_context(query: str, user_id: str = "default") -> str:
     The old approach did get_all_entries (100-row scan) + search every turn;
     instructions are now served from a 60-second in-process cache instead.
     """
+    _last_provenance.set(None)
     if not get("memory.enabled", True):
         return ""
 
@@ -380,6 +397,7 @@ def build_context(query: str, user_id: str = "default") -> str:
 
     lines: list[str] = []
     seen: set[str] = set()
+    prov: list[dict[str, Any]] = []
 
     if is_greeting(query):
         block = last_session_block()
@@ -393,6 +411,15 @@ def build_context(query: str, user_id: str = "default") -> str:
         if line not in seen:
             lines.append(line)
             seen.add(line)
+            prov.append(
+                {
+                    "id": str(e.get("id") or ""),
+                    "kind": "instruction",
+                    "text": str(e["text"])[:240],
+                    "source": "memory",
+                    "_line": line,
+                }
+            )
 
     # Semantic search covers facts, tasks, summaries, and relevant instructions.
     # Blend similarity with importance + recall + recency so one-off lookups sink
@@ -412,6 +439,15 @@ def build_context(query: str, user_id: str = "default") -> str:
             if line not in seen:
                 lines.append(line)
                 seen.add(line)
+                prov.append(
+                    {
+                        "id": str(h.get("id") or ""),
+                        "kind": str(h.get("kind") or "fact"),
+                        "text": str(h["text"])[:240],
+                        "source": "memory",
+                        "_line": line,
+                    }
+                )
                 if h.get("id"):
                     injected_ids.append(str(h["id"]))
         if injected_ids and get("memory.ranking.enabled", True):
@@ -435,12 +471,30 @@ def build_context(query: str, user_id: str = "default") -> str:
                 if line not in seen:
                     lines.append(line)
                     seen.add(line)
+                    prov.append(
+                        {
+                            "id": "",
+                            "kind": "graph",
+                            "text": str(ln)[:240],
+                            "source": "graph",
+                            "_line": line,
+                        }
+                    )
         except Exception:
             pass
 
     lines = _dedupe_lines(lines)[:max_lines]
     if not lines:
         return ""
+
+    # Record provenance for only the entries whose line survived dedupe/truncation,
+    # in injected order. Drop the internal "_line" tracking key before exposing.
+    surviving = set(lines)
+    kept: list[dict[str, Any]] = []
+    for p in prov:
+        if p.pop("_line", None) in surviving:
+            kept.append(p)
+    _last_provenance.set(kept)
 
     body = "Relevant context from memory:\n" + "\n".join(f"- {ln}" for ln in lines)
     if len(body) > max_chars:

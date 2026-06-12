@@ -459,6 +459,12 @@ def send_message(
     else:
         reply, new_history = run_turn(text, speak=speak, source=source, voice_mode=voice_mode)
 
+    # Drain the provenance the turn's memory injection recorded (for the
+    # "why did you say that?" UI). Same thread/context, so the ContextVar is set.
+    from skills.memory.store import take_last_provenance
+
+    provenance = take_last_provenance()
+
     run_consolidation_bg: bool = False
     consolidation_history: list[dict[str, Any]] = []
     consolidation_start: int = 0
@@ -493,6 +499,7 @@ def send_message(
         "reply": reply,
         "session_id": sid,
         "messages": messages,
+        "provenance": provenance,
     }
 
 
@@ -548,6 +555,11 @@ def send_message_stream(
         yield final_event
         return
 
+    # Drain provenance recorded during the streamed turn (same context).
+    from skills.memory.store import take_last_provenance
+
+    provenance = take_last_provenance()
+
     # Phase 3: save session state (under lock)
     new_history = final_event.get("messages")
     reply = final_event.get("reply", "")
@@ -586,6 +598,7 @@ def send_message_stream(
         "reply": reply,
         "session_id": sid,
         "messages": messages,
+        "provenance": provenance,
     }
 
 
