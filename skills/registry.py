@@ -205,7 +205,12 @@ def execute_tool(
                 return blocked
             result = execute_pc(name, arguments)
         security.audit_tool(name, arguments, result, source=source)
-        return result
+        # Prompt-injection defense: tools that pull in external text (files, web
+        # pages, clipboard) get their result delimited as untrusted *data* before
+        # it re-enters the model context. The audit logs the raw result above.
+        from celestia_core import untrusted
+
+        return untrusted.wrap_tool_result(name, result)
     except Exception as e:
         result = f"Tool error ({name}): {e}"
         security.audit_tool(name, arguments, result, source=source)
