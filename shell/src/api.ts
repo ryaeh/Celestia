@@ -106,6 +106,12 @@ export type ChatSession = {
   active: boolean;
 };
 
+/** A past conversation matched by keyword search (Feature 03 / #86). */
+export type ChatSearchResult = ChatSession & {
+  snippet: string;
+  matches: number;
+};
+
 export async function fetchStatus(): Promise<Status> {
   const r = await apiFetch("/status");
   if (!r.ok) throw new Error(`status ${r.status}`);
@@ -261,6 +267,16 @@ export async function fetchChatSessions(): Promise<{
   const r = await apiFetch("/chat/sessions");
   if (!r.ok) throw new Error(`chat sessions ${r.status}`);
   return r.json();
+}
+
+export async function searchChatSessions(
+  q: string,
+  limit = 20,
+): Promise<ChatSearchResult[]> {
+  const r = await apiFetch(`/chat/search?q=${encodeURIComponent(q)}&limit=${limit}`);
+  if (!r.ok) throw new Error(`chat search ${r.status}`);
+  const data = await r.json();
+  return data.results ?? [];
 }
 
 export async function fetchChatHistory(sessionId?: string): Promise<{

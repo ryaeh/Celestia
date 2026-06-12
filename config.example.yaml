@@ -12,6 +12,8 @@ chat:
   consolidate_before_delete: true  # when deleting a chat, distill it into long-term
                                     # memory first so what she learned survives — only
                                     # the raw transcript is removed (false = hard delete)
+  search_enabled: true              # expose the search_conversations tool + sidebar
+                                    # search over past chats (Feature 03 / #86)
 
 personality:
   active: default

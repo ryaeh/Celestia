@@ -402,6 +402,17 @@ def get_chat_sessions():
     return {"sessions": list_sessions(), "active_id": get_active_session_id()}
 
 
+@app.get("/chat/search")
+def get_chat_search(q: str = "", limit: int = 20):
+    """Keyword search over past chat sessions (Feature 03 / #86)."""
+    from celestia_core.shell_chat import search_sessions
+    query = (q or "").strip()
+    if not query:
+        return {"query": "", "results": []}
+    results = search_sessions(query, limit=max(1, min(int(limit or 20), 50)))
+    return {"query": query, "results": results}
+
+
 @app.get("/chat/ptt/status")
 def get_ptt_status():
     from celestia_core.shell_ptt import ptt_status

@@ -71,6 +71,7 @@ skills/
   vision/                 # Capture → preprocess → Ollama vision model → optional confirm flow
   pc_control/tools.py     # open_path, open_url, run_powershell — all gated through security.gate_pc_tool()
   todos/                  # To-do list: store.py (locked JSON in data/todos.json) + tools.py (todo_add/list/complete/update/remove)
+  conversations/tools.py  # Conversation search (Feature 03 / #86): search_conversations tool over past sessions (shell_chat.search_sessions)
 shell/                    # Tauri v2 + React 19 + Vite + Tailwind + shadcn/ui desktop app
   src/pages/Home.tsx      # Main chat page with SSE streaming
   src/pages/Todos.tsx     # To-do page — add/complete/edit/delete; talks to /todos API
