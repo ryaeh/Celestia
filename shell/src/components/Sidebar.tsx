@@ -12,7 +12,7 @@ import Aura from "./Aura";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { Plus, Activity as ActivityIcon, Brain, Settings, ChevronLeft, ChevronRight, Trash2, Check, X } from "lucide-react";
+import { Plus, Activity as ActivityIcon, Brain, ListTodo, Settings, ChevronLeft, ChevronRight, Trash2, Check, X } from "lucide-react";
 
 type SidebarProps = {
   route: Route;
@@ -188,6 +188,14 @@ export default function Sidebar({
             >
               <span className="foot-icon"><Brain size={15} /></span>
               Memory
+            </button>
+            <button
+              type="button"
+              className={cn("sidebar-foot-btn", route === "todos" && "active")}
+              onClick={() => onNavigate("todos")}
+            >
+              <span className="foot-icon"><ListTodo size={15} /></span>
+              To-do
             </button>
             <button
               type="button"

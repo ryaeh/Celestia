@@ -6,12 +6,19 @@ import Home from "./pages/Home";
 import Memory from "./pages/Memory";
 import Placeholder from "./pages/Placeholder";
 import Settings from "./pages/Settings";
+import Todos from "./pages/Todos";
 import "./App.css";
 
-export type Route = "home" | "settings" | "personality" | "activity" | "memory";
+export type Route = "home" | "settings" | "personality" | "activity" | "memory" | "todos";
 
 function normalizeRoute(raw: string): Route {
-  if (raw === "settings" || raw === "personality" || raw === "activity" || raw === "memory") {
+  if (
+    raw === "settings" ||
+    raw === "personality" ||
+    raw === "activity" ||
+    raw === "memory" ||
+    raw === "todos"
+  ) {
     return raw;
   }
   return "home";
@@ -23,6 +30,8 @@ function SecondaryPage({ route, onNavigate }: { route: Route; onNavigate: (r: Ro
       return <Settings onNavigate={onNavigate} />;
     case "memory":
       return <Memory />;
+    case "todos":
+      return <Todos />;
     case "personality":
       return (
         <Placeholder

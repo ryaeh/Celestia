@@ -14,6 +14,14 @@ from skills.pc_control.tools import (
 )
 from skills.web.tools import WEB_TOOL_SCHEMAS, fetch_page, web_search
 from skills.briefing.tools import BRIEFING_TOOL_SCHEMA, morning_briefing
+from skills.todos.tools import (
+    TODO_TOOL_SCHEMAS,
+    todo_add,
+    todo_complete,
+    todo_list,
+    todo_remove,
+    todo_update,
+)
 
 # Handler type: (arguments, user_id) -> result string
 _Handler = Callable[[dict[str, Any], str], str]
@@ -80,6 +88,50 @@ def _h_morning_briefing(args: dict[str, Any], uid: str) -> str:
     return morning_briefing(city=args.get("city", ""))
 
 
+def _h_todo_add(args: dict[str, Any], uid: str) -> str:
+    return todo_add(
+        args.get("text", ""),
+        uid,
+        priority=str(args.get("priority") or "normal"),
+        due=str(args.get("due") or ""),
+        notes=str(args.get("notes") or ""),
+    )
+
+
+def _h_todo_list(args: dict[str, Any], uid: str) -> str:
+    return todo_list(uid, include_done=bool(args.get("include_done")))
+
+
+def _h_todo_complete(args: dict[str, Any], uid: str) -> str:
+    done = args.get("done")
+    return todo_complete(
+        uid,
+        todo_id=str(args.get("todo_id") or ""),
+        match_text=str(args.get("match_text") or ""),
+        done=True if done is None else bool(done),
+    )
+
+
+def _h_todo_update(args: dict[str, Any], uid: str) -> str:
+    return todo_update(
+        uid,
+        todo_id=str(args.get("todo_id") or ""),
+        match_text=str(args.get("match_text") or ""),
+        text=str(args.get("text") or ""),
+        priority=str(args.get("priority") or ""),
+        due=args.get("due"),
+        notes=args.get("notes"),
+    )
+
+
+def _h_todo_remove(args: dict[str, Any], uid: str) -> str:
+    return todo_remove(
+        uid,
+        todo_id=str(args.get("todo_id") or ""),
+        match_text=str(args.get("match_text") or ""),
+    )
+
+
 _TOOL_DISPATCH: dict[str, _Handler] = {
     "file_read": _h_file_read,
     "file_write": _h_file_write,
@@ -93,6 +145,11 @@ _TOOL_DISPATCH: dict[str, _Handler] = {
     "web_search": _h_web_search,
     "fetch_page": _h_fetch_page,
     "morning_briefing": _h_morning_briefing,
+    "todo_add": _h_todo_add,
+    "todo_list": _h_todo_list,
+    "todo_complete": _h_todo_complete,
+    "todo_update": _h_todo_update,
+    "todo_remove": _h_todo_remove,
 }
 
 
@@ -115,6 +172,9 @@ def tool_schemas() -> list:
         if get("skills.web.enabled", True):
             tools += WEB_TOOL_SCHEMAS
         tools += BRIEFING_TOOL_SCHEMA
+        # To-dos are user-owned data, not PC actions — safe in all modes.
+        if get("todos.enabled", True):
+            tools += TODO_TOOL_SCHEMAS
         return tools
 
     tools = list(PC_TOOL_SCHEMAS) + list(FILE_TOOL_SCHEMAS) + list(CLIPBOARD_TOOL_SCHEMAS)
@@ -123,6 +183,8 @@ def tool_schemas() -> list:
     if get("skills.web.enabled", True):
         tools += WEB_TOOL_SCHEMAS
     tools += BRIEFING_TOOL_SCHEMA
+    if get("todos.enabled", True):
+        tools += TODO_TOOL_SCHEMAS
     return tools
 
 
