@@ -9,6 +9,17 @@ Examples:
 - "You've alt-tabbed between these 12 tabs a lot — want a summary?"
 - "It's 6pm and that doc still says DRAFT — remind you tomorrow?"
 
+> **Build decision (Jun 2026).** This is the feature most likely to get disabled within a
+> week (constant cost, rare payoff, wrong-moment interruptions burn trust fast). So v1 is
+> deliberately small and *quiet*:
+> - **Delivery = notification channels, not voice.** v1 nudges arrive as a dismissible
+>   in-shell card / push via the notification-channel layer (ntfy), **never** a spoken
+>   interjection. Voice interjection is out until trust is earned.
+> - **Timing is gated on 12's "good moment" signal** once 12 exists; until then, hard
+>   conservative defaults (high silence threshold, low cap).
+> - **Privacy off-switch is a hard prerequisite** — the incognito/pause toggle + retention
+>   policy must ship *before* this daemon records anything (see roadmap watch-outs).
+
 ## Why this is a Celestia feature
 
 A cloud assistant can't watch your screen continuously and privately. This needs all of:
@@ -62,5 +73,6 @@ best built in Phase 4 after vision/memory are solid.
 
 ## Open questions
 
-- Nudge delivery: toast, tray, or a soft in-shell card?
 - How to learn "don't nudge me about X" without a heavy feedback UI?
+- When (if ever) does a nudge graduate from a card to a spoken line — explicit user opt-in
+  per category, or a trust score?

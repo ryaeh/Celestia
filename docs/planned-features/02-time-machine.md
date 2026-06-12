@@ -4,6 +4,16 @@
 Tuesday afternoon?" / "Summarize everything about the Celestia refactor this week." A
 second brain you never had to maintain — and it's entirely local.
 
+> **Build decision (Jun 2026).** The direct UX ("what did I do Tuesday?") is demo-ware —
+> you'll use it a handful of times. The *real* value flows through consumers: the morning
+> briefing, 06/affect, and 12. So:
+> - **Don't build the timeline-scrubber UI early.** v1 is the episodic **store + retrieval
+>   only**, exposed through conversational recall and the briefing. A visual timeline waits
+>   for UI V2 (if it earns it).
+> - **One retrieval stack, shared with 03.** The episodic store and 03's corpus index use
+>   the *same* embed/retrieve substrate from the start — do not build two retrievers.
+> - Built **on the 10 graph** as the episodic layer, not a separate Chroma collection.
+
 ## Why this is a Celestia feature
 
 You already auto-distill chat sessions (`skills/memory/session_consolidate.py`). Extend
@@ -60,4 +70,5 @@ the nightly reflection pass is the quality gate. Phase 2 foundation for the memo
 ## Open questions
 
 - Granularity: per-session entries vs hourly rollups vs daily only?
-- UI: a scrollable timeline in the shell, or purely conversational recall?
+- (UI deferred per the build decision — conversational recall + briefing first; a visual
+  timeline only if real use demands it.)

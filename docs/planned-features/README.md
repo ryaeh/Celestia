@@ -31,7 +31,7 @@ at once. Anything a cloud assistant could do equally well is out of scope.
 | [03](03-local-rag.md) | Local RAG over your stuff | Remembers · Local | Chroma index |
 | [04](04-scoped-autonomy.md) | Scoped autonomy + visible plan | Acts | agent loop + security modes |
 | [05](05-macros-rituals.md) | Recordable macros / rituals | Acts · Local | pc_control + scheduler |
-| [06](06-affective-continuity.md) | Affective continuity | Remembers | memory + personalities |
+| [06](06-affective-continuity.md) | Affective continuity *(folded into 12)* | Remembers | memory + personalities |
 | [07](07-universal-read-hotkey.md) | Universal "read screen" hotkey | Sees | vision + hotkey |
 | [08](08-privacy-guardian.md) | Local privacy guardian | Sees · Acts · Local | watcher loop + security |
 | [09](09-adaptive-test-time-compute.md) | Adaptive test-time compute | Local | agent turn loop |
@@ -59,6 +59,27 @@ the user's *world*, `12` models the *user* — graded tastes, daily rhythms, and
 learning (how the user responds to Celestia tunes her behavior). It stores its portrait as
 graph entries, so `10`'s supersede/history/inspect-UI mechanics come for free; it absorbs
 `06`'s substrate and supplies `01` with "is this a good moment" judgment.
+
+## Build decisions (Jun 2026)
+
+A review pass scoped several briefs down. Each affected brief carries a **Build decision**
+callout; the headlines:
+
+- **06 Affect → folded into 12.** Not a standalone epic; only the Aura mood surface survives.
+- **08 Guardian → descoped.** Ships first as secrets-scrubbing + clipboard warnings (no
+  daemon); the full anomaly monitor is a late, optional specialization on 01's daemon.
+- **01 Ambient → quiet v1.** Nudges via notification cards/push, never voice; gated on 12's
+  good-moment signal; privacy off-switch is a prerequisite.
+- **02/03 Memory → store-and-retrieve first.** No early timeline UI (02); v1 of 03 is
+  conversation search (#86). Both share one retrieval stack, built on the 10 graph.
+- **04 Autonomy → file-ops-first, short plans.** Undo only where it's real; irreversible
+  actions always confirm. **05 Macros** = saved 04 plans (no OS-level UI recording).
+- **09 Compute → router-first, measure before `consensus`.** A small/big model router may
+  obsolete the sampling loop.
+- **10 Graph → scaling gated** on the contradiction inbox + health panel + an extraction
+  gold-set; A/B hybrid recall vs vector before trusting it.
+- **11 Modes → 3–4 modes, session-sticky confirmations.** **12** → highest threshold on
+  noisy reaction signals + an anti-over-fitting "stretch" rule.
 
 ## Shared building blocks
 
@@ -177,7 +198,7 @@ the cohesive **UI V2** polish pass comes after the cluster.
 | 04 | Scoped autonomy | Live plan panel — visible steps, approve / pause / undo |
 | 05 | Macros / rituals | Macro library + recorder page |
 | 01 | Ambient proactivity | Quiet, dismissible nudge cards / toast center |
-| 06 | Affective continuity | Aura reflects mood (reuse Aura state + `--aura-*` colors) |
+| 06 | Affective continuity *(folded into 12)* | Aura reflects mood (the one surface kept — reuse Aura state + `--aura-*` colors) |
 | 08 | Privacy guardian | Privacy dashboard + incognito toggle + redaction badges |
 | 09 | Adaptive compute | "Thinking harder" intensity on the Aura `thinking` state |
 | 12 | Adaptive user model | "About you" review page (rides the `10` memory UI) |

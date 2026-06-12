@@ -4,6 +4,16 @@
 questions over it — fully offline. "Ask my files." "What did that contract say about
 termination?" Your documents never leave the machine.
 
+> **Build decision (Jun 2026).** This is the biggest scope-creep magnet in the set (file
+> formats, stale indexes, PDF parsing hell). Contain it:
+> - **v1 = conversation search ([#86](https://github.com/ryaeh/Celestia/issues/86)), not
+>   files.** "Search my past chats" reuses memory's existing embeddings, ships in days, and
+>   delivers most of the felt value. Generalize to file corpora only after it proves out.
+> - **Share one retrieval stack with 02** — same embed/retrieve substrate; 03 adds the
+>   *indexer* (chunking, incremental updates), not a second retriever.
+> - **File formats land incrementally:** plain text/markdown first; PDF/Office is a later,
+>   optional add behind the lazy-import rule — never a v1 blocker.
+
 ## Why this is a Celestia feature
 
 Chroma is already in the stack for memory. The privacy story — *your documents are indexed

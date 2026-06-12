@@ -5,6 +5,18 @@ suspicious activity — "this app just opened your camera", "this process is rea
 clipboard repeatedly", "an installer is writing outside its folder" — running entirely
 on-device. A companion that protects you.
 
+> **Build decision (Jun 2026).** There's an irony at the core: a privacy guardian that has
+> to watch your screen constantly, where classifier false-positives turn into alert fatigue
+> (the "annoying antivirus" failure). So the full guardian is **deprioritized**, and the
+> cheap 80% ships first as small, standalone safety utilities — no daemon required:
+> - **Secrets scrubbing** (regex pass over OCR/chat before storage — already in the ideas
+>   backlog) + **clipboard-exposure warnings**. These deliver most of the protective value
+>   with none of the watching cost.
+> - The **full anomaly guardian** (camera/mic/outbound-net monitoring) only makes sense once
+>   01's observation daemon exists — at which point it's *the same daemon with a security
+>   classifier*, not a separate build. Treat it as a late, optional specialization, not a
+>   committed epic.
+
 ## Why this is a Celestia feature
 
 The same capabilities that make Celestia powerful (sees the screen, watches the system) are

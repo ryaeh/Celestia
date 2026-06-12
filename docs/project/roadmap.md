@@ -35,8 +35,9 @@ and lays substrate the next step reuses.
 | 4 | **11 — Operating modes** ([#98](https://github.com/ryaeh/Celestia/issues/98)) | Residency substrate (`gpu.py`) ✅; the mode control plane on top is open. Keep it to 3–4 modes at first. |
 | 5 | **04 — Scoped autonomy** ([#99](https://github.com/ryaeh/Celestia/issues/99)) · **05 — Macros** ([#100](https://github.com/ryaeh/Celestia/issues/100)) | 04 builds the plan→approve→execute loop; a macro is a *saved* 04 plan. |
 | 6 | **01 — Ambient proactivity** ([#101](https://github.com/ryaeh/Celestia/issues/101)) | Last big substrate consumer — comes up already governed by 11's budgets and informed by 12's signal. |
-| 7 | **12 — Adaptive user model** ([#105](https://github.com/ryaeh/Celestia/issues/105)) · **08 — Privacy guardian** ([#103](https://github.com/ryaeh/Celestia/issues/103)) · **06 — Affective continuity** ([#102](https://github.com/ryaeh/Celestia/issues/102)) | Thin layers on everything above. **12's signal collection starts much earlier** (it needs weeks of data — begin as soon as graph ingestion is trusted). 06 is a candidate to fold into 12. |
-| — | **09 — Adaptive test-time compute** ([#104](https://github.com/ryaeh/Celestia/issues/104)) | Horizontal — layer in when the turn loop is stable; measure before building. |
+| 7 | **12 — Adaptive user model** ([#105](https://github.com/ryaeh/Celestia/issues/105)) | The personalization layer; **06 Affect is folded into it** ([#102](https://github.com/ryaeh/Celestia/issues/102), only the Aura-mood surface kept). **Signal collection starts much earlier** — it needs weeks of data, so begin as soon as graph ingestion is trusted. |
+| — | **08 — Privacy guardian** ([#103](https://github.com/ryaeh/Celestia/issues/103)) | **Descoped.** Cheap 80% (secrets scrubbing + clipboard warnings) ships early as standalone utilities; the full anomaly monitor is a late, optional specialization on 01's daemon. |
+| — | **09 — Adaptive test-time compute** ([#104](https://github.com/ryaeh/Celestia/issues/104)) | Horizontal — router-first, and *measure before* building `consensus`. Layer in only when the turn loop is stable. |
 
 **UI V2** is the cohesive polish pass (markdown rendering, cancel/stop, toasts, GPU pill,
 model pickers, Settings expansion, the **graph viewer**) and runs **after** the cluster
@@ -47,7 +48,16 @@ above starts landing surfaces — features first, polish once. The item list liv
 
 ## Watch-outs
 
-Honest risks to keep in view while building the list above:
+Honest risks to keep in view while building the list above. Each is now baked into the
+relevant brief as a **Build decision** (see
+[`planned-features/README.md`](../planned-features/README.md#build-decisions-jun-2026)).
+Two hard gates fall out of them:
+
+- **Gate A — eval set before LLM-stacking.** The extraction gold-set + voice-consistency
+  baseline must exist before 02/03/12 ride on the graph, and before 04/09 trust the model.
+- **Gate B — privacy off-switch before the first watcher.** Incognito/pause toggle +
+  retention policy ship before 01 (or any ambient ingestion in 10) records anything.
+
 
 - **One builder, twelve briefs.** The real risk is substrate-itis — months of platform work
   with nothing *felt*. Rule: every step must end in a moment Celestia visibly does something
@@ -58,7 +68,7 @@ Honest risks to keep in view while building the list above:
   features.
 - **Privacy debt accrues before the guardian ships.** 01/02/08/12 each record more. The
   incognito toggle + retention policy should ship **before** the first watcher (01), not
-  after.
+  after (Gate B). 08 is descoped to ship the cheap protective utilities early instead.
 - **Graph junk compounds.** 7B extraction noise multiplies once 02/03 consume the graph.
   The contradiction inbox + memory health panel (ideas backlog) are prerequisites for
   scaling ingestion, and hybrid recall should be A/B-checked against plain vector recall.

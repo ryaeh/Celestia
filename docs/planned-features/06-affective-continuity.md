@@ -1,5 +1,19 @@
 # 06 — Affective continuity
 
+> **Build decision (Jun 2026): folded into [12 — Adaptive user model](12-adaptive-user-model.md).**
+> Standalone, this was the weakest brief — it's mostly a *consumer* of 02's episodic data
+> plus tone modulation, and 12 already declares it absorbs 06's substrate. So 06 does not
+> ship as its own epic. What survives:
+> - **The durable "relationship" understanding** (concerns, style prefs, how things felt)
+>   becomes the *reaction/affect* part of 12's living portrait — same store, same supersede
+>   mechanics, same review page.
+> - **The only standalone surface kept is the Aura mood reflection** — the shell's Aura
+>   presence subtly reflecting read mood (a small UI hook, not a subsystem).
+> - In-the-moment mood sensing lives in 12's "read the moment" rule; it is *not* a separate
+>   layer.
+>
+> The original design is retained below as the sub-spec for 12's affect component.
+
 **Pitch:** Make the companion *persistent* rather than a fresh prompt each session. A
 lightweight rapport/mood layer so Celestia references shared history naturally — "last time
 you were stressed about this deadline, how'd it go?" — instead of starting cold every time.

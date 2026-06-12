@@ -85,6 +85,20 @@ each entity to a canonical node. Both are tuned to stay off the chat hot-path.
 
 This gets full-LLM accuracy at roughly hybrid cost.
 
+## Scaling discipline (prerequisites before more ingestion)
+
+> **Build decision (Jun 2026).** 7B extraction noise *compounds* once 02/03 consume the
+> graph — garbage entities multiply downstream. So these are **prerequisites for turning up
+> ingestion**, not later nice-to-haves:
+> - **Contradiction inbox + memory health panel** (both in the ideas backlog) ship *before*
+>   ambient/file ingestion is widened. They are how you catch extraction drift before it
+>   poisons retrieval.
+> - **A/B hybrid recall against plain vector recall** on a fixed query set. Graph-walk adds
+>   real complexity; if it doesn't *measurably* beat similarity-only, it isn't paying rent —
+>   keep it behind the `walk_hops` config and don't assume it wins.
+> - **Build the extraction gold-set** (hand-checked excerpt → expected triples) as the
+>   regression test before stacking 02/03/12 on top — the whole cluster trusts this pass.
+
 ## Transparency: inspect / edit / export UI
 
 A memory page in the shell (`shell/src/pages/`) to browse the graph, see what Celestia knows

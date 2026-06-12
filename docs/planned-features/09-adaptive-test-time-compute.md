@@ -10,6 +10,19 @@ fixed model size, accuracy on hard problems scales with test-time compute (longe
 self-consistency, verify-and-revise). The trick is *routing* — don't pay that cost on the
 90% of turns that don't need it.
 
+> **Build decision (Jun 2026): measure before building, and start with the router only.**
+> Snappiness *is* the companion's core feel, so "think longer" fights the product. Two
+> caveats shape this:
+> - **The cheapest win is a small/big model router**, not the `consensus` sampling loop.
+>   Build the difficulty router + `think` tier (swap to a better model on hard turns) first;
+>   it's low-risk and may capture most of the value.
+> - **Reasoning-capable local models may make `consensus` obsolete.** If the `reason_model`
+>   already does internal CoT, a hand-rolled sample-and-fuse loop adds latency for little
+>   gain. Build `consensus` only if measurement on a real eval set shows the router+think
+>   tier leaving accuracy on the table.
+> - Horizontal and last regardless — don't touch this until the turn loop is otherwise
+>   stable.
+
 ## Why this is a Celestia feature
 
 Local compute is the budget; you can't afford to run every turn 3×. But you control the
