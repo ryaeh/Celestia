@@ -68,8 +68,10 @@ skills/
   stt/engine.py           # faster-whisper; model lazily loaded, idle-unloaded after N minutes
   vision/                 # Capture → preprocess → Ollama vision model → optional confirm flow
   pc_control/tools.py     # open_path, open_url, run_powershell — all gated through security.gate_pc_tool()
+  todos/                  # To-do list: store.py (locked JSON in data/todos.json) + tools.py (todo_add/list/complete/update/remove)
 shell/                    # Tauri v2 + React 19 + Vite + Tailwind + shadcn/ui desktop app
   src/pages/Home.tsx      # Main chat page with SSE streaming
+  src/pages/Todos.tsx     # To-do page — add/complete/edit/delete; talks to /todos API
   src/api.ts              # All fetch calls to shell_server.py; reads token from /token endpoint
 personalities/*.yaml      # Personality packs — name, traits, extra prompt lines
 tests/                    # pytest; all heavy deps (Ollama, Chroma, mem0, Whisper) are mocked

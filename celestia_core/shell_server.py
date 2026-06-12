@@ -122,6 +122,21 @@ class MemoryPatch(BaseModel):
     keep: bool | None = None
 
 
+class TodoBody(BaseModel):
+    text: str
+    priority: str = "normal"
+    due: str | None = None
+    notes: str = ""
+
+
+class TodoPatch(BaseModel):
+    text: str | None = None
+    done: bool | None = None
+    priority: str | None = None
+    due: str | None = None
+    notes: str | None = None
+
+
 class PttStopBody(BaseModel):
     session_id: str | None = None
 
@@ -404,6 +419,12 @@ def get_memory_activity(n: int = 30):
     return _memory_activity_payload(n)
 
 
+@app.get("/todos")
+def get_todos(include_done: bool = True):
+    from skills.todos.store import list_todos
+    return {"todos": list_todos(_memory_user_id(), include_done=include_done)}
+
+
 @app.get("/activity/stream")
 def get_activity_stream():
     """SSE feed of activity events — one JSON object per data line (CC-99)."""
@@ -593,6 +614,25 @@ def post_memory(body: MemoryBody):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+@app.post("/todos")
+def post_todos(body: TodoBody):
+    from skills.todos.store import add_todo, list_todos
+    text = body.text.strip()
+    if not text:
+        return JSONResponse(status_code=400, content={"error": "text required"})
+    try:
+        add_todo(
+            text,
+            _memory_user_id(),
+            priority=body.priority,
+            due=body.due,
+            notes=body.notes,
+        )
+        return {"ok": True, "todos": list_todos(_memory_user_id())}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 @app.post("/memory/last-session/refresh")
 def post_memory_last_session_refresh():
     from celestia_core.shell_chat import get_active_session_id, get_history
@@ -652,6 +692,31 @@ def delete_memory(memory_id: str):
     if "failed" in result.lower():
         return JSONResponse(status_code=400, content={"error": result})
     return {"ok": True, "message": result, **_memory_list_payload()}
+
+
+@app.patch("/todos/{todo_id}")
+def patch_todo(todo_id: str, body: TodoPatch):
+    from skills.todos.store import list_todos, update_todo
+    updated = update_todo(
+        todo_id,
+        text=body.text,
+        done=body.done,
+        priority=body.priority,
+        due=body.due,
+        notes=body.notes,
+        user_id=_memory_user_id(),
+    )
+    if updated is None:
+        return JSONResponse(status_code=404, content={"error": "to-do not found"})
+    return {"ok": True, "todos": list_todos(_memory_user_id())}
+
+
+@app.delete("/todos/{todo_id}")
+def delete_todo_route(todo_id: str):
+    from skills.todos.store import delete_todo, list_todos
+    if not delete_todo(todo_id, _memory_user_id()):
+        return JSONResponse(status_code=404, content={"error": "to-do not found"})
+    return {"ok": True, "todos": list_todos(_memory_user_id())}
 
 
 # ---------------------------------------------------------------------------

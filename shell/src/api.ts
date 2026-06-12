@@ -639,3 +639,68 @@ export function subscribeActivityStream(
 // regular vision capture + confirm flow (visionCapture("active_window")).
 // The instant, no-confirm POST /read-screen/trigger path is reserved for the
 // global hotkey, which calls the backend directly.
+
+// --- To-do list -------------------------------------------------------------
+
+export type TodoPriority = "low" | "normal" | "high";
+
+export type Todo = {
+  id: string;
+  user_id: string;
+  text: string;
+  done: boolean;
+  priority: TodoPriority;
+  due: string | null;
+  notes: string;
+  created_at: string;
+  completed_at: string | null;
+};
+
+export type TodoPatch = {
+  text?: string;
+  done?: boolean;
+  priority?: TodoPriority;
+  due?: string | null;
+  notes?: string;
+};
+
+async function todosPayload(r: Response): Promise<Todo[]> {
+  if (!r.ok) throw new Error(`todos ${r.status}`);
+  const data = await r.json();
+  return data.todos ?? [];
+}
+
+export async function fetchTodos(): Promise<Todo[]> {
+  const r = await apiFetch("/todos");
+  return todosPayload(r);
+}
+
+export async function createTodo(
+  text: string,
+  priority: TodoPriority = "normal",
+  due?: string | null,
+  notes = "",
+): Promise<Todo[]> {
+  const r = await apiFetch("/todos", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, priority, due: due ?? null, notes }),
+  });
+  return todosPayload(r);
+}
+
+export async function updateTodo(id: string, patch: TodoPatch): Promise<Todo[]> {
+  const r = await apiFetch(`/todos/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  return todosPayload(r);
+}
+
+export async function deleteTodo(id: string): Promise<Todo[]> {
+  const r = await apiFetch(`/todos/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  return todosPayload(r);
+}
