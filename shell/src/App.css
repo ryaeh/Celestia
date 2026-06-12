@@ -200,6 +200,68 @@ body {
   -webkit-text-fill-color: transparent;
 }
 
+/* "Why did you say that?" provenance row under a reply */
+.provenance {
+  margin-top: 0.5rem;
+}
+.provenance-toggle {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  border: none; background: transparent;
+  padding: 0.1rem 0;
+  font: inherit; font-size: 0.74rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0.8;
+  transition: color 0.15s, opacity 0.15s;
+}
+.provenance-toggle:hover { color: var(--text); opacity: 1; }
+.provenance-list {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
+  background: color-mix(in srgb, var(--bg-panel) 60%, transparent);
+  display: flex; flex-direction: column; gap: 0.3rem;
+}
+.provenance-item {
+  display: flex; align-items: baseline; gap: 0.45rem;
+  font-size: 0.76rem; line-height: 1.35;
+}
+.provenance-kind {
+  flex-shrink: 0;
+  font-size: 0.64rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.03em;
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.3rem;
+  color: var(--text-muted);
+  background: var(--bg-input);
+}
+.provenance-kind-graph { color: var(--aura-3); }
+.provenance-text { color: var(--text); opacity: 0.85; }
+
+/* Incognito / pause-learning toggle (pushed to the right of the brand row) */
+.incognito-toggle {
+  margin-left: auto;
+  display: grid; place-items: center;
+  width: 1.85rem; height: 1.85rem;
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.incognito-toggle:hover {
+  color: var(--text);
+  border-color: var(--border-light);
+}
+.incognito-toggle[aria-pressed="true"] {
+  color: var(--aura-2);
+  border-color: var(--aura-2);
+  background: color-mix(in srgb, var(--aura-2) 14%, transparent);
+}
+
 /* New chat button */
 .btn-primary, .sidebar-new-chat {
   display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem;

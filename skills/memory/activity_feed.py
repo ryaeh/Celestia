@@ -49,6 +49,13 @@ def append_event(
     kind: str = "fact",
     source: str = "consolidate",
 ) -> None:
+    # Belt-and-suspenders: consolidation is already gated under incognito, but any
+    # other direct caller (e.g. a future decay/import event) is also silenced while
+    # learning is paused.
+    from celestia_core import incognito
+
+    if incognito.is_on():
+        return
     row = {
         "ts": time.time(),
         "action": action,

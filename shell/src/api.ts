@@ -91,6 +91,14 @@ export type Status = {
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
+/** One memory/graph entry that informed a reply ("why did you say that?"). */
+export type ProvenanceEntry = {
+  id: string;
+  kind: string;
+  text: string;
+  source: "memory" | "graph";
+};
+
 export type ChatSession = {
   id: string;
   title: string;
@@ -111,6 +119,24 @@ export async function setMode(mode: string): Promise<void> {
     body: JSON.stringify({ mode }),
   });
   if (!r.ok) throw new Error(`mode ${r.status}`);
+}
+
+export async function getIncognito(): Promise<boolean> {
+  const r = await apiFetch("/incognito");
+  if (!r.ok) throw new Error(`incognito ${r.status}`);
+  const data = await r.json();
+  return Boolean(data.on);
+}
+
+export async function setIncognito(on: boolean): Promise<boolean> {
+  const r = await apiFetch("/incognito", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ on }),
+  });
+  if (!r.ok) throw new Error(`incognito ${r.status}`);
+  const data = await r.json();
+  return Boolean(data.on);
 }
 
 export async function fetchWorkspaces(): Promise<string[]> {
@@ -379,6 +405,7 @@ export type ChatStreamDone = {
   reply: string;
   session_id: string;
   messages: ChatMessage[];
+  provenance?: ProvenanceEntry[];
 };
 export type ChatStreamError = { error: string };
 export type ChatStreamEvent = ChatStreamToken | ChatStreamDone | ChatStreamError;

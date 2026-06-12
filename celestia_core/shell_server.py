@@ -102,6 +102,10 @@ class ModeBody(BaseModel):
     mode: str
 
 
+class IncognitoBody(BaseModel):
+    on: bool
+
+
 class ChatBody(BaseModel):
     message: str
     session_id: str | None = None
@@ -484,6 +488,19 @@ def get_memory_entry(memory_id: str):
 # ---------------------------------------------------------------------------
 # Routes — POST
 # ---------------------------------------------------------------------------
+
+@app.get("/incognito")
+def get_incognito():
+    from celestia_core import incognito
+    return {"on": incognito.is_on(), "label": incognito.status_label()}
+
+
+@app.post("/incognito")
+def post_incognito(body: IncognitoBody):
+    from celestia_core import incognito
+    incognito.set_on(body.on)
+    return {"on": incognito.is_on(), "label": incognito.status_label()}
+
 
 @app.post("/mode")
 def post_mode(body: ModeBody):

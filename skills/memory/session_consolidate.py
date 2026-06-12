@@ -82,6 +82,15 @@ def should_run_consolidation(
     if not get("memory.session_consolidate", True):
         return False
 
+    # Incognito / pause-learning: chat keeps working, but nothing is recorded.
+    # This is the single choke point — typed memory *and* the graph-extract pass
+    # run inside consolidate_session_messages, so gating here covers both on every
+    # invocation path (background, finalize, delete).
+    from celestia_core import incognito
+
+    if incognito.is_on():
+        return False
+
     mode = consolidate_mode()
     if mode == "off":
         return False

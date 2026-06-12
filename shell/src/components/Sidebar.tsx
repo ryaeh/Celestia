@@ -3,7 +3,9 @@ import {
   createChatSession,
   deleteChatSession,
   fetchChatSessions,
+  getIncognito,
   selectChatSession,
+  setIncognito,
   type ChatSession,
 } from "../api";
 import { usePersistedState } from "../hooks/usePersistedState";
@@ -12,7 +14,7 @@ import Aura from "./Aura";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { Plus, Activity as ActivityIcon, Brain, ListTodo, Settings, ChevronLeft, ChevronRight, Trash2, Check, X } from "lucide-react";
+import { Plus, Activity as ActivityIcon, Brain, ListTodo, Settings, ChevronLeft, ChevronRight, Trash2, Check, X, Eye, EyeOff } from "lucide-react";
 
 type SidebarProps = {
   route: Route;
@@ -36,6 +38,23 @@ export default function Sidebar({
   const [open, setOpen] = usePersistedState("celestia.shell.sidebarOpen", true);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [incognito, setIncognitoState] = useState(false);
+
+  useEffect(() => {
+    getIncognito()
+      .then(setIncognitoState)
+      .catch(() => setIncognitoState(false));
+  }, []);
+
+  const toggleIncognito = useCallback(async () => {
+    const next = !incognito;
+    setIncognitoState(next); // optimistic
+    try {
+      setIncognitoState(await setIncognito(next));
+    } catch {
+      setIncognitoState(!next); // revert on failure
+    }
+  }, [incognito]);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -78,6 +97,20 @@ export default function Sidebar({
           <div className="brand">
             <Aura size="brand" state="idle" />
             <strong>{displayName}</strong>
+            <button
+              type="button"
+              className="incognito-toggle"
+              aria-pressed={incognito}
+              onClick={toggleIncognito}
+              title={
+                incognito
+                  ? "Incognito — learning paused (chat still works). Click to resume."
+                  : "Learning on. Click to pause memory + graph + activity."
+              }
+              aria-label={incognito ? "Resume learning" : "Pause learning (incognito)"}
+            >
+              {incognito ? <EyeOff size={15} /> : <Eye size={15} />}
+            </button>
           </div>
 
           {/* New chat */}
