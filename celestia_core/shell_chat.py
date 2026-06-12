@@ -367,21 +367,30 @@ def _run_finalize_bg(sid: str, history: list[dict[str, Any]], start: int) -> Non
     except Exception:
         pass
 
+    uid = get("app.user_id", "atlas_user")
     try:
         from skills.memory.session_consolidate import consolidate_session_messages
 
-        uid = get("app.user_id", "atlas_user")
         new_start, _ = consolidate_session_messages(
             history, uid, start_index=start, end=True, extract_graph=True
         )
+        with _store_lock():
+            state = _read_session(sid)
+            if state is not None and new_start != int(state.get("consolidate_from") or 0):
+                state["consolidate_from"] = new_start
+                _write_session(sid, state)
     except Exception:
-        return
+        pass
 
-    with _store_lock():
-        state = _read_session(sid)
-        if state is not None and new_start != int(state.get("consolidate_from") or 0):
-            state["consolidate_from"] = new_start
-            _write_session(sid, state)
+    # Memory lifecycle step 3: throttled decay-delete of memories that earned no
+    # keep. Internally gated by memory.decay.enabled + a once-per-interval throttle,
+    # so this is a cheap no-op when disabled or recently swept.
+    try:
+        from skills.memory.decay import sweep_decay
+
+        sweep_decay(uid)
+    except Exception:
+        pass
 
 
 def create_session(*, finalize_active: bool = True) -> str:
@@ -615,3 +624,67 @@ def clear_session(session_id: str | None = None) -> str:
             if state is not None:
                 _finalize_session(state)
     return create_session(finalize_active=False)
+
+
+def delete_session(session_id: str) -> dict[str, Any]:
+    """Delete a chat session, keeping what Celestia learned from it.
+
+    By default (``chat.consolidate_before_delete``) the chat is consolidated into
+    long-term memory first — typed memories + the knowledge graph — so only the
+    raw transcript is removed; the distilled knowledge survives. Consolidation
+    runs off the hot path against a history snapshot, so the file can be removed
+    immediately (its memory writes don't depend on the file still existing).
+
+    If the active chat is deleted, the active pointer falls back to the most
+    recently updated remaining chat, or a fresh one when none are left.
+
+    Returns ``{"deleted": bool, "active_id": str, "error"?: str}``.
+    """
+    consolidate = bool(get("chat.consolidate_before_delete", True))
+    finalize_history: list[dict[str, Any]] = []
+    finalize_start = 0
+
+    with _store_lock():
+        _resolve_active()
+        if session_id not in _list_session_ids():
+            return {"deleted": False, "error": "no such session"}
+
+        if consolidate:
+            state = _read_session(session_id)
+            if state is not None and state.get("history"):
+                finalize_history = list(state["history"])
+                finalize_start = int(state.get("consolidate_from") or 0)
+
+        try:
+            (_sessions_dir() / f"{session_id}.json").unlink(missing_ok=True)
+        except OSError:
+            pass
+
+        # Repair the active pointer only if we just removed the active chat.
+        if _read_active() == session_id:
+            remaining = _list_session_ids()
+            if remaining:
+                remaining.sort(
+                    key=lambda sid: float((_read_session(sid) or {}).get("updated_at", 0)),
+                    reverse=True,
+                )
+                _write_active(remaining[0])
+            else:
+                fresh = str(uuid.uuid4())
+                _write_session(fresh, _new_session_state())
+                _write_active(fresh)
+        active_id = _read_active()
+
+    # Distill from the snapshot in the background. The session file is already
+    # gone; consolidation writes to the memory store, so the learnings persist.
+    # _run_finalize_bg's trailing consolidate_from write-back is a harmless no-op
+    # against the now-deleted session.
+    if consolidate and finalize_history:
+        threading.Thread(
+            target=_run_finalize_bg,
+            args=(session_id, finalize_history, finalize_start),
+            name="delete-finalize-session",
+            daemon=True,
+        ).start()
+
+    return {"deleted": True, "active_id": active_id or ""}

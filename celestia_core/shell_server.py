@@ -119,6 +119,7 @@ class MemoryBody(BaseModel):
 class MemoryPatch(BaseModel):
     text: str | None = None
     kind: str | None = None
+    keep: bool | None = None
 
 
 class PttStopBody(BaseModel):
@@ -220,7 +221,16 @@ def _memory_user_id() -> str:
 
 def _memory_list_payload() -> dict[str, Any]:
     from skills.memory.store import get_all_entries
-    return {"entries": get_all_entries(_memory_user_id(), limit=200)}
+    from skills.memory.ranking import is_kept, load_stats, recall_for
+    entries = get_all_entries(_memory_user_id(), limit=200)
+    stats = load_stats()
+    for e in entries:
+        mid = str(e.get("id", ""))
+        recall_count, last = recall_for(stats, mid)
+        e["recall_count"] = recall_count
+        e["last_recalled"] = last
+        e["keep"] = is_kept(stats, mid)
+    return {"entries": entries}
 
 
 def _memory_last_session_payload() -> dict[str, Any]:
@@ -272,17 +282,32 @@ def patch_pref(body: PrefPatch):
 
 
 @app.post("/vision/capture")
-def post_vision_capture():
-    """Take a full-screen screenshot, store in ring buffer, return base64."""
+def post_vision_capture(mode: str = "fullscreen"):
+    """Capture a screenshot, store in the ring buffer, return base64.
+
+    mode: fullscreen (default) | region (drag a rectangle) | active_window.
+    """
     if not get("vision.enabled", False):
         return JSONResponse(status_code=400, content={"error": "Vision is disabled in config.yaml"})
+    mode = (mode or "fullscreen").lower()
     try:
-        from skills.vision.capture import capture_fullscreen
+        from skills.vision import capture as vcap
         from skills.vision.history import push
         import base64
         from PIL import Image
 
-        path = capture_fullscreen()
+        if mode == "region":
+            from skills.vision.selector import select_region_subprocess
+
+            bbox = select_region_subprocess()
+            if bbox is None:
+                return JSONResponse(status_code=409, content={"error": "Region selection cancelled"})
+            path = vcap.capture_bbox(*bbox)
+        elif mode == "active_window":
+            path = vcap.capture_active_window()
+        else:
+            path = vcap.capture_fullscreen()
+
         entry_id = push(path)
         b64 = base64.b64encode(path.read_bytes()).decode()
         with Image.open(path) as img:
@@ -509,6 +534,25 @@ def post_chat_select(body: SelectSessionBody):
     return {"ok": True, "session_id": sid, "messages": get_history(sid)}
 
 
+@app.post("/chat/delete")
+def post_chat_delete(body: SelectSessionBody):
+    from celestia_core.shell_chat import delete_session, get_history
+    sid = body.session_id.strip()
+    if not sid:
+        return JSONResponse(status_code=400, content={"error": "session_id required"})
+    result = delete_session(sid)
+    if not result.get("deleted"):
+        return JSONResponse(
+            status_code=400, content={"error": result.get("error", "delete failed")}
+        )
+    active_id = result.get("active_id") or ""
+    return {
+        "ok": True,
+        "active_id": active_id,
+        "messages": get_history(active_id) if active_id else [],
+    }
+
+
 @app.post("/chat/ptt/start")
 def post_ptt_start():
     from celestia_core.shell_ptt import ptt_start
@@ -558,6 +602,20 @@ def post_memory_last_session_refresh():
     return {"ok": True, **_memory_last_session_payload()}
 
 
+@app.post("/memory/decay")
+def post_memory_decay(dry_run: bool = False):
+    """Run the memory decay sweep now (manual trigger, bypasses the throttle).
+
+    ``dry_run=true`` returns the ids that *would* be removed without deleting —
+    for a "preview what gets cleaned" UI. Respects memory.decay.enabled.
+    """
+    from skills.memory.decay import sweep_decay
+    result = sweep_decay(_memory_user_id(), dry_run=dry_run, force=True)
+    if dry_run or result.get("deleted"):
+        result.update(_memory_list_payload())
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Routes — PATCH / DELETE
 # ---------------------------------------------------------------------------
@@ -565,15 +623,26 @@ def post_memory_last_session_refresh():
 @app.patch("/memory/{memory_id}")
 def patch_memory(memory_id: str, body: MemoryPatch):
     from skills.memory.store import update_entry
-    result = update_entry(
-        memory_id,
-        text=body.text.strip() if body.text else None,
-        kind=body.kind.strip() if body.kind else None,
-        user_id=_memory_user_id(),
-    )
-    if result == "Memory not found.":
-        return JSONResponse(status_code=404, content={"error": result})
-    return {"ok": True, "message": result, **_memory_list_payload()}
+
+    message = "Updated."
+    # Pin/unpin (keeper) — a sidecar flag, independent of the text/kind edit.
+    if body.keep is not None:
+        from skills.memory.ranking import set_keep
+        set_keep(memory_id, body.keep)
+        message = "Pinned." if body.keep else "Unpinned."
+
+    if body.text is not None or body.kind is not None:
+        result = update_entry(
+            memory_id,
+            text=body.text.strip() if body.text else None,
+            kind=body.kind.strip() if body.kind else None,
+            user_id=_memory_user_id(),
+        )
+        if result == "Memory not found.":
+            return JSONResponse(status_code=404, content={"error": result})
+        message = result
+
+    return {"ok": True, "message": message, **_memory_list_payload()}
 
 
 @app.delete("/memory/{memory_id}")

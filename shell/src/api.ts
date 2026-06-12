@@ -157,8 +157,14 @@ export type VisionHistoryEntry = {
   base64: string;
 };
 
-export async function visionCapture(): Promise<VisionCapture> {
-  const r = await apiFetch("/vision/capture", { method: "POST" });
+export type VisionCaptureMode = "fullscreen" | "region" | "active_window";
+
+export async function visionCapture(
+  mode: VisionCaptureMode = "fullscreen",
+): Promise<VisionCapture> {
+  const r = await apiFetch(`/vision/capture?mode=${encodeURIComponent(mode)}`, {
+    method: "POST",
+  });
   if (!r.ok) {
     const d = await r.json().catch(() => ({}));
     throw new Error((d as { error?: string }).error ?? `vision/capture ${r.status}`);
@@ -340,6 +346,24 @@ export async function selectChatSession(sessionId: string): Promise<{
   return r.json();
 }
 
+/**
+ * Delete a chat. Celestia consolidates it into long-term memory first (when
+ * chat.consolidate_before_delete is on), so what she learned survives — only
+ * the transcript is removed. Returns the active session to fall back to.
+ */
+export async function deleteChatSession(sessionId: string): Promise<{
+  active_id: string;
+  messages: ChatMessage[];
+}> {
+  const r = await apiFetch("/chat/delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId }),
+  });
+  if (!r.ok) throw new Error(`chat/delete ${r.status}`);
+  return r.json();
+}
+
 /** @deprecated use createChatSession */
 export async function clearChatSession(): Promise<string> {
   return createChatSession();
@@ -448,6 +472,19 @@ export type MemoryEntry = {
   text: string;
   kind: MemoryKind | string;
   updated_at: number;
+  importance?: number;
+  recall_count?: number;
+  keep?: boolean;
+};
+
+export type DecayResult = {
+  enabled: boolean;
+  ids: string[];
+  scanned?: number;
+  deleted?: number;
+  dry_run?: boolean;
+  throttled?: boolean;
+  entries?: MemoryEntry[];
 };
 
 export type LastSessionNote = {
@@ -503,6 +540,27 @@ export async function deleteMemoryEntry(id: string): Promise<MemoryEntry[]> {
     method: "DELETE",
   });
   return memoryPayload(r);
+}
+
+/** Pin/unpin a memory as a keeper (exempt from decay, ranks high). */
+export async function setMemoryKeep(id: string, keep: boolean): Promise<MemoryEntry[]> {
+  const r = await apiFetch(`/memory/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ keep }),
+  });
+  return memoryPayload(r);
+}
+
+/** Decay sweep. dry_run=true previews the ids that would be removed. */
+export async function memoryDecay(dryRun: boolean): Promise<DecayResult> {
+  const r = await apiFetch(`/memory/decay?dry_run=${dryRun ? "true" : "false"}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  if (!r.ok) throw new Error(`memory/decay ${r.status}`);
+  return r.json();
 }
 
 export async function refreshLastSession(): Promise<LastSessionNote> {
@@ -577,21 +635,7 @@ export function subscribeActivityStream(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Read screen (Feature 07)
-// ---------------------------------------------------------------------------
-
-export async function triggerReadScreen(
-  sessionId?: string,
-): Promise<{ session_id: string; messages: ChatMessage[] }> {
-  const r = await apiFetch("/read-screen/trigger", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ session_id: sessionId }),
-  });
-  if (!r.ok) {
-    const d = await r.json().catch(() => ({}));
-    throw new Error((d as { error?: string }).error ?? `read-screen ${r.status}`);
-  }
-  return r.json();
-}
+// Read screen (Feature 07): the in-chat "eye" button now goes through the
+// regular vision capture + confirm flow (visionCapture("active_window")).
+// The instant, no-confirm POST /read-screen/trigger path is reserved for the
+// global hotkey, which calls the backend directly.

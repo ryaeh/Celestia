@@ -60,6 +60,22 @@ def test_add_json_includes_kind_in_metadata(mock_mem):
     assert call_kwargs["metadata"]["kind"] == "task"
 
 
+def test_add_json_tags_importance_by_kind(mock_mem):
+    """Each saved memory carries a write-time importance (high for instructions,
+    low for summaries) so ranking/decay have a signal to work from."""
+    add_json("Always greet me by name", "test_user", kind="instruction")
+    inst_imp = mock_mem.add.call_args.kwargs["metadata"]["importance"]
+    add_json("we chatted about pasta", "test_user", kind="summary")
+    summ_imp = mock_mem.add.call_args.kwargs["metadata"]["importance"]
+    assert inst_imp == 1.0
+    assert inst_imp > summ_imp
+
+
+def test_add_json_stamps_created_at(mock_mem):
+    add_json("something durable", "test_user", kind="fact")
+    assert "created_at" in mock_mem.add.call_args.kwargs["metadata"]
+
+
 def test_add_json_handles_exception(mock_mem):
     """If the underlying add() raises, add_json must return an error string."""
     mock_mem.add.side_effect = RuntimeError("Chroma connection failed")

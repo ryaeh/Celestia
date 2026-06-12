@@ -219,6 +219,96 @@ def test_set_active_session_unknown_id_returns_false(chat_tmp) -> None:
 
 
 # ---------------------------------------------------------------------------
+# delete_session
+# ---------------------------------------------------------------------------
+
+
+def test_delete_session_removes_from_list(chat_tmp) -> None:
+    s1 = sc.create_session(finalize_active=False)
+    s2 = sc.create_session(finalize_active=False)
+    result = sc.delete_session(s1)
+    assert result["deleted"] is True
+    ids = [s["id"] for s in sc.list_sessions()]
+    assert s1 not in ids
+    assert s2 in ids
+
+
+def test_delete_non_active_keeps_active(chat_tmp) -> None:
+    s1 = sc.create_session(finalize_active=False)
+    s2 = sc.create_session(finalize_active=False)  # s2 is now active
+    result = sc.delete_session(s1)
+    assert result["active_id"] == s2
+
+
+def test_delete_active_falls_back_to_remaining(chat_tmp) -> None:
+    s1 = sc.create_session(finalize_active=False)
+    s2 = sc.create_session(finalize_active=False)  # s2 is now active
+    result = sc.delete_session(s2)
+    assert result["active_id"] == s1
+    assert sc.get_active_session_id() == s1
+
+
+def test_delete_last_session_creates_fresh(chat_tmp) -> None:
+    s1 = sc.create_session(finalize_active=False)
+    result = sc.delete_session(s1)
+    assert result["deleted"] is True
+    new_active = result["active_id"]
+    assert new_active and new_active != s1
+    # exactly one session remains and it is the fresh active one
+    ids = [s["id"] for s in sc.list_sessions()]
+    assert ids == [new_active]
+
+
+def test_delete_unknown_id_returns_error(chat_tmp) -> None:
+    sc.create_session(finalize_active=False)
+    result = sc.delete_session("00000000-0000-0000-0000-000000000000")
+    assert result["deleted"] is False
+    assert "error" in result
+
+
+def test_delete_consolidates_history_before_removal(chat_tmp, stub_run_turn, monkeypatch) -> None:
+    """A chat with history is distilled (snapshot handed to the finalize pass)
+    before the file is removed, so the learnings survive the delete."""
+    captured: list[tuple] = []
+    monkeypatch.setattr(
+        sc, "_run_finalize_bg", lambda sid, history, start: captured.append((sid, history, start))
+    )
+    sid = sc.create_session(finalize_active=False)
+    sc.send_message("remember the dentist is on Tuesday", session_id=sid)
+
+    sc.delete_session(sid)
+
+    assert len(captured) == 1
+    finalized_sid, finalized_history, _ = captured[0]
+    assert finalized_sid == sid
+    assert any(m["role"] == "user" for m in finalized_history)
+
+
+def test_delete_without_consolidation_skips_finalize(chat_tmp, stub_run_turn, monkeypatch) -> None:
+    """chat.consolidate_before_delete=false → hard delete, no finalize pass."""
+    captured: list[tuple] = []
+    monkeypatch.setattr(
+        sc, "_run_finalize_bg", lambda *a: captured.append(a)
+    )
+    monkeypatch.setattr(
+        sc,
+        "get",
+        lambda key, default=None: {
+            "chat.session_enabled": True,
+            "chat.consolidate_before_delete": False,
+            "memory.session_consolidate": False,
+            "app.user_id": "test_user",
+        }.get(key, default),
+    )
+    sid = sc.create_session(finalize_active=False)
+    sc.send_message("some history", session_id=sid)
+
+    result = sc.delete_session(sid)
+    assert result["deleted"] is True
+    assert captured == []
+
+
+# ---------------------------------------------------------------------------
 # get_history
 # ---------------------------------------------------------------------------
 
