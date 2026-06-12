@@ -4,6 +4,15 @@
 "Every weekday 9am: open these three apps, read me my calendar, summarize unread." Builds
 straight on the CC-59 morning briefing.
 
+> **Build decision (Jun 2026).** The word "recordable" is a trap — OS-level UI recording
+> (mouse/keyboard/window capture) on Windows is brittle and not worth building. Reframe:
+> - **A macro is a saved *tool-call* plan (a 04 plan), not a recorded UI session.** You
+>   author one by saving a successful autonomy run ("save these steps as a macro") or by
+>   hand in config. This makes 05 nearly free once 04 exists.
+> - **Scheduler is the only genuinely new piece** here, and it's shared with 01/02.
+> - "Record by demonstration" at the UI level is explicitly **out of scope**, possibly
+>   forever.
+
 ## Why this is a Celestia feature
 
 Cloud assistants can't open your apps or run your scripts. Celestia already has gated PC

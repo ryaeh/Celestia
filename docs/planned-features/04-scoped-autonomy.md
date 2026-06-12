@@ -5,6 +5,16 @@ Celestia shows the *full plan* first, you approve once (or per-step), then it ex
 a live checklist. Real agentic PC work — with the brakes the security design already
 implies.
 
+> **Build decision (Jun 2026).** Two honest constraints shape v1:
+> - **Undo is a promise we can only keep for some actions.** You can't un-send a message or
+>   un-close an app. So v1 autonomy is **file-ops-first**, where undo is *real* (move-to-
+>   trash, backup-before-overwrite). Irreversible actions (send, delete-permanent, purchase)
+>   always confirm individually and are **never** part of an approve-once batch — this is
+>   the preview → undo → confirm-irreversible model from 11.
+> - **7B plans are mediocre, so keep them short.** Cap `max_steps` low (≈5) for v1; long
+>   autonomous plans are where the model wanders. Pair with 09's `think` tier for plan
+>   generation specifically.
+
 ## Why this is a Celestia feature
 
 The `safe`/`scoped`/`armed` security modes (`celestia_core/security.py`) were built for
@@ -61,4 +71,6 @@ surface. Phase 3.
 ## Open questions
 
 - Plan representation: let the LLM emit JSON steps, or a constrained DSL?
-- Rollback — can steps declare an undo action for safe reversal?
+- Each tool declares its own reversibility + undo action; tools with no real undo are
+  flagged irreversible and forced to per-step confirm. (Replaces the old open "can steps
+  declare an undo?" — yes, and it's mandatory metadata.)

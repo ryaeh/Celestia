@@ -51,6 +51,14 @@ nothing changes who she is). Adapting toward mirroring the user is out of scope 
 - **Gentle, pattern-backed pushback.** When a strong pattern warrants it, she may challenge
   once ("you usually regret these late-night purchases — still want it?"). Never twice for
   the same decision; capped frequency overall.
+- **Guard against over-fitting (don't shrink her to your past self).** Pure adaptation
+  narrows her to what you've already done. She must occasionally suggest *outside* the
+  learned profile — a new tool, a different approach — explicitly flagged as a stretch.
+  Adaptation tunes *how* she helps, it does not wall off the unfamiliar.
+- **Reaction signals are noisy — treat them as weak evidence.** A cut-off reply isn't
+  dislike (it could be a doorbell); a skipped suggestion isn't rejection (bad timing).
+  Reaction-learning therefore uses the **highest** pattern threshold of all three components
+  and the longest confirmation window — never updates the portrait off a single signal.
 
 ## Data & config
 
@@ -102,7 +110,9 @@ rule). Ship the review page in the same release as the first learned behavior, n
 
 ## Open questions
 
-- Pattern threshold: fixed (3) or per-kind (tastes update slower than reaction tuning)?
+- Pattern threshold: **per-kind** (decided — reaction tuning needs the highest bar, tastes
+  next, stated facts lowest); exact numbers TBD from real signal.
+- How often is a "stretch" suggestion right vs annoying — fixed rate, or tied to confidence?
 - Should reaction learning have a "reset" (user had a bad month; start fresh) distinct from
   deleting entries?
 - Cold start: does the `10` guided-seed onboarding pre-fill any portrait entries, or must all

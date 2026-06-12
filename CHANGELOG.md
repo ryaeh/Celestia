@@ -23,8 +23,8 @@ Roadmap for upcoming work: [`docs/project/roadmap.md`](docs/project/roadmap.md).
   a 6-theme engine (`shell/src/theme.ts`, Settings → Appearance), companion-voice
   chat layout, all-lucide icons, and an auto-growing chat input.
 - **Planned-features design corpus** — 12 self-contained briefs in
-  [`docs/planned-features/`](docs/planned-features/) plus a delivery ROADMAP and
-  tracking issues (#94–#105).
+  [`docs/planned-features/`](docs/planned-features/) plus tracking issues (#94–#105);
+  build order lives in [`docs/project/roadmap.md`](docs/project/roadmap.md).
 
 ### Changed
 - **Fast-by-default vision** — `moondream` for general screenshots, escalate to

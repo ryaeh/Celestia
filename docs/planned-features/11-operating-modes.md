@@ -42,6 +42,15 @@ Two paths, combined:
 This avoids the failure mode of fully-automatic switching (silently unloading models you were
 mid-task with) while keeping friction near zero.
 
+> **Build decision (Jun 2026).** Two guardrails so the right feature doesn't rot into
+> sprawl/nag:
+> - **Hold the line at 3–4 modes** (`work` / `gaming` / `focus`, maybe one custom). Modes
+>   are a posture switch, not a config explosion — resist a mode per app.
+> - **Auto-switch confirmations are session-sticky.** If she asks "switch to gaming?" and
+>   you say no (or yes), she remembers that answer **for this session / this app** and does
+>   not ask again. Confirm-fatigue is how good auto-detect gets turned off; one prompt per
+>   context, not per launch.
+
 ## Proactivity: a per-mode dial
 
 Proactivity is a slider set per mode, ranging:

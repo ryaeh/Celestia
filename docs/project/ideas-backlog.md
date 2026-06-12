@@ -93,6 +93,24 @@ Each idea notes a rough **value/effort** read. "Tiny/Low/Medium/High."
 | **Voice-consistency regression tests** | Medium / Medium | Before swapping a model, run a fixed prompt set through each personality and diff tone/length/format vs saved baselines. Protects the thing that makes Celestia *her* across model upgrades. |
 | **Skill SDK / drop-in folder skills** | Medium / Medium | `registry.py` is already a clean dispatch table. Formalize the contract (`SKILL.yaml` + `tools.py` per folder, auto-discovered) and document it. Future-you is the third-party developer. |
 
+## Borrowed from the field — Odysseus takeaways
+
+Ideas worth stealing from [Odysseus](https://github.com/pewdiepie-archdaemon/odysseus)
+(a local-first AI *workspace* — same stack as Celestia: FastAPI + Chroma + faster-whisper +
+Ollama/llama.cpp, which is good validation of our foundations). Celestia is a *companion*,
+not a workspace, so we take capabilities, not the office-suite identity: their email/calendar/
+document **editors**, mobile PWA remote access, and multi-user auth are explicitly **not**
+for us.
+
+| Idea | Value/Effort | Notes |
+|------|--------------|-------|
+| **"Cookbook" — hardware-aware model recommender** ⭐ | High / Medium | Their standout: scan the GPU, fit-score models (VRAM-aware, GGUF/quant-aware, built on [llmfit](https://github.com/AlexsJones/llmfit)), recommend + one-click download. For us it upgrades four things at once: the **first-run wizard** ("scan → pick chat/vision/STT models that fit → `ollama pull`"), **Feature 11's per-mode VRAM presets** (fit-scoring generates them instead of hand-tuning), the UI V2 **model pickers**, and it's the *selection* layer on top of `gpu.py`'s *runtime* residency. |
+| **Deep Research mode** | Medium / High | Multi-step gather → read → synthesize → visual report (they adapted [Tongyi DeepResearch](https://github.com/Alibaba-NLP/DeepResearch)). Companion framing: "look into X and report back." Pairs perfectly with **"tidying while you're away"** — she researches while you're AFK, report ready when you return. Needs web-search skill + 03-RAG retrieval; 09 governs its compute budget. |
+| **Notification channels (ntfy / browser / email)** | High / Low | Answers a question the roadmap hasn't: **how does proactive Celestia reach you away from the PC?** A pluggable channel layer — especially [ntfy](https://ntfy.sh) for phone push — is the delivery pipe for 01's nudges, 05's scheduled tasks, and the morning briefing. Small, concrete, and it does *not* expose the box to the internet (outbound push only). |
+| **Read-only calendar/email awareness** | Medium / Medium | *Not* a mail client (identity trap — that's workspace, not companion). CalDAV/IMAP **read-only ingestion** feeding the briefing + ambient layer: "meeting in 10, want the doc?", inbox triaged into a spoken morning summary. Take the awareness, skip the editors and auto-reply. |
+| **Skills import/export + contextual retrieval** | Low / Low | (a) Import/export makes skills portable — folds into the **Skill SDK** idea above. (b) Retrieving *relevant* tool schemas per turn from a vector store instead of sending all of them — not needed at ~13 tools, right pattern past ~30. |
+| **Blind model comparison** | Low / Low | A/B two models on the same prompt without knowing which is which. Folds into **voice-consistency regression tests**: before swapping qwen for the next model, blind-compare on a fixed companion-prompt set. |
+
 ---
 
 ## Top 3 to do next (opinion)
@@ -110,3 +128,6 @@ Each idea notes a rough **value/effort** read. "Tiny/Low/Medium/High."
 - **Feeds existing briefs:** journal/callbacks → 06; provenance/contradiction-inbox/health-panel
   → 10; reminders → 05; incognito + time-boxed arming → 11; "about you" page + access-ranking
   → 12; overlay bubble + notifications → 01.
+- **Odysseus takeaways:** Cookbook → first-run wizard + 11 presets + UI V2 model pickers;
+  notification channels → 01/05/briefing delivery; deep research → tidying + 03 + 09;
+  calendar/email awareness → briefing + 01.

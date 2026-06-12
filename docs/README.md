@@ -28,8 +28,8 @@ Everything for Celestia is under `docs/`. Start with **getting-started** if this
 
 ## Roadmap & planning
 
-- [project/roadmap.md](project/roadmap.md) — phases: what shipped and what's next (includes the M0–M4 companion track)
-- [planned-features/](planned-features/) — 12 designed feature briefs + delivery [ROADMAP](planned-features/ROADMAP.md)
+- [project/roadmap.md](project/roadmap.md) — **the** roadmap: where we are, build order, watch-outs, what shipped
+- [planned-features/](planned-features/) — 12 designed feature briefs + cross-feature analysis ([README](planned-features/README.md))
 - [project/perf-and-qol-backlog.md](project/perf-and-qol-backlog.md) — perf/GPU findings + the UI V2 plan
 - [project/ideas-backlog.md](project/ideas-backlog.md) — unsorted idea pool (security, personality, memory, app, frontend)
 
