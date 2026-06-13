@@ -72,7 +72,18 @@ PC_TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "get_system_status",
-            "description": "CPU, RAM, disk, and uptime summary.",
+            "description": "Live CPU load, RAM/disk usage, and uptime (current state, not hardware names).",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_pc_specs",
+            "description": (
+                "This PC's hardware specs: CPU model, GPU model(s), total RAM, and OS. "
+                "Use this for 'what are my specs / what GPU/CPU do I have'."
+            ),
             "parameters": {"type": "object", "properties": {}},
         },
     },
@@ -333,6 +344,18 @@ def execute_pc(name: str, arguments: dict[str, Any]) -> str:
             "ForEach-Object { \"$($_.DeviceID) $([math]::Round(($_.Size-$_.FreeSpace)/1GB,1))/$([math]::Round($_.Size/1GB,1)) GB used\" }; "
             "$uptime = (Get-Date) - $os.LastBootUpTime; "
             "\"CPU: ${cpu}% | RAM: ${ram}/${ramTotal} GB | Uptime: $($uptime.Days)d $($uptime.Hours)h $($uptime.Minutes)m | Disk: $($disk -join '; ')\""
+        )
+        return _run_ps(cmd)
+    if name == "get_pc_specs":
+        cmd = (
+            "$cs = Get-CimInstance Win32_ComputerSystem; "
+            "$cpu = Get-CimInstance Win32_Processor | Select-Object -First 1; "
+            "$os = Get-CimInstance Win32_OperatingSystem; "
+            "$gpus = (Get-CimInstance Win32_VideoController | "
+            "ForEach-Object { $_.Name.Trim() }) -join ', '; "
+            "$ram = [math]::Round($cs.TotalPhysicalMemory/1GB, 1); "
+            "\"CPU: $($cpu.Name.Trim()) ($($cpu.NumberOfCores)C/$($cpu.NumberOfLogicalProcessors)T) | "
+            "RAM: ${ram} GB | GPU: $gpus | OS: $($os.Caption) (build $($os.BuildNumber))\""
         )
         return _run_ps(cmd)
     if name == "list_processes":

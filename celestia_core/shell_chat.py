@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import threading
 import time
 import uuid
@@ -341,6 +342,100 @@ def list_sessions() -> list[dict[str, Any]]:
         return rows
 
 
+def _search_tokens(query: str) -> list[str]:
+    return [t for t in re.findall(r"\w+", query.lower()) if len(t) >= 2]
+
+
+def _match_score(text_low: str, query_low: str, terms: list[str]) -> int:
+    """2 = full phrase present, 1 = all terms present, 0 = no match."""
+    if query_low and query_low in text_low:
+        return 2
+    if terms and all(t in text_low for t in terms):
+        return 1
+    return 0
+
+
+def _snippet(content: str, terms: list[str], query_low: str, width: int = 160) -> str:
+    """A ~width-char window of *content* centered on the first matched term."""
+    low = content.lower()
+    pos = low.find(query_low) if query_low else -1
+    if pos < 0:
+        for t in terms:
+            pos = low.find(t)
+            if pos >= 0:
+                break
+    if pos < 0:
+        pos = 0
+    start = max(0, pos - width // 3)
+    end = min(len(content), start + width)
+    snip = content[start:end].strip()
+    if start > 0:
+        snip = "…" + snip
+    if end < len(content):
+        snip = snip + "…"
+    return snip
+
+
+def search_sessions(query: str, *, limit: int = 20) -> list[dict[str, Any]]:
+    """Keyword search over past chat sessions (titles + message content).
+
+    Returns rows shaped like list_sessions() plus a ``snippet`` and ``matches``
+    count, ranked by match strength then recency. Read-only; no LLM, no index.
+    """
+    q = query.strip().lower()
+    terms = _search_tokens(q)
+    if not q:
+        return []
+
+    with _store_lock():
+        active_id = _resolve_active()
+        ids = _list_session_ids()
+        rows: list[dict[str, Any]] = []
+        for sid in ids:
+            state = _read_session(sid)
+            if not state:
+                continue
+            title = state.get("title") or "New chat"
+            title_score = _match_score(title.lower(), q, terms)
+
+            best_snippet = ""
+            match_count = 0
+            best_msg_score = 0
+            for msg in state.get("history") or []:
+                if msg.get("role") not in ("user", "assistant"):
+                    continue
+                content = (msg.get("content") or "").strip()
+                if not content:
+                    continue
+                score = _match_score(content.lower(), q, terms)
+                if score:
+                    match_count += 1
+                    if score > best_msg_score:
+                        best_msg_score = score
+                        best_snippet = _snippet(content, terms, q)
+
+            if not title_score and not match_count:
+                continue
+
+            if not best_snippet and title_score:
+                best_snippet = title
+            rows.append(
+                {
+                    "id": sid,
+                    "title": title,
+                    "updated_at": state.get("updated_at", 0),
+                    "when": _relative_time(float(state.get("updated_at", time.time()))),
+                    "active": sid == active_id,
+                    "snippet": best_snippet,
+                    "matches": match_count,
+                    "_rank": max(title_score * 2, best_msg_score) + min(match_count, 5) * 0.1,
+                }
+            )
+
+    rows.sort(key=lambda r: (r.pop("_rank"), r["updated_at"]), reverse=True)
+    return rows[:limit]
+
+
 def _finalize_session(state: dict[str, Any]) -> None:
     """Consolidate + update last-session note before ending a chat."""
     history = state.get("history")
@@ -459,6 +554,12 @@ def send_message(
     else:
         reply, new_history = run_turn(text, speak=speak, source=source, voice_mode=voice_mode)
 
+    # Drain the provenance the turn's memory injection recorded (for the
+    # "why did you say that?" UI). Same thread/context, so the ContextVar is set.
+    from skills.memory.store import take_last_provenance
+
+    provenance = take_last_provenance()
+
     run_consolidation_bg: bool = False
     consolidation_history: list[dict[str, Any]] = []
     consolidation_start: int = 0
@@ -493,6 +594,7 @@ def send_message(
         "reply": reply,
         "session_id": sid,
         "messages": messages,
+        "provenance": provenance,
     }
 
 
@@ -542,8 +644,8 @@ def send_message_stream(
             voice_mode=voice_mode,
             cancel_check=lambda: stream_cancel.is_cancelled(sid),
         ):
-            if "token" in event:
-                yield event  # forward token immediately
+            if "token" in event or "tool" in event:
+                yield event  # forward token / tool-activity events immediately
             else:
                 final_event = event  # hold done/error until session is saved
     finally:
@@ -557,6 +659,11 @@ def send_message_stream(
     if "error" in final_event:
         yield final_event
         return
+
+    # Drain provenance recorded during the streamed turn (same context).
+    from skills.memory.store import take_last_provenance
+
+    provenance = take_last_provenance()
 
     # Phase 3: save session state (under lock)
     new_history = final_event.get("messages")
@@ -596,6 +703,7 @@ def send_message_stream(
         "reply": reply,
         "session_id": sid,
         "messages": messages,
+        "provenance": provenance,
     }
 
 

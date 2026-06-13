@@ -300,6 +300,100 @@ def _sync_tool_rounds(
     return "Stopped: too many tool rounds.", _trim_session_messages(_strip_ephemeral(messages))
 
 
+def _tool_activity_label(name: str, args: dict[str, Any]) -> str:
+    """Short present-tense label for the 'what she's doing' UI."""
+    path = str(args.get("path") or "")
+    if name in ("get_pc_specs",):
+        return "Checking PC specs"
+    if name == "get_system_status":
+        return "Checking system status"
+    if name == "list_processes":
+        return "Listing processes"
+    if name == "run_powershell":
+        cmd = str(args.get("command") or "").strip()
+        return f"Running PowerShell: {cmd[:48]}" if cmd else "Running PowerShell"
+    if name == "open_path":
+        return f"Opening {path}" if path else "Opening"
+    if name == "open_url":
+        return f"Opening {str(args.get('url') or '')[:48]}"
+    if name == "file_read":
+        return f"Reading {path}" if path else "Reading file"
+    if name == "file_write":
+        return f"Writing {path}" if path else "Writing file"
+    if name in ("clipboard_read", "clipboard_write"):
+        return "Using clipboard"
+    if name == "web_search":
+        return f"Searching the web for '{str(args.get('query') or '')[:40]}'"
+    if name == "fetch_page":
+        return "Reading a web page"
+    if name == "search_conversations":
+        return f"Searching past chats for '{str(args.get('query') or '')[:40]}'"
+    if name.startswith("memory_"):
+        return "Looking through memory"
+    if name.startswith("todo_"):
+        return "Updating your to-dos"
+    if name == "morning_briefing":
+        return "Preparing your briefing"
+    return f"Running {name}"
+
+
+def _emit_and_exec_tools(
+    tool_calls: list[dict[str, Any]],
+    messages: list[dict[str, Any]],
+    uid: str,
+    source: str,
+) -> Generator[dict[str, Any], None, None]:
+    """Execute tool calls, yielding a start/end activity event around each.
+
+    Appends each tool result to *messages* (mutated in place) so the caller can
+    continue the round loop.
+    """
+    for tc in tool_calls:
+        fn = tc.get("function") or {}
+        name = fn.get("name", "")
+        args = _parse_tool_args(fn.get("arguments"))
+        yield {"tool": name, "phase": "start", "label": _tool_activity_label(name, args)}
+        result = execute_tool(name, args, uid, source=source)
+        ok = not result.startswith("Blocked")
+        yield {"tool": name, "phase": "end", "ok": ok}
+        messages.append({"role": "tool", "content": result, "name": name})
+
+
+def _stream_tool_rounds(
+    messages: list[dict[str, Any]],
+    model: str,
+    client: ollama.Client,
+    uid: str,
+    source: str,
+    max_rounds: int,
+    schemas: list,
+) -> Generator[dict[str, Any], None, tuple[str, list[dict[str, Any]]]]:
+    """Like _sync_tool_rounds but yields tool-activity events as it goes.
+
+    Returns (text, final_messages) via PEP-380 (`yield from` captures it).
+    """
+    for _ in range(max_rounds):
+        try:
+            response = client.chat(
+                model=model,
+                messages=messages,
+                tools=schemas,
+                options={"num_predict": int(get("llm.max_tokens", 1024))},
+            )
+        except Exception as e:
+            raise RuntimeError(f"LLM error: {e}") from e
+
+        msg = _message_to_dict(response["message"])
+        messages.append(msg)
+        tool_calls = msg.get("tool_calls") or []
+        if not tool_calls:
+            text = (msg.get("content") or "").strip()
+            return text, _trim_session_messages(_strip_ephemeral(messages))
+        yield from _emit_and_exec_tools(tool_calls, messages, uid, source)
+
+    return "Stopped: too many tool rounds.", _trim_session_messages(_strip_ephemeral(messages))
+
+
 def run_turn(
     user_message: str,
     *,
@@ -444,23 +538,19 @@ def run_turn_stream(
         }
         return
 
-    # --- Tool-call rounds (synchronous fallback) ----------------------------
-    # First round produced tool calls; handle them and continue non-streaming.
+    # --- Tool-call rounds -----------------------------------------------------
+    # First round produced tool calls; emit activity events for them, then
+    # continue the rounds (also event-emitting) until a text reply.
     messages.append({
         "role": "assistant",
         "content": full_content,
         "tool_calls": tool_calls_found,
     })
-    for tc in tool_calls_found:
-        fn = tc.get("function") or {}
-        name = fn.get("name", "")
-        args = _parse_tool_args(fn.get("arguments"))
-        result = execute_tool(name, args, uid, source=source)
-        messages.append({"role": "tool", "content": result, "name": name})
+    yield from _emit_and_exec_tools(tool_calls_found, messages, uid, source)
 
     try:
-        text, final_messages = _sync_tool_rounds(
-            messages, model, client, user_message, uid, source, max_tool_rounds - 1
+        text, final_messages = yield from _stream_tool_rounds(
+            messages, model, client, uid, source, max_tool_rounds - 1, schemas
         )
         yield {"done": True, "reply": text, "messages": final_messages}
     except RuntimeError as e:

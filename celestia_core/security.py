@@ -17,8 +17,33 @@ Mode = Literal["safe", "scoped", "armed"]
 _MODE_RANK: dict[str, int] = {"safe": 0, "scoped": 1, "armed": 2}
 _TRAY_SOURCES = frozenset({"tray", "voice", "screen"})
 
-PC_TOOLS_ALWAYS_OK = frozenset({"get_system_status", "list_processes"})
+PC_TOOLS_ALWAYS_OK = frozenset({"get_system_status", "list_processes", "get_pc_specs"})
 PC_TOOLS_SCOPED_BLOCK = frozenset({"run_powershell"})
+
+# State-changing PowerShell/Cmd verbs + operators. A command matching any of these
+# is NOT read-only and stays armed-only even when scoped read-only PowerShell is
+# enabled. Matched anywhere in the string, so `Get-Date; Remove-Item x` is blocked.
+_PS_MUTATING = re.compile(
+    r"\b(Set|Remove|New|Add|Clear|Stop|Start|Restart|Suspend|Resume|Move|Copy|"
+    r"Rename|Export|Import|Install|Uninstall|Register|Unregister|Disable|Enable|"
+    r"Invoke|Write|Send|Push|Pop|Mount|Dismount|Format|Initialize|Reset|Update)-"
+    r"|\bOut-File\b|\b(del|erase|rd|rmdir|mkdir|move|copy|ren|format)\b"
+    r"|[>]|`",
+    re.IGNORECASE,
+)
+
+
+def is_readonly_powershell(command: str) -> bool:
+    """True if *command* looks read-only (Get-*, dir, ipconfig, …).
+
+    Conservative: any state-changing verb/operator anywhere in the command makes
+    it non-read-only. The deeper `BLOCKED_PS` safety denylist in pc_control still
+    applies as a second layer at execution time.
+    """
+    cmd = (command or "").strip()
+    if not cmd:
+        return False
+    return not _PS_MUTATING.search(cmd)
 PC_TOOLS_SCOPE_CHECK = frozenset({"open_path", "file_read", "file_write"})
 PC_TOOLS_SAFE_BLOCK = frozenset(
     {
@@ -256,9 +281,13 @@ def gate_pc_tool(name: str, arguments: dict[str, Any] | None = None) -> str | No
 
     if mode == "scoped":
         if name == "run_powershell":
+            cmd = str(args.get("command", ""))
+            if get("security.scoped_allow_readonly_powershell", True) and is_readonly_powershell(cmd):
+                return None  # read-only Get-*/dir/ipconfig etc. — allowed in scoped
             return (
-                "Blocked in scoped mode (needs armed): PowerShell. "
-                "Type arm for full access, or use allowlisted open_path only."
+                "Blocked in scoped mode (needs armed): that PowerShell changes state. "
+                "Read-only commands (Get-*, dir, ipconfig, systeminfo) are allowed; "
+                "type arm for full access."
             )
         if name == "open_url":
             from celestia_core.scope import check_open_url
@@ -305,13 +334,15 @@ def _config_path() -> Path:
 
 
 def _integrity_files() -> list[Path]:
+    """Files whose integrity we baseline.
+
+    The policy file is watched **even when absent** so that *creating* one later
+    (e.g. malware writing itself into the app allowlist) is flagged, not just edits
+    to an already-present file. ``trust_config`` records an absent file as ``null``.
+    """
     from celestia_core.config import policy_path
 
-    files = [_config_path()]
-    pp = policy_path()
-    if pp.exists():
-        files.append(pp)
-    return files
+    return [_config_path(), policy_path()]
 
 
 def _hash_file(path: Path) -> str:
@@ -384,15 +415,23 @@ def _summarize_args(name: str, arguments: dict[str, Any]) -> str:
 
 def trust_config() -> str:
     files = _integrity_files()
-    digests = {p.name: _hash_file(p) for p in files}
+    # Present files get their sha256; a watched-but-absent file (the policy file)
+    # is recorded as null so a later creation is detectable as tampering.
+    digests: dict[str, str | None] = {
+        p.name: (_hash_file(p) if p.exists() else None) for p in files
+    }
     store = _trust_path()
     store.parent.mkdir(parents=True, exist_ok=True)
     store.write_text(
         json.dumps({"files": digests, "trusted_at": _now_iso()}, indent=2),
         encoding="utf-8",
     )
-    names = ", ".join(digests)
-    return f"Trusted: {names}"
+    present = [n for n, h in digests.items() if h is not None]
+    absent = [n for n, h in digests.items() if h is None]
+    msg = f"Trusted: {', '.join(present)}"
+    if absent:
+        msg += f" (watching for creation of: {', '.join(absent)})"
+    return msg
 
 
 def check_config_integrity() -> str | None:
@@ -406,7 +445,7 @@ def check_config_integrity() -> str | None:
     except (json.JSONDecodeError, OSError):
         return "Config integrity store is corrupt — run --trust-config"
 
-    expected_files: dict[str, str] = data.get("files") or {}
+    expected_files: dict[str, str | None] = data.get("files") or {}
     if not expected_files and data.get("sha256"):
         expected_files = {data.get("path", "config.yaml").split("\\")[-1].split("/")[-1]: data["sha256"]}
 
@@ -416,16 +455,22 @@ def check_config_integrity() -> str | None:
     changed: list[str] = []
     for name, expected in expected_files.items():
         path = ROOT / name
-        if not path.exists():
-            continue
-        if _hash_file(path) != expected:
-            changed.append(name)
+        exists = path.exists()
+        if expected is None:
+            # Watched-but-absent at trust time → a newly-created file is suspicious
+            # (the "malware adds itself to the allowlist" case).
+            if exists:
+                changed.append(f"{name} (added)")
+        elif not exists:
+            changed.append(f"{name} (removed)")
+        elif _hash_file(path) != expected:
+            changed.append(f"{name} (modified)")
 
     if changed:
         names = ", ".join(changed)
         msg = (
-            f"Warning: {names} changed since last --trust-config. "
-            "Review edits, then run: python run_celestia.py --trust-config"
+            f"Warning: {names} since last --trust-config. "
+            "Review the change, then run: python run_celestia.py --trust-config"
         )
         _append_jsonl(
             _security_events_path(),

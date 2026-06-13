@@ -91,11 +91,25 @@ export type Status = {
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
+/** One memory/graph entry that informed a reply ("why did you say that?"). */
+export type ProvenanceEntry = {
+  id: string;
+  kind: string;
+  text: string;
+  source: "memory" | "graph";
+};
+
 export type ChatSession = {
   id: string;
   title: string;
   when: string;
   active: boolean;
+};
+
+/** A past conversation matched by keyword search (Feature 03 / #86). */
+export type ChatSearchResult = ChatSession & {
+  snippet: string;
+  matches: number;
 };
 
 export async function fetchStatus(): Promise<Status> {
@@ -111,6 +125,24 @@ export async function setMode(mode: string): Promise<void> {
     body: JSON.stringify({ mode }),
   });
   if (!r.ok) throw new Error(`mode ${r.status}`);
+}
+
+export async function getIncognito(): Promise<boolean> {
+  const r = await apiFetch("/incognito");
+  if (!r.ok) throw new Error(`incognito ${r.status}`);
+  const data = await r.json();
+  return Boolean(data.on);
+}
+
+export async function setIncognito(on: boolean): Promise<boolean> {
+  const r = await apiFetch("/incognito", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ on }),
+  });
+  if (!r.ok) throw new Error(`incognito ${r.status}`);
+  const data = await r.json();
+  return Boolean(data.on);
 }
 
 export async function fetchWorkspaces(): Promise<string[]> {
@@ -235,6 +267,16 @@ export async function fetchChatSessions(): Promise<{
   const r = await apiFetch("/chat/sessions");
   if (!r.ok) throw new Error(`chat sessions ${r.status}`);
   return r.json();
+}
+
+export async function searchChatSessions(
+  q: string,
+  limit = 20,
+): Promise<ChatSearchResult[]> {
+  const r = await apiFetch(`/chat/search?q=${encodeURIComponent(q)}&limit=${limit}`);
+  if (!r.ok) throw new Error(`chat search ${r.status}`);
+  const data = await r.json();
+  return data.results ?? [];
 }
 
 export async function fetchChatHistory(sessionId?: string): Promise<{
@@ -391,6 +433,7 @@ export type ChatStreamDone = {
   reply: string;
   session_id: string;
   messages: ChatMessage[];
+  provenance?: ProvenanceEntry[];
 };
 export type ChatStreamError = { error: string };
 export type ChatStreamEvent = ChatStreamToken | ChatStreamDone | ChatStreamError;

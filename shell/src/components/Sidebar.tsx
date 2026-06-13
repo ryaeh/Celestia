@@ -3,7 +3,11 @@ import {
   createChatSession,
   deleteChatSession,
   fetchChatSessions,
+  getIncognito,
+  searchChatSessions,
   selectChatSession,
+  setIncognito,
+  type ChatSearchResult,
   type ChatSession,
 } from "../api";
 import { usePersistedState } from "../hooks/usePersistedState";
@@ -12,7 +16,7 @@ import Aura from "./Aura";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { Plus, Activity as ActivityIcon, Brain, ListTodo, Settings, ChevronLeft, ChevronRight, Trash2, Check, X } from "lucide-react";
+import { Plus, Activity as ActivityIcon, Brain, ListTodo, Settings, ChevronLeft, ChevronRight, Trash2, Check, X, Eye, EyeOff, Search } from "lucide-react";
 
 type SidebarProps = {
   route: Route;
@@ -36,6 +40,44 @@ export default function Sidebar({
   const [open, setOpen] = usePersistedState("celestia.shell.sidebarOpen", true);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [incognito, setIncognitoState] = useState(false);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<ChatSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const trimmedQuery = query.trim();
+
+  // Debounced conversation search (Feature 03 / #86). Fires at >= 2 chars.
+  useEffect(() => {
+    if (trimmedQuery.length < 2) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const handle = setTimeout(() => {
+      searchChatSessions(trimmedQuery)
+        .then(setResults)
+        .catch(() => setResults([]))
+        .finally(() => setSearching(false));
+    }, 220);
+    return () => clearTimeout(handle);
+  }, [trimmedQuery]);
+
+  useEffect(() => {
+    getIncognito()
+      .then(setIncognitoState)
+      .catch(() => setIncognitoState(false));
+  }, []);
+
+  const toggleIncognito = useCallback(async () => {
+    const next = !incognito;
+    setIncognitoState(next); // optimistic
+    try {
+      setIncognitoState(await setIncognito(next));
+    } catch {
+      setIncognitoState(!next); // revert on failure
+    }
+  }, [incognito]);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -78,6 +120,20 @@ export default function Sidebar({
           <div className="brand">
             <Aura size="brand" state="idle" />
             <strong>{displayName}</strong>
+            <button
+              type="button"
+              className="incognito-toggle"
+              aria-pressed={incognito}
+              onClick={toggleIncognito}
+              title={
+                incognito
+                  ? "Incognito — learning paused (chat still works). Click to resume."
+                  : "Learning on. Click to pause memory + graph + activity."
+              }
+              aria-label={incognito ? "Resume learning" : "Pause learning (incognito)"}
+            >
+              {incognito ? <EyeOff size={15} /> : <Eye size={15} />}
+            </button>
           </div>
 
           {/* New chat */}
@@ -96,12 +152,62 @@ export default function Sidebar({
 
           <Separator className="bg-[var(--border-light)] my-1" />
 
-          {/* History */}
+          {/* Conversation search (Feature 03 / #86) */}
+          <div className="sidebar-search">
+            <Search size={14} className="sidebar-search-icon" />
+            <input
+              type="text"
+              className="sidebar-search-input"
+              placeholder="Search chats…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Search past conversations"
+            />
+            {query && (
+              <button
+                type="button"
+                className="sidebar-search-clear"
+                aria-label="Clear search"
+                onClick={() => setQuery("")}
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
+          {/* History / search results */}
           <div className="sidebar-section flex-1 min-h-0">
-            <span className="sidebar-label">History</span>
+            <span className="sidebar-label">{trimmedQuery ? "Results" : "History"}</span>
             <ScrollArea className="h-full">
               <ul className="history-list">
-                {sessions.length === 0 ? (
+                {trimmedQuery ? (
+                  results.length === 0 ? (
+                    <li className="muted sidebar-empty">
+                      {searching ? "Searching…" : "No matches"}
+                    </li>
+                  ) : (
+                    results.map((item) => (
+                      <li key={item.id}>
+                        <button
+                          type="button"
+                          className={cn(
+                            "history-item search-result w-full",
+                            item.id === activeSessionId && "active",
+                          )}
+                          onClick={async () => {
+                            await selectChatSession(item.id);
+                            onNavigate("home");
+                            onSelectSession(item.id);
+                          }}
+                        >
+                          <span className="history-title">{item.title}</span>
+                          <span className="search-snippet">{item.snippet}</span>
+                          <span className="history-when">{item.when}</span>
+                        </button>
+                      </li>
+                    ))
+                  )
+                ) : sessions.length === 0 ? (
                   <li className="muted sidebar-empty">No chats yet</li>
                 ) : (
                   sessions.map((item) => (

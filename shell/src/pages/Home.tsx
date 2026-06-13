@@ -11,6 +11,7 @@ import {
   visionCapture,
   visionAnalyze,
   type ChatMessage,
+  type ProvenanceEntry,
   type Status,
   type VisionCapture,
   type VisionCaptureMode,
@@ -19,6 +20,7 @@ import StatusHeader from "../components/StatusHeader";
 import ChatInput from "../components/ChatInput";
 import Aura from "../components/Aura";
 import MessageBody from "../components/MessageBody";
+import MemoryProvenance from "../components/MemoryProvenance";
 import VisionPreview from "../components/VisionPreview";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -39,6 +41,8 @@ type HomeProps = {
 export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
   const [status, setStatus] = useState<Status | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Provenance for the most recent reply only (cleared on send / session change).
+  const [lastProvenance, setLastProvenance] = useState<ProvenanceEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [statusReady, setStatusReady] = useState(false);
   const [sessionLoading, setSessionLoading] = useState(true);
@@ -71,6 +75,7 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
   const loadSession = useCallback(async (sid: string) => {
     setSessionLoading(true);
     setError(null);
+    setLastProvenance([]);
     try {
       const hist = await fetchChatHistory(sid);
       setMessages(hist.messages);
@@ -184,6 +189,7 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
     setStreamingTokens(false);
     streamingRef.current = false;
     setError(null);
+    setLastProvenance([]);
     setMessages((prev) => [...prev, { role: "user", content: text }]);
 
     try {
@@ -203,6 +209,7 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
           }
         } else if ("done" in event && event.done) {
           setMessages(event.messages);
+          setLastProvenance(event.provenance ?? []);
           onSidebarRefresh?.();
         } else if ("error" in event) {
           setError(event.error);
@@ -310,6 +317,9 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
                     />
                     <div className="msg-assistant-body">
                       <MessageBody content={msg.content} />
+                      {i === lastIdx && !streamingTokens && (
+                        <MemoryProvenance entries={lastProvenance} />
+                      )}
                     </div>
                   </div>
                 ),

@@ -12,6 +12,8 @@ chat:
   consolidate_before_delete: true  # when deleting a chat, distill it into long-term
                                     # memory first so what she learned survives — only
                                     # the raw transcript is removed (false = hard delete)
+  search_enabled: true              # expose the search_conversations tool + sidebar
+                                    # search over past chats (Feature 03 / #86)
 
 personality:
   active: default
@@ -43,6 +45,10 @@ memory:
   session_consolidate_verbose: false
   session_consolidate_max_facts: 3
   kinds_enabled: [fact, instruction, summary, task]
+  scrub_secrets: true            # redact API keys, tokens, JWTs, private keys, and
+                                 # Luhn-valid card numbers before anything is written
+                                 # to memory/graph (privacy-guardian lite). High-
+                                 # confidence patterns only — normal prose is untouched.
   # Recall ranking (memory lifecycle, step 2): when choosing which memories to
   # inject, blend raw similarity with each memory's importance, how often it's
   # been recalled, and recency. One-off lookups sink; useful memories float up.
@@ -144,6 +150,9 @@ security:
   mode: safe
   default_armed: false
   shared_armed_state: true
+  scoped_allow_readonly_powershell: true  # in scoped mode, allow read-only PowerShell/Cmd
+                                          # (Get-*, dir, ipconfig, systeminfo). Anything that
+                                          # changes state stays armed-only.
   # tray_max_mode: scoped   # optional: cap tray/voice/screen (safe | scoped | armed)
   # Allowlists & workspaces live in security.policy.yaml (copy from security.policy.example.yaml)
   file_read_max_bytes: 262144

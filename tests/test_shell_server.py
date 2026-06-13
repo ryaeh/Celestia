@@ -101,6 +101,41 @@ def test_remote_client_is_forbidden(isolated, token):
 
 
 # ---------------------------------------------------------------------------
+# Token persistence (B-02)
+# ---------------------------------------------------------------------------
+
+def test_token_reused_from_file(monkeypatch, tmp_path):
+    path = tmp_path / ".api_token"
+    path.write_text("deadbeefcafe", encoding="utf-8")
+    monkeypatch.setattr(shell_server, "_TOKEN_PATH", path)
+    assert shell_server._load_or_create_token() == "deadbeefcafe"
+
+
+def test_token_generated_when_absent(monkeypatch, tmp_path):
+    path = tmp_path / ".api_token"  # does not exist
+    monkeypatch.setattr(shell_server, "_TOKEN_PATH", path)
+    tok = shell_server._load_or_create_token()
+    assert len(tok) == 64 and tok != ""  # fresh 32-byte hex
+
+
+def test_token_regenerated_when_file_empty(monkeypatch, tmp_path):
+    path = tmp_path / ".api_token"
+    path.write_text("   \n", encoding="utf-8")  # blank/whitespace
+    monkeypatch.setattr(shell_server, "_TOKEN_PATH", path)
+    assert len(shell_server._load_or_create_token()) == 64
+
+
+def test_write_token_file_round_trips(monkeypatch, tmp_path):
+    path = tmp_path / ".api_token"
+    monkeypatch.setattr(shell_server, "_TOKEN_PATH", path)
+    monkeypatch.setattr(shell_server, "_API_TOKEN", "persisted-token-value")
+    shell_server._write_token_file()
+    assert path.read_text(encoding="utf-8") == "persisted-token-value"
+    # Reusing the same file yields the same token (no rotation across restart).
+    assert shell_server._load_or_create_token() == "persisted-token-value"
+
+
+# ---------------------------------------------------------------------------
 # /mode
 # ---------------------------------------------------------------------------
 

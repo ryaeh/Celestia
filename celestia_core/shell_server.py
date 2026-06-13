@@ -29,12 +29,28 @@ _faillog.setup()
 
 # ---------------------------------------------------------------------------
 # Auth token (CC-114)
-# Session-scoped random token written to data/.api_token at startup.
+# Persisted random token in data/.api_token, reused across restarts so an open
+# Tauri window keeps working when the server restarts (B-02). Regenerated only
+# when the file is absent or unreadable. The frontend (api.ts) clears its cache
+# and re-fetches /token once on a 401, so token rotation degrades gracefully.
 # All endpoints except /status and /token require X-Celestia-Token header.
 # ---------------------------------------------------------------------------
 
-_API_TOKEN: str = secrets.token_hex(32)
 _TOKEN_PATH: Path = ROOT / "data" / ".api_token"
+
+
+def _load_or_create_token() -> str:
+    try:
+        if _TOKEN_PATH.exists():
+            existing = _TOKEN_PATH.read_text(encoding="utf-8").strip()
+            if existing:
+                return existing
+    except OSError:
+        pass
+    return secrets.token_hex(32)
+
+
+_API_TOKEN: str = _load_or_create_token()
 
 # Endpoints that don't require the token:
 #   /status  — health check used by ensure-api.mjs before the frontend loads
@@ -100,6 +116,10 @@ def get_api_token():
 
 class ModeBody(BaseModel):
     mode: str
+
+
+class IncognitoBody(BaseModel):
+    on: bool
 
 
 class ChatBody(BaseModel):
@@ -402,6 +422,17 @@ def get_chat_sessions():
     return {"sessions": list_sessions(), "active_id": get_active_session_id()}
 
 
+@app.get("/chat/search")
+def get_chat_search(q: str = "", limit: int = 20):
+    """Keyword search over past chat sessions (Feature 03 / #86)."""
+    from celestia_core.shell_chat import search_sessions
+    query = (q or "").strip()
+    if not query:
+        return {"query": "", "results": []}
+    results = search_sessions(query, limit=max(1, min(int(limit or 20), 50)))
+    return {"query": query, "results": results}
+
+
 @app.get("/chat/ptt/status")
 def get_ptt_status():
     from celestia_core.shell_ptt import ptt_status
@@ -488,6 +519,19 @@ def get_memory_entry(memory_id: str):
 # ---------------------------------------------------------------------------
 # Routes — POST
 # ---------------------------------------------------------------------------
+
+@app.get("/incognito")
+def get_incognito():
+    from celestia_core import incognito
+    return {"on": incognito.is_on(), "label": incognito.status_label()}
+
+
+@app.post("/incognito")
+def post_incognito(body: IncognitoBody):
+    from celestia_core import incognito
+    incognito.set_on(body.on)
+    return {"on": incognito.is_on(), "label": incognito.status_label()}
+
 
 @app.post("/mode")
 def post_mode(body: ModeBody):
