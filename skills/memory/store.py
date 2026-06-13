@@ -433,7 +433,6 @@ def build_context(query: str, user_id: str = "default") -> str:
                 hits = rank_order(hits)
             except Exception:
                 pass
-        injected_ids: list[str] = []
         for h in hits[:4]:
             line = f"[{h['kind']}] {h['text']}"
             if line not in seen:
@@ -448,15 +447,10 @@ def build_context(query: str, user_id: str = "default") -> str:
                         "_line": line,
                     }
                 )
-                if h.get("id"):
-                    injected_ids.append(str(h["id"]))
-        if injected_ids and get("memory.ranking.enabled", True):
-            try:
-                from skills.memory.ranking import bump_recall
-
-                bump_recall(injected_ids)
-            except Exception:
-                pass
+        # NOTE: recall is bumped *after* dedupe/truncation below, and only for
+        # memories genuinely relevant to the query — vector search returns the
+        # top-k for any query, so counting every injected hit would inflate
+        # recall on memories that were not actually recalled.
 
     # Feature 10 — structural recall: walk the knowledge graph from entities
     # named in the query and inject connected facts (hybrid with similarity).
@@ -496,10 +490,56 @@ def build_context(query: str, user_id: str = "default") -> str:
             kept.append(p)
     _last_provenance.set(kept)
 
+    # Bump recall only for surviving memory entries that are lexically relevant to
+    # the query — so a memory injected purely by weak vector similarity (the user's
+    # "it counted something I didn't recall" case) doesn't accrue a phantom recall.
+    if get("memory.ranking.enabled", True):
+        recall_ids = [
+            p["id"]
+            for p in kept
+            if p["source"] == "memory" and p["id"] and _recall_relevant(query, p["text"])
+        ]
+        if recall_ids:
+            try:
+                from skills.memory.ranking import bump_recall
+
+                bump_recall(recall_ids)
+            except Exception:
+                pass
+
     body = "Relevant context from memory:\n" + "\n".join(f"- {ln}" for ln in lines)
     if len(body) > max_chars:
         body = body[: max_chars - 3] + "..."
     return body
+
+
+# Common words that should never, on their own, make a memory count as "recalled".
+_RECALL_STOPWORDS = frozenset(
+    {
+        "the", "and", "for", "are", "you", "your", "with", "what", "that", "this",
+        "have", "was", "were", "can", "did", "does", "about", "from", "they", "them",
+        "his", "her", "she", "him", "our", "out", "got", "get", "had", "has", "how",
+        "why", "who", "when", "where", "which", "would", "could", "should", "tell",
+        "know", "like", "want", "need", "make", "made", "just", "now", "then", "there",
+    }
+)
+
+
+def _content_terms(text: str) -> set[str]:
+    return {t for t in re.findall(r"[a-z0-9]+", text.lower()) if len(t) >= 3 and t not in _RECALL_STOPWORDS}
+
+
+def _recall_relevant(query: str, memory_text: str) -> bool:
+    """True if query and memory share a meaningful content word.
+
+    Used to gate recall counting: a memory injected by vector similarity only
+    counts as *recalled* when it lexically overlaps the user's query, so phantom
+    counts on tangentially-similar memories are avoided.
+    """
+    q = _content_terms(query)
+    if not q:
+        return False
+    return bool(q & _content_terms(memory_text))
 
 
 def _needs_memory_smart(query: str) -> bool:
