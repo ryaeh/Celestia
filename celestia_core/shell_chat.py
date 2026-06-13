@@ -636,8 +636,8 @@ def send_message_stream(
     for event in run_turn_stream(
         text, source=source, history=history if use_session else None, voice_mode=voice_mode
     ):
-        if "token" in event:
-            yield event  # forward token immediately
+        if "token" in event or "tool" in event:
+            yield event  # forward token / tool-activity events immediately
         else:
             final_event = event  # hold done/error until session is saved
 
