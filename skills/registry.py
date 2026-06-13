@@ -13,6 +13,7 @@ from skills.pc_control.tools import (
     execute_pc,
 )
 from skills.web.tools import WEB_TOOL_SCHEMAS, fetch_page, web_search
+from skills.conversations.tools import CONVERSATION_TOOL_SCHEMAS, search_conversations
 from skills.briefing.tools import BRIEFING_TOOL_SCHEMA, morning_briefing
 from skills.todos.tools import (
     TODO_TOOL_SCHEMAS,
@@ -88,6 +89,10 @@ def _h_morning_briefing(args: dict[str, Any], uid: str) -> str:
     return morning_briefing(city=args.get("city", ""))
 
 
+def _h_search_conversations(args: dict[str, Any], uid: str) -> str:
+    return search_conversations(args["query"], limit=int(args.get("limit", 5)))
+
+
 def _h_todo_add(args: dict[str, Any], uid: str) -> str:
     return todo_add(
         args.get("text", ""),
@@ -144,6 +149,7 @@ _TOOL_DISPATCH: dict[str, _Handler] = {
     "memory_delete": _h_memory_delete,
     "web_search": _h_web_search,
     "fetch_page": _h_fetch_page,
+    "search_conversations": _h_search_conversations,
     "morning_briefing": _h_morning_briefing,
     "todo_add": _h_todo_add,
     "todo_list": _h_todo_list,
@@ -171,6 +177,9 @@ def tool_schemas() -> list:
         # Web search and briefing are read-only — safe in all modes.
         if get("skills.web.enabled", True):
             tools += WEB_TOOL_SCHEMAS
+        # Conversation search is read-only recall over the user's own chats.
+        if get("chat.search_enabled", True):
+            tools += CONVERSATION_TOOL_SCHEMAS
         tools += BRIEFING_TOOL_SCHEMA
         # To-dos are user-owned data, not PC actions — safe in all modes.
         if get("todos.enabled", True):
@@ -182,6 +191,8 @@ def tool_schemas() -> list:
         tools += MEMORY_TOOL_SCHEMAS
     if get("skills.web.enabled", True):
         tools += WEB_TOOL_SCHEMAS
+    if get("chat.search_enabled", True):
+        tools += CONVERSATION_TOOL_SCHEMAS
     tools += BRIEFING_TOOL_SCHEMA
     if get("todos.enabled", True):
         tools += TODO_TOOL_SCHEMAS
@@ -205,7 +216,12 @@ def execute_tool(
                 return blocked
             result = execute_pc(name, arguments)
         security.audit_tool(name, arguments, result, source=source)
-        return result
+        # Prompt-injection defense: tools that pull in external text (files, web
+        # pages, clipboard) get their result delimited as untrusted *data* before
+        # it re-enters the model context. The audit logs the raw result above.
+        from celestia_core import untrusted
+
+        return untrusted.wrap_tool_result(name, result)
     except Exception as e:
         result = f"Tool error ({name}): {e}"
         security.audit_tool(name, arguments, result, source=source)

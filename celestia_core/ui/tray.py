@@ -166,6 +166,12 @@ class CelestiaTray:
         if low == "status":
             print(f"[status] {security.armed_status_label()} (shared)")
             return True
+        if low in ("incognito", "pause-learning"):
+            from celestia_core import incognito
+
+            incognito.toggle()
+            print(f"[incognito] {incognito.status_label()}")
+            return True
         if low == "screen" or low.startswith("screen "):
             from skills.vision.flow import parse_screen_command, run_screen_ask
 
@@ -328,6 +334,19 @@ class CelestiaTray:
             ).start()
             print("[tray] Chat thread started (shared session file; enable shell for the app UI).")
 
+        def on_incognito(_icon, _item):
+            from celestia_core import incognito
+
+            now_on = incognito.toggle()
+            print(f"[incognito] {incognito.status_label()}")
+            if now_on:
+                print("[incognito] consolidation + graph + activity feed paused")
+
+        def incognito_checked(_item) -> bool:
+            from celestia_core import incognito
+
+            return incognito.is_on()
+
         def on_help(_icon, _item):
             print_help(for_tray=True)
 
@@ -340,6 +359,11 @@ class CelestiaTray:
             pystray.MenuItem(
                 "Chat" if get("ui.shell_settings", True) else "Chat (console)",
                 on_chat,
+            ),
+            pystray.MenuItem(
+                "Incognito (pause learning)",
+                on_incognito,
+                checked=incognito_checked,
             ),
             pystray.MenuItem("Help", on_help),
             pystray.MenuItem("Voice (PTT)", on_voice),

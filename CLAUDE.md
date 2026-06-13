@@ -56,6 +56,8 @@ celestia_core/
   scope.py                # Workspace path allowlist, protected path checks
   config.py               # Reads config.yaml; get(key, default) accessor — always use this, never read config directly
   open_dispatch.py        # Routes "open X" text to open_path or open_url
+  incognito.py            # Pause-learning toggle: shared mtime-cached state (data/incognito_state.json); is_on() gates consolidation/graph/activity
+  untrusted.py            # Prompt-injection defense: wrap_tool_result() delimits external content (file/web/clipboard) as untrusted data
 skills/
   registry.py             # tool_schemas() + execute_tool() — the single dispatch layer for all LLM tool calls
   memory/store.py         # mem0 + ChromaDB wrapper; _memory is lazily initialized (None at import)
@@ -69,6 +71,7 @@ skills/
   vision/                 # Capture → preprocess → Ollama vision model → optional confirm flow
   pc_control/tools.py     # open_path, open_url, run_powershell — all gated through security.gate_pc_tool()
   todos/                  # To-do list: store.py (locked JSON in data/todos.json) + tools.py (todo_add/list/complete/update/remove)
+  conversations/tools.py  # Conversation search (Feature 03 / #86): search_conversations tool over past sessions (shell_chat.search_sessions)
 shell/                    # Tauri v2 + React 19 + Vite + Tailwind + shadcn/ui desktop app
   src/pages/Home.tsx      # Main chat page with SSE streaming
   src/pages/Todos.tsx     # To-do page — add/complete/edit/delete; talks to /todos API
@@ -92,6 +95,10 @@ tests/                    # pytest; all heavy deps (Ollama, Chroma, mem0, Whispe
 **Heavy deps are lazy**: `mem0`, `chromadb`, `faster-whisper`, `llama-cpp`, `torch`, `pystray`, `pynput` are all imported inside functions — never at module top-level. This keeps startup fast and lets tests run without installing them.
 
 **Memory lifecycle** (`skills/memory/ranking.py` + `decay.py`): memories are *saved* freely (auto-consolidation), then **ranked and decayed** so one-offs don't crowd recall. Each entry gets a write-time `importance` (by kind: instruction 1.0 > fact 0.7 > task 0.4 > summary 0.3); `recall_count`/`last_recalled`/`keep` live in a JSON **sidecar** (`data/memory/recall_stats.json`) keyed by memory id, so a recall never rewrites a vector. `build_context` blends similarity with importance+recall+recency (`rank_order`) and bumps recall on injected entries. `decay.sweep_decay()` deletes only unprotected, low-importance, **never-recalled**, old entries (ever-recalled or pinned = exempt) — off by default (`memory.decay.enabled`), throttled, run on session-finalize + `POST /memory/decay`. The two GPU model tiers split here: cheap 3B heuristics on the hot path, a bigger model on a future GPU-idle pass for smarter re-scoring + graph entity-resolution.
+
+**Memory provenance** (`skills/memory/store.py`): `build_context` records the entries it injected (memory + graph) into a `ContextVar`; the chat layer drains it with `take_last_provenance()` and attaches `provenance` to the chat response / stream done event. The shell renders an expandable "what I was remembering" row under the latest reply (`MemoryProvenance.tsx`). Live-reply only — not persisted across reload.
+
+**Privacy & untrusted input** (Gate B / prompt-injection): `incognito.is_on()` pauses *all* recording (consolidation, graph extraction, activity feed) at the single `should_run_consolidation()` choke point while chat keeps working — toggled from tray, shell sidebar, or `POST /incognito`. Separately, `untrusted.wrap_tool_result()` delimits any external text (`file_read`/`clipboard_read`/`fetch_page`/`web_search`) as `⟦UNTRUSTED DATA … ⟧` before it re-enters the model context; the system prompt (`personality._BASE`) carries the matching "data, not instructions" clause. Keep the two halves in sync.
 
 ## Configuration files
 

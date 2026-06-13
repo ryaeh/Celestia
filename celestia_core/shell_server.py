@@ -118,6 +118,10 @@ class ModeBody(BaseModel):
     mode: str
 
 
+class IncognitoBody(BaseModel):
+    on: bool
+
+
 class ChatBody(BaseModel):
     message: str
     session_id: str | None = None
@@ -414,6 +418,17 @@ def get_chat_sessions():
     return {"sessions": list_sessions(), "active_id": get_active_session_id()}
 
 
+@app.get("/chat/search")
+def get_chat_search(q: str = "", limit: int = 20):
+    """Keyword search over past chat sessions (Feature 03 / #86)."""
+    from celestia_core.shell_chat import search_sessions
+    query = (q or "").strip()
+    if not query:
+        return {"query": "", "results": []}
+    results = search_sessions(query, limit=max(1, min(int(limit or 20), 50)))
+    return {"query": query, "results": results}
+
+
 @app.get("/chat/ptt/status")
 def get_ptt_status():
     from celestia_core.shell_ptt import ptt_status
@@ -500,6 +515,19 @@ def get_memory_entry(memory_id: str):
 # ---------------------------------------------------------------------------
 # Routes — POST
 # ---------------------------------------------------------------------------
+
+@app.get("/incognito")
+def get_incognito():
+    from celestia_core import incognito
+    return {"on": incognito.is_on(), "label": incognito.status_label()}
+
+
+@app.post("/incognito")
+def post_incognito(body: IncognitoBody):
+    from celestia_core import incognito
+    incognito.set_on(body.on)
+    return {"on": incognito.is_on(), "label": incognito.status_label()}
+
 
 @app.post("/mode")
 def post_mode(body: ModeBody):
