@@ -111,6 +111,30 @@ for us.
 | **Skills import/export + contextual retrieval** | Low / Low | (a) Import/export makes skills portable — folds into the **Skill SDK** idea above. (b) Retrieving *relevant* tool schemas per turn from a vector store instead of sending all of them — not needed at ~13 tools, right pattern past ~30. |
 | **Blind model comparison** | Low / Low | A/B two models on the same prompt without knowing which is which. Folds into **voice-consistency regression tests**: before swapping qwen for the next model, blind-compare on a fixed companion-prompt set. |
 
+## Borrowed from the field — J.A.I.son takeaways
+
+Ideas from [J.A.I.son](https://github.com/limitcantcode/jaison-core) — the closest *sibling*
+project (a local "AI companion server": STT→LLM→TTS pipeline, YAML config, personality
+prompts, MCP). Its target is different: a **public-facing VTuber/streamer persona** (official
+apps are a Discord bot, VTube Studio expressions, a Twitch chatbot). Celestia is a *private
+companion that sees the screen, remembers, and acts on the PC* — so the comparison mostly
+**validates the moat** (memory graph, screen, PC control, adaptation are exactly what J.A.I.son
+lacks). We take the companion mechanics, not the streaming identity.
+
+| Idea | Value/Effort | Notes |
+|------|--------------|-------|
+| **Emotion signal → Aura + voice** ⭐ | Medium / Medium | Their best idea: the LLM tags each reply with an *emotion* that drives the avatar's expression. We have both halves disconnected — the **Aura** (`shell/src/components/Aura.tsx`) is state-driven (idle/thinking/listening/speaking) but mood-blind, and Orpheus TTS already has `voice.tts.emotion_tags`/`emotion_guidance`. Emit **one** lightweight emotion tag per reply → drive **both** the Aura's color/animation **and** TTS delivery from it. This *completes the 06→12 fold* (the "Aura reflects mood" surface). Pure companion feel, zero identity risk. |
+| **MCP client support in the registry** | Medium / Medium | J.A.I.son plugs in MCP servers for extra tools. `registry.py` is already a clean dispatch table — letting it also consume MCP tool servers is the standard version of the **Skill SDK / drop-in skills** idea: add tools without writing Python. (This Claude session runs on MCP, so the shape is proven.) |
+| **Swappable "scene" / context prompt** | Low / Low | They separate prompts into *character / instruction / scene*. We have character (personalities) + instruction (system prompt) but no light, swappable **scene** ("we're debugging", "just hanging out", "focus session"). A lighter cousin of Feature 11 modes — a prompt layer, not a VRAM/feature switch. **Hard rule:** scene sets the situation, never the identity. |
+| **WebSocket event bus** (reinforces existing) | — | J.A.I.son uses a WebSocket event system external apps subscribe to and inject into. That's the SSE→WebSocket upgrade in *App/backend* above — the natural backbone for the overlay bubble and any bridge. |
+| **Private Discord bridge** (reinforces existing) | Low / Medium | The companion-friendly slice of their Discord bot: text Celestia from Discord = the same "reach her away from the PC" need as the **notification channels** idea. Private bridge = fine; public stream bot = not Celestia. |
+
+> **Skip from J.A.I.son:** VTube Studio avatar rig + Twitch chatbot (public-streamer
+> direction) and cloud providers (Azure/OpenAI/Fish Audio — breaks local-first; we already
+> have a TTS backend manager). *If* a visual/streamed avatar ever becomes a deliberate
+> product goal, their [VTS emotion-hotkey app](https://github.com/limitcantcode/app-jaison-vts-hotkeys-lcc)
+> is the ready-made path — but that's an expansion, not a slip-in feature.
+
 ---
 
 ## Top 3 to do next (opinion)
@@ -131,3 +155,6 @@ for us.
 - **Odysseus takeaways:** Cookbook → first-run wizard + 11 presets + UI V2 model pickers;
   notification channels → 01/05/briefing delivery; deep research → tidying + 03 + 09;
   calendar/email awareness → briefing + 01.
+- **J.A.I.son takeaways:** emotion signal → Aura + TTS (completes 06→12); MCP client →
+  Skill SDK; scene prompt → light cousin of 11; WebSocket/Discord bridge → overlay bubble +
+  notification channels.
