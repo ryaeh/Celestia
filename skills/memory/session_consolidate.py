@@ -199,6 +199,12 @@ def consolidate_session_messages(
     if not excerpt.strip() or len(excerpt) < 30:
         return len(messages), []
 
+    # Scrub secrets before the excerpt reaches the consolidation LLM, the typed
+    # memories derived from it, or the graph extractor downstream.
+    from skills.memory.scrub import scrub_for_storage
+
+    excerpt = scrub_for_storage(excerpt)
+
     # One fetch of the recent entries, grouped by kind — equivalent to calling
     # get_entries_by_kind(limit=40) per kind but without the repeated get_all scan.
     recent = get_all_entries(user_id, limit=40)

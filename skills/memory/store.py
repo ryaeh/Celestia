@@ -181,9 +181,13 @@ def add(
     importance: float | None = None,
 ) -> dict[str, Any]:
     from skills.memory.ranking import default_importance
+    from skills.memory.scrub import scrub_for_storage
 
     m = _get_memory()
     k = normalize_kind(str(kind))
+    # Universal backstop: strip secrets before they ever reach the vector store
+    # (covers consolidation, the memory_save tool, and pin-to-memory alike).
+    content = scrub_for_storage(content)
     imp = float(importance) if importance is not None else default_importance(k)
     result = m.add(
         content,

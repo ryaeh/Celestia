@@ -45,6 +45,10 @@ memory:
   session_consolidate_verbose: false
   session_consolidate_max_facts: 3
   kinds_enabled: [fact, instruction, summary, task]
+  scrub_secrets: true            # redact API keys, tokens, JWTs, private keys, and
+                                 # Luhn-valid card numbers before anything is written
+                                 # to memory/graph (privacy-guardian lite). High-
+                                 # confidence patterns only — normal prose is untouched.
   # Recall ranking (memory lifecycle, step 2): when choosing which memories to
   # inject, blend raw similarity with each memory's importance, how often it's
   # been recalled, and recency. One-off lookups sink; useful memories float up.
