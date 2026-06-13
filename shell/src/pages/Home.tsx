@@ -17,6 +17,7 @@ import {
 import StatusHeader from "../components/StatusHeader";
 import ChatInput from "../components/ChatInput";
 import Aura from "../components/Aura";
+import MessageBody from "../components/MessageBody";
 import VisionPreview from "../components/VisionPreview";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -298,7 +299,7 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
                       state={i === lastIdx && streamingTokens ? "speaking" : "idle"}
                     />
                     <div className="msg-assistant-body">
-                      <p>{msg.content}</p>
+                      <MessageBody content={msg.content} />
                     </div>
                   </div>
                 ),
