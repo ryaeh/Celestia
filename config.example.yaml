@@ -146,6 +146,9 @@ security:
   mode: safe
   default_armed: false
   shared_armed_state: true
+  scoped_allow_readonly_powershell: true  # in scoped mode, allow read-only PowerShell/Cmd
+                                          # (Get-*, dir, ipconfig, systeminfo). Anything that
+                                          # changes state stays armed-only.
   # tray_max_mode: scoped   # optional: cap tray/voice/screen (safe | scoped | armed)
   # Allowlists & workspaces live in security.policy.yaml (copy from security.policy.example.yaml)
   file_read_max_bytes: 262144
