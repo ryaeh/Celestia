@@ -4,7 +4,8 @@ One page: where Celestia is, what's being built next (in order), and what alread
 
 - **Feature designs** → [`planned-features/`](../planned-features/) (briefs 01–12; the [README](../planned-features/README.md) has dependencies, UI surfaces, and the cross-feature analysis)
 - **Idea pool** → [ideas-backlog.md](ideas-backlog.md)
-- **Perf/GPU + UI V2 plan** → [perf-and-qol-backlog.md](perf-and-qol-backlog.md)
+- **Perf/GPU backlog** → [perf-and-qol-backlog.md](perf-and-qol-backlog.md)
+- **UI V2 plan** → [ui-v2-plan.md](ui-v2-plan.md) (foundations + phased surfaces)
 - **Day-to-day tracking** → [GitHub Issues](https://github.com/ryaeh/Celestia/issues)
 
 ---
@@ -41,8 +42,9 @@ and lays substrate the next step reuses.
 
 **UI V2** is the cohesive polish pass (markdown rendering, cancel/stop, toasts, GPU pill,
 model pickers, Settings expansion, the **graph viewer**) and runs **after** the cluster
-above starts landing surfaces — features first, polish once. The item list lives in
-[perf-and-qol-backlog.md](perf-and-qol-backlog.md).
+above starts landing surfaces — features first, polish once. Framed as foundations + phased
+surfaces in [ui-v2-plan.md](ui-v2-plan.md); the two foundations (**markdown rendering** +
+**toast primitive**) shipped Jun 2026, the rest interleaves with the feature work above.
 
 ---
 
