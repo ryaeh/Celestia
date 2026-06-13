@@ -111,6 +111,10 @@ class SelectSessionBody(BaseModel):
     session_id: str
 
 
+class CancelBody(BaseModel):
+    session_id: str | None = None
+
+
 class MemoryBody(BaseModel):
     text: str
     kind: str = "fact"
@@ -537,6 +541,21 @@ def post_chat_stream(body: ChatBody):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@app.post("/chat/cancel")
+def post_chat_cancel(body: CancelBody):
+    """Stop the in-flight streaming turn for a session (UI V2 / F3).
+
+    The stream loop polls the cancel flag between tokens and finishes with the
+    partial reply. Returns cancelled=True only if a stream was actually running.
+    """
+    from celestia_core import stream_cancel
+    from celestia_core.shell_chat import get_active_session_id
+
+    sid = body.session_id or get_active_session_id()
+    cancelled = stream_cancel.request_cancel(sid)
+    return {"ok": True, "cancelled": cancelled, "session_id": sid}
 
 
 @app.post("/chat/new")

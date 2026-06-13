@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, ArrowUp, Camera, ScanEye, Sparkles, Monitor, Crop, AppWindow } from "lucide-react";
+import { Mic, MicOff, ArrowUp, Square, Camera, ScanEye, Sparkles, Monitor, Crop, AppWindow } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type CaptureMode = "fullscreen" | "region" | "active_window";
@@ -13,6 +13,7 @@ const CAPTURE_MODES: { mode: CaptureMode; label: string; Icon: typeof Monitor }[
 
 type ChatInputProps = {
   onSend: (message: string) => void;
+  onStop?: () => void;
   disabled?: boolean;
   busy?: boolean;
   pttEnabled?: boolean;
@@ -28,6 +29,7 @@ type ChatInputProps = {
 
 export default function ChatInput({
   onSend,
+  onStop,
   disabled,
   busy,
   pttEnabled = true,
@@ -184,16 +186,30 @@ export default function ChatInput({
             <ScanEye size={16} />
           </Button>
         )}
-        <Button
-          type="submit"
-          variant="ghost"
-          size="icon"
-          className="chat-send h-8 w-8 shrink-0"
-          disabled={locked || pttListening}
-          aria-label="Send"
-        >
-          {busy ? <span className="text-xs">…</span> : <ArrowUp size={16} />}
-        </Button>
+        {busy && onStop ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="chat-send chat-stop h-8 w-8 shrink-0"
+            onClick={onStop}
+            aria-label="Stop generating"
+            title="Stop generating"
+          >
+            <Square size={14} />
+          </Button>
+        ) : (
+          <Button
+            type="submit"
+            variant="ghost"
+            size="icon"
+            className="chat-send h-8 w-8 shrink-0"
+            disabled={locked || pttListening}
+            aria-label="Send"
+          >
+            {busy ? <span className="text-xs">…</span> : <ArrowUp size={16} />}
+          </Button>
+        )}
       </form>
       <p className="chat-disclaimer">
         Click <span className="chat-ptt-hint">mic</span> to start, click again to send.

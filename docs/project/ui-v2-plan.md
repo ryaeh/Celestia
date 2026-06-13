@@ -45,11 +45,18 @@ elements are themed against the palette, so it tracks all 6 themes. Replaced the
 confirmation. This is the shared surface that **cancel feedback, API-error surfacing, mode-change
 toasts, "memory saved", and copy confirmations** all reuse — so those items become trivial.
 
-### F3 — In-flight op / cancel control plane  ⏳ OPEN (the big one)
-Backend cancellation for long ops (chat turn, vision) + a frontend **stop button**, and the
-**server→client state-push channel** it shares with the GPU/model HUD. This is the genuinely
-large, design-heavy piece. It is the bridge to Feature 11's mode HUD. See the SSE→WebSocket
-decision below — F3 is where that lands.
+### F3 — In-flight op / cancel control plane  ⏳ IN PROGRESS (the big one)
+Backend cancellation for long ops + a frontend **stop button**, and the **server→client
+state-push channel** it shares with the GPU/model HUD. The bridge to Feature 11's mode HUD.
+
+- **Cancel / stop (chat) ✅ SHIPPED (Jun 2026)** — `celestia_core/stream_cancel.py` is a
+  thread-safe per-session registry; `run_turn_stream` polls a `cancel_check` between tokens and
+  finishes with the partial reply (`cancelled: True`); `POST /chat/cancel` flags the session;
+  the shell's send button becomes a **stop button** while streaming and toasts on stop (reuses
+  F2). *Next within cancel: extend to in-flight vision ops.*
+- **State-push channel (SSE→WebSocket) + GPU/model HUD — OPEN.** The remaining, larger half;
+  see the decision below. Cancel currently uses a plain `POST` (no WS needed); the WS migration
+  is optional and bundled with the push channel work.
 
 ---
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Generator
+from typing import Any, Callable, Generator
 
 import ollama
 
@@ -341,13 +341,18 @@ def run_turn_stream(
     history: list[dict[str, Any]] | None = None,
     max_tool_rounds: int = 8,
     voice_mode: bool = False,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> Generator[dict[str, Any], None, None]:
     """Generator that yields token events then a final done/error event.
 
     Yields one of:
         {"token": str}                                                — per Ollama chunk
         {"done": True, "reply": str, "messages": list[dict]}         — completion
+        {"done": True, ..., "cancelled": True}                        — stopped mid-stream
         {"error": str}                                                — LLM failure
+
+    ``cancel_check`` is polled between streamed tokens; when it returns True the
+    stream stops and the partial reply is returned (and saved) with cancelled=True.
 
     Tool-call turns are handled synchronously (non-streaming) so the caller
     always receives a clean done event with the full message history.
@@ -380,8 +385,15 @@ def run_turn_stream(
 
     full_content = ""
     tool_calls_found: list[dict[str, Any]] = []
+    cancelled = False
 
     for chunk in stream:
+        # Stop between tokens if the caller requested cancellation. The partial
+        # reply collected so far is kept and saved below.
+        if cancel_check is not None and cancel_check():
+            cancelled = True
+            break
+
         # Normalize the partial message from the chunk
         try:
             if hasattr(chunk, "message"):
@@ -409,6 +421,17 @@ def run_turn_stream(
             tcs = msg_part.get("tool_calls") or []
             if tcs:
                 tool_calls_found = tcs
+
+    if cancelled:
+        # Stopped mid-stream: keep whatever was generated so far.
+        messages.append({"role": "assistant", "content": full_content})
+        yield {
+            "done": True,
+            "reply": full_content.strip(),
+            "cancelled": True,
+            "messages": _trim_session_messages(_strip_ephemeral(messages)),
+        }
+        return
 
     if not tool_calls_found:
         # Clean text reply — finish here
