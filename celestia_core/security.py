@@ -334,13 +334,15 @@ def _config_path() -> Path:
 
 
 def _integrity_files() -> list[Path]:
+    """Files whose integrity we baseline.
+
+    The policy file is watched **even when absent** so that *creating* one later
+    (e.g. malware writing itself into the app allowlist) is flagged, not just edits
+    to an already-present file. ``trust_config`` records an absent file as ``null``.
+    """
     from celestia_core.config import policy_path
 
-    files = [_config_path()]
-    pp = policy_path()
-    if pp.exists():
-        files.append(pp)
-    return files
+    return [_config_path(), policy_path()]
 
 
 def _hash_file(path: Path) -> str:
@@ -413,15 +415,23 @@ def _summarize_args(name: str, arguments: dict[str, Any]) -> str:
 
 def trust_config() -> str:
     files = _integrity_files()
-    digests = {p.name: _hash_file(p) for p in files}
+    # Present files get their sha256; a watched-but-absent file (the policy file)
+    # is recorded as null so a later creation is detectable as tampering.
+    digests: dict[str, str | None] = {
+        p.name: (_hash_file(p) if p.exists() else None) for p in files
+    }
     store = _trust_path()
     store.parent.mkdir(parents=True, exist_ok=True)
     store.write_text(
         json.dumps({"files": digests, "trusted_at": _now_iso()}, indent=2),
         encoding="utf-8",
     )
-    names = ", ".join(digests)
-    return f"Trusted: {names}"
+    present = [n for n, h in digests.items() if h is not None]
+    absent = [n for n, h in digests.items() if h is None]
+    msg = f"Trusted: {', '.join(present)}"
+    if absent:
+        msg += f" (watching for creation of: {', '.join(absent)})"
+    return msg
 
 
 def check_config_integrity() -> str | None:
@@ -435,7 +445,7 @@ def check_config_integrity() -> str | None:
     except (json.JSONDecodeError, OSError):
         return "Config integrity store is corrupt — run --trust-config"
 
-    expected_files: dict[str, str] = data.get("files") or {}
+    expected_files: dict[str, str | None] = data.get("files") or {}
     if not expected_files and data.get("sha256"):
         expected_files = {data.get("path", "config.yaml").split("\\")[-1].split("/")[-1]: data["sha256"]}
 
@@ -445,16 +455,22 @@ def check_config_integrity() -> str | None:
     changed: list[str] = []
     for name, expected in expected_files.items():
         path = ROOT / name
-        if not path.exists():
-            continue
-        if _hash_file(path) != expected:
-            changed.append(name)
+        exists = path.exists()
+        if expected is None:
+            # Watched-but-absent at trust time → a newly-created file is suspicious
+            # (the "malware adds itself to the allowlist" case).
+            if exists:
+                changed.append(f"{name} (added)")
+        elif not exists:
+            changed.append(f"{name} (removed)")
+        elif _hash_file(path) != expected:
+            changed.append(f"{name} (modified)")
 
     if changed:
         names = ", ".join(changed)
         msg = (
-            f"Warning: {names} changed since last --trust-config. "
-            "Review edits, then run: python run_celestia.py --trust-config"
+            f"Warning: {names} since last --trust-config. "
+            "Review the change, then run: python run_celestia.py --trust-config"
         )
         _append_jsonl(
             _security_events_path(),

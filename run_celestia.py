@@ -91,7 +91,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--trust-config",
         action="store_true",
-        help="Record config.yaml hash (integrity baseline)",
+        help="Record config.yaml + security.policy.yaml hashes (integrity baseline)",
     )
     parser.add_argument(
         "--pick-workspace",
