@@ -66,7 +66,7 @@ Screenshots: `logs/vision_audit.jsonl` (no image bytes).
 ## Config integrity
 
 1. `run_celestia.py --trust-config` saves hashes of `config.yaml` and `security.policy.yaml` to `data/config.trust`
-2. Next start: if either file changed, you get a warning
+2. Next start: if either file is **modified, removed, or newly created**, you get a warning. The policy file is watched even when absent — so malware *creating* one to add itself to the app allowlist is caught, not just edits to an existing one.
 3. You edited on purpose? Run `--trust-config` again
 
 **URL allowlist (scoped):** use a short label (`github`) or full host (`github.com`). Both allow `https://github.com`. If you list `github.com` and `github.io`, `open github` asks which one.

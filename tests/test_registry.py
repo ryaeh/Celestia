@@ -117,13 +117,16 @@ def test_execute_tool_memory_delete_no_args(monkeypatch) -> None:
 def test_execute_tool_web_search(monkeypatch) -> None:
     monkeypatch.setattr(reg, "web_search", lambda query, num_results=5: "search results here")
     result = reg.execute_tool("web_search", {"query": "python asyncio"}, "user1")
-    assert result == "search results here"
+    # External content is delimited as untrusted data before returning to the model.
+    assert "search results here" in result
+    assert "⟦UNTRUSTED DATA" in result
 
 
 def test_execute_tool_fetch_page(monkeypatch) -> None:
     monkeypatch.setattr(reg, "fetch_page", lambda url, max_chars=3000: "page content")
     result = reg.execute_tool("fetch_page", {"url": "https://example.com"}, "user1")
-    assert result == "page content"
+    assert "page content" in result
+    assert "⟦UNTRUSTED DATA" in result
 
 
 # ---------------------------------------------------------------------------

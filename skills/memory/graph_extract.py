@@ -132,6 +132,12 @@ def extract_and_store(
     if len(excerpt) < 30:
         return []
 
+    # Defensive scrub: keep secrets out of the extractor prompt and the graph even
+    # when called outside the consolidation path (which already scrubs upstream).
+    from skills.memory.scrub import scrub_for_storage
+
+    excerpt = scrub_for_storage(excerpt)
+
     use_model = (
         model
         or get("memory.graph.extraction_model")
