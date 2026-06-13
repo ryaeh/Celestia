@@ -728,6 +728,12 @@ body {
 .chat-send:not(:disabled):hover { filter: brightness(1.08); }
 .chat-send:not(:disabled):active { transform: scale(0.94); }
 
+/* Stop button: replaces send while a turn is streaming */
+.chat-stop {
+  background: linear-gradient(135deg, var(--armed), color-mix(in oklab, var(--armed) 70%, var(--accent-warm)));
+  opacity: 1; cursor: pointer;
+}
+
 .chat-disclaimer { text-align: center; font-size: 0.69rem; color: var(--text-dim); margin: 0.5rem 0 0; }
 .chat-ptt-hint { color: var(--text-muted); }
 

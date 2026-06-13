@@ -184,3 +184,13 @@ def test_select_unknown_session_is_400(client, token):
     )
     assert r.status_code == 400
     assert "error" in r.json()
+
+
+def test_cancel_with_no_active_stream_is_noop(client, token):
+    sid = client.post("/chat/new", headers=auth(token)).json()["session_id"]
+    r = client.post("/chat/cancel", json={"session_id": sid}, headers=auth(token))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    assert body["cancelled"] is False  # nothing was streaming
+    assert body["session_id"] == sid

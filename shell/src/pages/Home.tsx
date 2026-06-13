@@ -6,6 +6,7 @@ import {
   pttCancel,
   pttStart,
   pttStop,
+  cancelChat,
   streamChatMessage,
   visionCapture,
   visionAnalyze,
@@ -21,6 +22,7 @@ import Aura from "../components/Aura";
 import MessageBody from "../components/MessageBody";
 import MemoryProvenance from "../components/MemoryProvenance";
 import VisionPreview from "../components/VisionPreview";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -234,6 +236,14 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
     }
   }
 
+  const onStop = useCallback(() => {
+    cancelChat(sessionId)
+      .then((stopped) => {
+        if (stopped) toast("Stopped generating");
+      })
+      .catch(() => {});
+  }, [sessionId]);
+
   const name = status?.display_name ?? "Celestia";
   const visionEnabled = status?.vision_enabled ?? false;
   const showWelcome = messages.length === 0 && !chatBusy && !sessionLoading && !pttListening && !visionPending;
@@ -354,6 +364,7 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
 
       <ChatInput
         onSend={onSend}
+        onStop={onStop}
         disabled={(!!error && messages.length === 0 && !sessionLoading) || !!visionPending}
         busy={chatBusy}
         pttListening={pttListening}

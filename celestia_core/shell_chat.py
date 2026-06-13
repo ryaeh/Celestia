@@ -633,13 +633,23 @@ def send_message_stream(
     # Phase 2: stream LLM response (outside lock — this is the long operation)
     final_event: dict[str, Any] | None = None
 
-    for event in run_turn_stream(
-        text, source=source, history=history if use_session else None, voice_mode=voice_mode
-    ):
-        if "token" in event or "tool" in event:
-            yield event  # forward token / tool-activity events immediately
-        else:
-            final_event = event  # hold done/error until session is saved
+    from celestia_core import stream_cancel
+
+    stream_cancel.begin(sid)
+    try:
+        for event in run_turn_stream(
+            text,
+            source=source,
+            history=history if use_session else None,
+            voice_mode=voice_mode,
+            cancel_check=lambda: stream_cancel.is_cancelled(sid),
+        ):
+            if "token" in event or "tool" in event:
+                yield event  # forward token / tool-activity events immediately
+            else:
+                final_event = event  # hold done/error until session is saved
+    finally:
+        stream_cancel.end(sid)
 
     if final_event is None:
         # Generator ended without a done event (should not happen)

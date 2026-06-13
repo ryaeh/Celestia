@@ -326,6 +326,18 @@ export async function createChatSession(): Promise<string> {
   return data.session_id as string;
 }
 
+/** Stop the in-flight streaming turn for a session. Returns whether one was running. */
+export async function cancelChat(sessionId: string): Promise<boolean> {
+  const r = await apiFetch("/chat/cancel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId }),
+  });
+  if (!r.ok) return false;
+  const data = await r.json();
+  return Boolean(data.cancelled);
+}
+
 export type PttStatus = {
   phase: string;
   listening: boolean;
