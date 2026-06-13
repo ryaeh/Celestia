@@ -43,9 +43,9 @@ model and oversubscribes the GPU → display-driver hang. The safety floor is sh
 UI items land in the cohesive UI V2 pass on the existing design system (Aura + themes +
 panels). Backend-only items can ship sooner.
 
-1. **Markdown + code rendering in chat (UI V2).** Replies render as raw text today — code,
-   transcripts, and lists show unformatted. Render markdown with syntax-highlighted code
-   blocks + per-block copy. *High impact; she returns code/OCR transcripts constantly.*
+1. ✅ **DONE — Markdown + code rendering in chat (UI V2).** Shipped Jun 2026 as
+   `shell/src/components/MessageBody.tsx` (react-markdown + remark-gfm + rehype-highlight,
+   per-block copy, themed). The first UI V2 foundation — see [ui-v2-plan.md](ui-v2-plan.md).
 2. **Screenshot Fullscreen / Area chooser (UI V2 + backend).** Camera button opens a small
    popover: **Fullscreen · Area · Active window**. "Area" shows a drag-select overlay
    (transparent fullscreen Tauri window or a Python region selector) → crops before analysis.

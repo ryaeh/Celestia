@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Toaster } from "sonner";
 import { fetchChatSessions, initialRoute } from "./api";
 import Sidebar from "./components/Sidebar";
 import Activity from "./pages/Activity";
@@ -77,6 +78,12 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      <Toaster
+        position="bottom-right"
+        theme="dark"
+        toastOptions={{ className: "celestia-toast" }}
+        gap={8}
+      />
       <Sidebar
         route={route}
         activeSessionId={activeSessionId}
