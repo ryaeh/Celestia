@@ -135,6 +135,27 @@ lacks). We take the companion mechanics, not the streaming identity.
 > product goal, their [VTS emotion-hotkey app](https://github.com/limitcantcode/app-jaison-vts-hotkeys-lcc)
 > is the ready-made path — but that's an expansion, not a slip-in feature.
 
+## Landscape scan — what to take from neighbors
+
+A survey of the closest open-source projects (Jun 2026). Conclusion: **lots of neighbors,
+no twin** — Celestia's intersection (companion identity + temporal memory + voice + screen +
+*gated* PC control + adaptive model, all local) is unoccupied. Each project nails one or two
+axes; the table is what to *take*, not who to copy. Two to actively watch:
+**Open-LLM-VTuber** (companion UX) and the **computer-use agents** (acting).
+
+| Project | Axis it nails | What to take | Feeds |
+|---------|---------------|--------------|-------|
+| [Open-LLM-VTuber](https://github.com/Open-LLM-VTuber/Open-LLM-VTuber) | Offline voice companion + avatar | **Desktop-pet overlay done right**: transparent, always-on-top, **click-through**, draggable — the reference impl for the overlay bubble. Plus **barge-in** ("AI won't hear its own voice") and an **AI proactive-speaking** mode. | overlay bubble · 11 (PTT + barge-in) · 01 (proactive) |
+| Open-LLM-VTuber | (same) | **Backend-driven emotion→expression mapping** + **swappable ASR/TTS via simple config** | emotion → Aura + TTS · STT/TTS backend abstraction |
+| Computer-use agents — [open-computer-use](https://github.com/coasty-ai/open-computer-use), [openyak](https://github.com/openyak/openyak), [ai-desktop](https://github.com/FareedKhan-dev/ai-desktop), MS UFO, self-operating-computer | Acting on the PC | **Screen-grounded actions** (screenshot + UI-element detection → coordinate clicks) and a **Planner that decomposes a request into subtasks** for specialized executors. *Our edge: the security gate + undo they lack.* | 04 scoped autonomy (grounding + plan decomposition) |
+| open-computer-use | Acting | Clean split: a **Terminal agent** (command/file/script) vs a **Desktop agent** (GUI); MCP integration throughout | 04 executor structure · MCP client (registry) |
+| [Ollama-Vision-Memory-Desktop](https://github.com/Laszlobeer/Ollama-Vision-Memory-Desktop) | Local memory + vision | **Auto-index everything** (chats, PDFs, vision logs) into one searchable archive; **hardware auto-scan** (models + cameras) on startup | 03 RAG (PDF/vision corpora) · Cookbook hardware-scan · memory health panel |
+| OpenHuman | Transparent memory | **Memory as human-readable Markdown** (Obsidian vault) — editable, portable, inspectable by hand | 10 inspect/edit/export UI · "about you" page readability · export (#88/#21) |
+| [PyGPT](https://pygpt.net/) | Breadth | Mature **plugin system + presets** (swappable prompt/config bundles), command execution, i18n | Skill SDK / MCP · scene + personality presets · i18n (later) |
+| [Jan](https://github.com/Smart-Solution-LLC/jan-desktop-ai-llm-local) / [LocalAI](https://github.com/mudler/LocalAI) | Model management | **Multi-engine model management** + OpenAI-compatible local-server abstraction | Cookbook / UI V2 model pickers · 11 residency |
+| Letta / MemGPT | Memory architecture | **Self-editing tiered memory** (core vs archival; memory "blocks" the LLM curates itself) | 10 graph design (self-curation, tiers) |
+| Discord bots (jaison etc.) | Reach | **Private Discord bridge** to text her when away — **later**, per Doruk | notification channels · (deferred) |
+
 ---
 
 ## Top 3 to do next (opinion)
@@ -158,3 +179,6 @@ lacks). We take the companion mechanics, not the streaming identity.
 - **J.A.I.son takeaways:** emotion signal → Aura + TTS (completes 06→12); MCP client →
   Skill SDK; scene prompt → light cousin of 11; WebSocket/Discord bridge → overlay bubble +
   notification channels.
+- **Landscape scan:** Open-LLM-VTuber → overlay bubble + barge-in (11) + proactive (01);
+  computer-use agents → 04 grounding + plan decomposition (our edge = the gate); Letta/MemGPT
+  + OpenHuman → 10 design + readable export; Ollama-Vision-Memory + Jan → Cookbook/RAG.
