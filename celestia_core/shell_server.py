@@ -29,12 +29,28 @@ _faillog.setup()
 
 # ---------------------------------------------------------------------------
 # Auth token (CC-114)
-# Session-scoped random token written to data/.api_token at startup.
+# Persisted random token in data/.api_token, reused across restarts so an open
+# Tauri window keeps working when the server restarts (B-02). Regenerated only
+# when the file is absent or unreadable. The frontend (api.ts) clears its cache
+# and re-fetches /token once on a 401, so token rotation degrades gracefully.
 # All endpoints except /status and /token require X-Celestia-Token header.
 # ---------------------------------------------------------------------------
 
-_API_TOKEN: str = secrets.token_hex(32)
 _TOKEN_PATH: Path = ROOT / "data" / ".api_token"
+
+
+def _load_or_create_token() -> str:
+    try:
+        if _TOKEN_PATH.exists():
+            existing = _TOKEN_PATH.read_text(encoding="utf-8").strip()
+            if existing:
+                return existing
+    except OSError:
+        pass
+    return secrets.token_hex(32)
+
+
+_API_TOKEN: str = _load_or_create_token()
 
 # Endpoints that don't require the token:
 #   /status  — health check used by ensure-api.mjs before the frontend loads
