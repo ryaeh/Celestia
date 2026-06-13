@@ -111,6 +111,51 @@ for us.
 | **Skills import/export + contextual retrieval** | Low / Low | (a) Import/export makes skills portable — folds into the **Skill SDK** idea above. (b) Retrieving *relevant* tool schemas per turn from a vector store instead of sending all of them — not needed at ~13 tools, right pattern past ~30. |
 | **Blind model comparison** | Low / Low | A/B two models on the same prompt without knowing which is which. Folds into **voice-consistency regression tests**: before swapping qwen for the next model, blind-compare on a fixed companion-prompt set. |
 
+## Borrowed from the field — J.A.I.son takeaways
+
+Ideas from [J.A.I.son](https://github.com/limitcantcode/jaison-core) — the closest *sibling*
+project (a local "AI companion server": STT→LLM→TTS pipeline, YAML config, personality
+prompts, MCP). Its target is different: a **public-facing VTuber/streamer persona** (official
+apps are a Discord bot, VTube Studio expressions, a Twitch chatbot). Celestia is a *private
+companion that sees the screen, remembers, and acts on the PC* — so the comparison mostly
+**validates the moat** (memory graph, screen, PC control, adaptation are exactly what J.A.I.son
+lacks). We take the companion mechanics, not the streaming identity.
+
+| Idea | Value/Effort | Notes |
+|------|--------------|-------|
+| **Emotion signal → Aura + voice** ⭐ | Medium / Medium | Their best idea: the LLM tags each reply with an *emotion* that drives the avatar's expression. We have both halves disconnected — the **Aura** (`shell/src/components/Aura.tsx`) is state-driven (idle/thinking/listening/speaking) but mood-blind, and Orpheus TTS already has `voice.tts.emotion_tags`/`emotion_guidance`. Emit **one** lightweight emotion tag per reply → drive **both** the Aura's color/animation **and** TTS delivery from it. This *completes the 06→12 fold* (the "Aura reflects mood" surface). Pure companion feel, zero identity risk. |
+| **MCP client support in the registry** | Medium / Medium | J.A.I.son plugs in MCP servers for extra tools. `registry.py` is already a clean dispatch table — letting it also consume MCP tool servers is the standard version of the **Skill SDK / drop-in skills** idea: add tools without writing Python. (This Claude session runs on MCP, so the shape is proven.) |
+| **Swappable "scene" / context prompt** | Low / Low | They separate prompts into *character / instruction / scene*. We have character (personalities) + instruction (system prompt) but no light, swappable **scene** ("we're debugging", "just hanging out", "focus session"). A lighter cousin of Feature 11 modes — a prompt layer, not a VRAM/feature switch. **Hard rule:** scene sets the situation, never the identity. |
+| **WebSocket event bus** (reinforces existing) | — | J.A.I.son uses a WebSocket event system external apps subscribe to and inject into. That's the SSE→WebSocket upgrade in *App/backend* above — the natural backbone for the overlay bubble and any bridge. |
+| **Private Discord bridge** (reinforces existing) | Low / Medium | The companion-friendly slice of their Discord bot: text Celestia from Discord = the same "reach her away from the PC" need as the **notification channels** idea. Private bridge = fine; public stream bot = not Celestia. |
+
+> **Skip from J.A.I.son:** VTube Studio avatar rig + Twitch chatbot (public-streamer
+> direction) and cloud providers (Azure/OpenAI/Fish Audio — breaks local-first; we already
+> have a TTS backend manager). *If* a visual/streamed avatar ever becomes a deliberate
+> product goal, their [VTS emotion-hotkey app](https://github.com/limitcantcode/app-jaison-vts-hotkeys-lcc)
+> is the ready-made path — but that's an expansion, not a slip-in feature.
+
+## Landscape scan — what to take from neighbors
+
+A survey of the closest open-source projects (Jun 2026). Conclusion: **lots of neighbors,
+no twin** — Celestia's intersection (companion identity + temporal memory + voice + screen +
+*gated* PC control + adaptive model, all local) is unoccupied. Each project nails one or two
+axes; the table is what to *take*, not who to copy. Two to actively watch:
+**Open-LLM-VTuber** (companion UX) and the **computer-use agents** (acting).
+
+| Project | Axis it nails | What to take | Feeds |
+|---------|---------------|--------------|-------|
+| [Open-LLM-VTuber](https://github.com/Open-LLM-VTuber/Open-LLM-VTuber) | Offline voice companion + avatar | **Desktop-pet overlay done right**: transparent, always-on-top, **click-through**, draggable — the reference impl for the overlay bubble. Plus **barge-in** ("AI won't hear its own voice") and an **AI proactive-speaking** mode. | overlay bubble · 11 (PTT + barge-in) · 01 (proactive) |
+| Open-LLM-VTuber | (same) | **Backend-driven emotion→expression mapping** + **swappable ASR/TTS via simple config** | emotion → Aura + TTS · STT/TTS backend abstraction |
+| Computer-use agents — [open-computer-use](https://github.com/coasty-ai/open-computer-use), [openyak](https://github.com/openyak/openyak), [ai-desktop](https://github.com/FareedKhan-dev/ai-desktop), MS UFO, self-operating-computer | Acting on the PC | **Screen-grounded actions** (screenshot + UI-element detection → coordinate clicks) and a **Planner that decomposes a request into subtasks** for specialized executors. *Our edge: the security gate + undo they lack.* | 04 scoped autonomy (grounding + plan decomposition) |
+| open-computer-use | Acting | Clean split: a **Terminal agent** (command/file/script) vs a **Desktop agent** (GUI); MCP integration throughout | 04 executor structure · MCP client (registry) |
+| [Ollama-Vision-Memory-Desktop](https://github.com/Laszlobeer/Ollama-Vision-Memory-Desktop) | Local memory + vision | **Auto-index everything** (chats, PDFs, vision logs) into one searchable archive; **hardware auto-scan** (models + cameras) on startup | 03 RAG (PDF/vision corpora) · Cookbook hardware-scan · memory health panel |
+| OpenHuman | Transparent memory | **Memory as human-readable Markdown** (Obsidian vault) — editable, portable, inspectable by hand | 10 inspect/edit/export UI · "about you" page readability · export (#88/#21) |
+| [PyGPT](https://pygpt.net/) | Breadth | Mature **plugin system + presets** (swappable prompt/config bundles), command execution, i18n | Skill SDK / MCP · scene + personality presets · i18n (later) |
+| [Jan](https://github.com/Smart-Solution-LLC/jan-desktop-ai-llm-local) / [LocalAI](https://github.com/mudler/LocalAI) | Model management | **Multi-engine model management** + OpenAI-compatible local-server abstraction | Cookbook / UI V2 model pickers · 11 residency |
+| Letta / MemGPT | Memory architecture | **Self-editing tiered memory** (core vs archival; memory "blocks" the LLM curates itself) | 10 graph design (self-curation, tiers) |
+| Discord bots (jaison etc.) | Reach | **Private Discord bridge** to text her when away — **later**, per Doruk | notification channels · (deferred) |
+
 ---
 
 ## Top 3 to do next (opinion)
@@ -134,3 +179,9 @@ Next candidates: **Companion overlay bubble**, **time-boxed arming (auto-decay)*
 - **Odysseus takeaways:** Cookbook → first-run wizard + 11 presets + UI V2 model pickers;
   notification channels → 01/05/briefing delivery; deep research → tidying + 03 + 09;
   calendar/email awareness → briefing + 01.
+- **J.A.I.son takeaways:** emotion signal → Aura + TTS (completes 06→12); MCP client →
+  Skill SDK; scene prompt → light cousin of 11; WebSocket/Discord bridge → overlay bubble +
+  notification channels.
+- **Landscape scan:** Open-LLM-VTuber → overlay bubble + barge-in (11) + proactive (01);
+  computer-use agents → 04 grounding + plan decomposition (our edge = the gate); Letta/MemGPT
+  + OpenHuman → 10 design + readable export; Ollama-Vision-Memory + Jan → Cookbook/RAG.
