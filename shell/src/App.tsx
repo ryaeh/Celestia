@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Toaster } from "sonner";
 import { fetchChatSessions, initialRoute } from "./api";
+import { useLiveState } from "./hooks/useLiveState";
 import Sidebar from "./components/Sidebar";
 import Activity from "./pages/Activity";
 import Home from "./pages/Home";
@@ -53,6 +54,9 @@ export default function App() {
   const [activeSessionId, setActiveSessionId] = useState("");
   const [historyRefresh, setHistoryRefresh] = useState(0);
   const displayName = "Celestia";
+  // One live-state socket for the whole shell; passed down to surfaces that
+  // mirror cross-process state (header mode/GPU, sidebar incognito).
+  const { state: live } = useLiveState();
 
   function navigate(to: Route) {
     setPrevRoute(route);
@@ -97,6 +101,7 @@ export default function App() {
         }}
         refreshToken={historyRefresh}
         displayName={displayName}
+        liveIncognito={live.incognito}
       />
 
       <div className="main-column">
@@ -104,6 +109,7 @@ export default function App() {
           <Home
             sessionId={activeSessionId}
             onSidebarRefresh={bumpHistory}
+            live={live}
           />
         ) : route === "home" ? (
           <main className="secondary-page muted">Loading chat…</main>

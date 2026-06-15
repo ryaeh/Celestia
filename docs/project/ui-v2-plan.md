@@ -45,7 +45,7 @@ elements are themed against the palette, so it tracks all 6 themes. Replaced the
 confirmation. This is the shared surface that **cancel feedback, API-error surfacing, mode-change
 toasts, "memory saved", and copy confirmations** all reuse — so those items become trivial.
 
-### F3 — In-flight op / cancel control plane  ⏳ IN PROGRESS (the big one)
+### F3 — In-flight op / cancel control plane  ✅ SHIPPED (Jun 2026)
 Backend cancellation for long ops + a frontend **stop button**, and the **server→client
 state-push channel** it shares with the GPU/model HUD. The bridge to Feature 11's mode HUD.
 
@@ -54,9 +54,14 @@ state-push channel** it shares with the GPU/model HUD. The bridge to Feature 11'
   finishes with the partial reply (`cancelled: True`); `POST /chat/cancel` flags the session;
   the shell's send button becomes a **stop button** while streaming and toasts on stop (reuses
   F2). *Next within cancel: extend to in-flight vision ops.*
-- **State-push channel (SSE→WebSocket) + GPU/model HUD — OPEN.** The remaining, larger half;
-  see the decision below. Cancel currently uses a plain `POST` (no WS needed); the WS migration
-  is optional and bundled with the push channel work.
+- **State-push channel (SSE→WebSocket) + GPU/model HUD ✅ SHIPPED (Jun 2026)** — one
+  server→client WebSocket `/ws/state` (`shell_server.py`) diff-pushes mode / incognito / GPU
+  every 1s (localhost + token-via-query-param enforced in-handler; PTT and the Ollama-touching
+  resident-model list deliberately excluded from the tick). Client: `connectStateChannel` +
+  `useLiveState` hook (`shell/src/`) with capped-backoff reconnect; the header mode pill is now
+  live-first, the sidebar incognito toggle reflects cross-process changes, and a **GPU activity
+  pill** appears while a model holds the GPU. The shell's `fetchStatus` poll relaxed 5s→30s.
+  Dev proxy gained `ws: true`. Cancel still uses a plain `POST` (no WS needed).
 
 ---
 
@@ -92,13 +97,14 @@ Now unblocked by F2; each is small.
 - **Mode pill in the header** (ideas/Frontend) — read-only colored pill first (safe/scoped/armed),
   glows red while armed. Becomes Feature 11's HUD anchor; pairs later with time-boxed arming.
 
-### Phase 2 — The control plane (= Foundation F3)
-The big backend piece; do it as one arc.
-- **Cancel / stop in-flight op** (perf-QoL #3) — backend cancellation for chat/vision + a stop
-  button. Pairs with the GPU lock so a slow op never traps the user.
-- **SSE → WebSocket state-push channel** (per the decision above) — `/ws/state` + client store.
-- **GPU / model status indicator** (perf-QoL #5) — resident model + GPU-busy readout, optional
-  VRAM bar; consumes the push channel. Feeds Feature 11's mode HUD.
+### Phase 2 — The control plane (= Foundation F3)  ✅ DONE
+The big backend piece; done as one arc.
+- **Cancel / stop in-flight op** (perf-QoL #3) ✅ — backend cancellation for chat + a stop
+  button. *Vision-op cancel still to do.*
+- **SSE → WebSocket state-push channel** ✅ — `/ws/state` + `connectStateChannel`/`useLiveState`.
+- **GPU / model status indicator** (perf-QoL #5) ✅ — GPU-busy + current-task pill consuming the
+  push channel; feeds Feature 11's mode HUD. *Resident-model name + optional VRAM bar are a
+  follow-up (needs a slower `gpu.loaded_models()` fetch, kept off the 1s tick).*
 
 ### Phase 3 — Larger surfaces (interleave with feature work)
 Built on the stable foundation; each ships *with* its owning feature where one exists.

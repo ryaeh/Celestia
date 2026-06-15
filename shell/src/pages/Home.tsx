@@ -11,6 +11,7 @@ import {
   visionCapture,
   visionAnalyze,
   type ChatMessage,
+  type LiveState,
   type ProvenanceEntry,
   type Status,
   type VisionCapture,
@@ -36,9 +37,10 @@ const STARTER_CHIPS = [
 type HomeProps = {
   sessionId: string;
   onSidebarRefresh?: () => void;
+  live?: LiveState;
 };
 
-export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
+export default function Home({ sessionId, onSidebarRefresh, live }: HomeProps) {
   const [status, setStatus] = useState<Status | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // Provenance for the most recent reply only (cleared on send / session change).
@@ -66,9 +68,12 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
   }, []);
 
   useEffect(() => {
+    // Mode/incognito/GPU now arrive live over /ws/state, so this poll only needs
+    // to refresh the slow-changing rest of Status (personality, preflight checks,
+    // ollama_ok). Kept as a safety net at a relaxed cadence.
     const t = setInterval(async () => {
       try { setStatus(await fetchStatus()); } catch { /* ignore */ }
-    }, 5000);
+    }, 30000);
     return () => clearInterval(t);
   }, []);
 
@@ -251,7 +256,7 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
 
   return (
     <div className="home-view flex flex-col h-full overflow-hidden">
-      <StatusHeader status={status} />
+      <StatusHeader status={status} live={live} />
 
       {/* Error banner */}
       {error && !chatBusy && (

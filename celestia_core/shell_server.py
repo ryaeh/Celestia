@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, Generator
 if TYPE_CHECKING:
     import uvicorn
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
@@ -487,6 +487,74 @@ def get_activity_stream():
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ---------------------------------------------------------------------------
+# Live state push (UI V2 / F3) — server→client WebSocket
+# Cross-process state (mode, incognito) lives in mtime-cached JSON files toggled
+# by tray/CLI/shell alike, so there's no callback to hook; the socket polls the
+# (cheap) cached reads and pushes only what changed. SSE stays for chat streaming.
+#
+# Deliberately excluded:
+#   - PTT phase — changes on a ~250ms timescale; it stays on its own fast poll
+#     (shell Home.tsx), not this 1s state tick.
+#   - Resident model list (gpu.loaded_models) — that hits Ollama over the network;
+#     too heavy to poll here. The GPU HUD fetches it on its own slower cadence.
+# ---------------------------------------------------------------------------
+
+# Poll cadence for the live-state socket, in seconds. Module-level so tests can
+# shrink it instead of waiting on real time.
+_WS_POLL_INTERVAL = 1.0
+
+
+def _collect_state() -> dict[str, Any]:
+    """Snapshot the cross-process state the shell mirrors live. All reads are
+    cheap (in-memory / mtime-cached), so polling them is fine."""
+    from celestia_core import security, incognito, gpu
+
+    return {
+        "mode": security.get_mode(),
+        "mode_label": security.armed_status_label(),
+        "incognito": incognito.is_on(),
+        "gpu_busy": gpu.gpu_busy(),
+        "gpu_task": gpu.current_task(),
+    }
+
+
+@app.websocket("/ws/state")
+async def ws_state(websocket: WebSocket):
+    """Push mode / incognito / GPU state to the shell as it changes (UI V2 / F3).
+
+    A single server→client socket replaces the shell's status poll for
+    slow-changing state set from any surface (tray / CLI / shell). The first
+    frame is the full snapshot; later frames carry only the changed keys.
+
+    HTTP middlewares (localhost-only, token) don't run for WebSockets, so both
+    are enforced here: token via ``?token=`` query param (browsers can't set the
+    X-Celestia-Token header on a WS handshake).
+    """
+    import asyncio
+
+    host = websocket.client.host if websocket.client else ""
+    token = websocket.query_params.get("token", "")
+    if host not in ("127.0.0.1", "::1") or not secrets.compare_digest(token, _API_TOKEN):
+        await websocket.close(code=1008)  # policy violation
+        return
+
+    await websocket.accept()
+    last: dict[str, Any] = {}
+    try:
+        while True:
+            state = await asyncio.to_thread(_collect_state)
+            changes = state if not last else {k: v for k, v in state.items() if last.get(k) != v}
+            if changes:
+                await websocket.send_json({"type": "state", **changes})
+                last = state
+            await asyncio.sleep(_WS_POLL_INTERVAL)
+    except (WebSocketDisconnect, RuntimeError):
+        return
+    except Exception:
+        return
 
 
 @app.get("/read-screen/status")

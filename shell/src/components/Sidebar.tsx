@@ -26,6 +26,9 @@ type SidebarProps = {
   onSelectSession: (sessionId: string) => void;
   refreshToken?: number;
   displayName: string;
+  /** Incognito state pushed over /ws/state — keeps the toggle in sync when it's
+   *  flipped from another surface (tray / CLI). Undefined until the first frame. */
+  liveIncognito?: boolean;
 };
 
 export default function Sidebar({
@@ -36,6 +39,7 @@ export default function Sidebar({
   onSelectSession,
   refreshToken = 0,
   displayName,
+  liveIncognito,
 }: SidebarProps) {
   const [open, setOpen] = usePersistedState("celestia.shell.sidebarOpen", true);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -68,6 +72,11 @@ export default function Sidebar({
       .then(setIncognitoState)
       .catch(() => setIncognitoState(false));
   }, []);
+
+  // Reflect cross-process toggles (tray / CLI) pushed over /ws/state.
+  useEffect(() => {
+    if (liveIncognito !== undefined) setIncognitoState(liveIncognito);
+  }, [liveIncognito]);
 
   const toggleIncognito = useCallback(async () => {
     const next = !incognito;

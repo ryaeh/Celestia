@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Aura from "./Aura";
-import type { Status } from "../api";
+import type { LiveState, Status } from "../api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -8,6 +8,10 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 
 type StatusHeaderProps = {
   status: Status | null;
+  /** Live state from /ws/state — overrides the polled status for mode and feeds
+   *  the GPU activity readout. Optional so the header still renders from polling
+   *  alone if the socket is down. */
+  live?: LiveState;
 };
 
 const MODE_STYLE: Record<string, string> = {
@@ -18,13 +22,20 @@ const MODE_STYLE: Record<string, string> = {
 
 const CHECK_LABELS = ["Context", "Memory", "Tools", "Models"];
 
-export default function StatusHeader({ status }: StatusHeaderProps) {
+export default function StatusHeader({ status, live }: StatusHeaderProps) {
   const [expanded, setExpanded] = useState(false);
 
   const name = status?.display_name ?? "Celestia";
-  const mode = (status?.mode ?? "safe").toLowerCase();
-  const modeLabel = status?.mode_label ?? (mode === "armed" ? "ARMED" : mode === "scoped" ? "SCOPED" : "SAFE");
+  // Live mode (pushed) wins over the polled value so a tray/CLI mode change shows
+  // immediately; fall back to the polled status, then a safe default.
+  const mode = (live?.mode ?? status?.mode ?? "safe").toLowerCase();
+  const modeLabel =
+    live?.mode_label ??
+    status?.mode_label ??
+    (mode === "armed" ? "ARMED" : mode === "scoped" ? "SCOPED" : "SAFE");
   const personality = status?.personality ?? "";
+  const gpuBusy = live?.gpu_busy ?? false;
+  const gpuTask = live?.gpu_task ?? null;
 
   const preflightItems =
     status?.checks.slice(0, 4).map((c, i) => ({
@@ -59,6 +70,17 @@ export default function StatusHeader({ status }: StatusHeaderProps) {
         )}
 
         <span className="top-bar-spacer" />
+
+        {/* GPU activity — shown only while a model is working (UI V2 / F3). */}
+        {gpuBusy && (
+          <span
+            className="gpu-pill"
+            title={gpuTask ? `GPU busy — ${gpuTask}` : "GPU busy"}
+          >
+            <span className="gpu-pill-dot" aria-hidden />
+            {gpuTask ?? "GPU"}
+          </span>
+        )}
 
         {/* Preflight dots */}
         <div className="top-bar-preflight flex items-center gap-1" title="Preflight checks">

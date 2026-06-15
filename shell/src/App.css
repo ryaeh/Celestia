@@ -428,6 +428,26 @@ body {
 .status-pill-armed  { background: color-mix(in oklab, var(--armed) 14%, transparent);  color: var(--armed);  border: 1px solid color-mix(in oklab, var(--armed) 35%, transparent); }
 .status-pill-accent { background: var(--accent-glow); color: var(--accent-bright); border: 1px solid color-mix(in oklab, var(--accent-bright) 35%, transparent); }
 
+/* GPU activity pill (UI V2 / F3) — appears while a model holds the GPU. */
+.gpu-pill {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  height: 1.25rem; padding: 0 0.5rem; border-radius: 999px;
+  font-size: 0.65rem; font-weight: 600; letter-spacing: 0.02em;
+  color: var(--accent-bright);
+  background: var(--accent-glow);
+  border: 1px solid color-mix(in oklab, var(--accent-bright) 30%, transparent);
+}
+.gpu-pill-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+  background: var(--accent-bright);
+  box-shadow: 0 0 6px color-mix(in oklab, var(--accent-bright) 70%, transparent);
+  animation: gpu-pulse 1.1s var(--ease) infinite;
+}
+@keyframes gpu-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(0.7); }
+}
+
 .preflight-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 .preflight-dot.ok   { background: var(--safe); box-shadow: 0 0 6px color-mix(in oklab, var(--safe) 60%, transparent); }
 .preflight-dot.warn { background: var(--scoped); box-shadow: 0 0 6px color-mix(in oklab, var(--scoped) 50%, transparent); }
