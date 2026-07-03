@@ -84,10 +84,49 @@ def _fallback_models() -> list[str]:
     return models
 
 
+class VisionCancelled(Exception):
+    """The in-flight vision analysis was cancelled (stop button / POST /vision/cancel)."""
+
+
+def _cancel_requested() -> bool:
+    from celestia_core import stream_cancel
+
+    return stream_cancel.is_cancelled(stream_cancel.VISION_OP)
+
+
+def _stream_chat(
+    model: str,
+    messages: list[dict],
+    *,
+    options: dict,
+    keep_alive: object | None = None,
+) -> str:
+    """ollama.chat with stream=True, polling the vision cancel flag between chunks
+    so a slow analysis can be stopped mid-generation (UI V2 / F3). Raises
+    VisionCancelled on cancel; abandoning the stream makes Ollama stop generating.
+    """
+    kwargs: dict[str, object] = {}
+    if keep_alive is not None:
+        kwargs["keep_alive"] = keep_alive
+    stream = ollama.chat(model=model, messages=messages, options=options, stream=True, **kwargs)
+
+    parts: list[str] = []
+    for chunk in stream:
+        if _cancel_requested():
+            raise VisionCancelled("vision analysis cancelled")
+        msg = chunk.get("message") if isinstance(chunk, dict) else getattr(chunk, "message", None)
+        if msg is None:
+            continue
+        piece = msg.get("content") if isinstance(msg, dict) else getattr(msg, "content", None)
+        if piece:
+            parts.append(piece)
+    return "".join(parts).strip()
+
+
 def _chat_vision(model: str, image_path: Path, prompt: str, *, num_predict: int, temperature: float) -> str:
-    response = ollama.chat(
-        model=model,
-        messages=[
+    return _stream_chat(
+        model,
+        [
             {
                 "role": "user",
                 "content": prompt,
@@ -99,19 +138,17 @@ def _chat_vision(model: str, image_path: Path, prompt: str, *, num_predict: int,
         # to reload on the next turn (prevents two big models co-resident).
         keep_alive=get("vision.keep_alive", "30s"),
     )
-    return (response["message"].get("content") or "").strip()
 
 
 def _chat_text_only(model: str, prompt: str) -> str:
-    response = ollama.chat(
-        model=model,
-        messages=[{"role": "user", "content": prompt}],
+    return _stream_chat(
+        model,
+        [{"role": "user", "content": prompt}],
         options={
             "temperature": float(get("vision.temperature", 0.1)),
             "num_predict": int(get("vision.max_tokens", 2048)),
         },
     )
-    return (response["message"].get("content") or "").strip()
 
 
 def _two_pass_text(image_path: Path, question: str) -> str:
@@ -134,6 +171,8 @@ def _two_pass_text(image_path: Path, question: str) -> str:
     if not transcript or len(transcript) < 8:
         raise RuntimeError("Transcription empty — recrop tighter on the text area.")
 
+    if _cancel_requested():
+        raise VisionCancelled("vision analysis cancelled")
     print(f"[vision] pass 2/2: answer with {chat_model} (text only, no image)")
     answer = _chat_text_only(
         chat_model,
@@ -145,10 +184,17 @@ def _two_pass_text(image_path: Path, question: str) -> str:
 def analyze_image(image_path: Path, question: str) -> str:
     # Hold the GPU for the whole vision op so it can't overlap STT / a background
     # graph-extraction pass and oversubscribe VRAM.
+    from celestia_core import stream_cancel
     from celestia_core.gpu import gpu_task
 
     with gpu_task("vision"):
-        return _analyze_image_impl(image_path, question)
+        # Register as the (single) cancellable vision op so POST /vision/cancel
+        # can stop it mid-generation; the flag auto-clears on end.
+        stream_cancel.begin(stream_cancel.VISION_OP)
+        try:
+            return _analyze_image_impl(image_path, question)
+        finally:
+            stream_cancel.end(stream_cancel.VISION_OP)
 
 
 def _analyze_image_impl(image_path: Path, question: str) -> str:
@@ -170,6 +216,8 @@ def _analyze_image_impl(image_path: Path, question: str) -> str:
     last_err: Exception | None = None
 
     for i, model in enumerate(models):
+        if _cancel_requested():
+            raise VisionCancelled("vision analysis cancelled")
         print(f"[vision] analyzing with {model}...")
         try:
             if text_mode:

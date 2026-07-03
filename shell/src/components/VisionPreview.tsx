@@ -7,7 +7,7 @@
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Camera, X, Send, Loader2 } from "lucide-react";
+import { Camera, X, Send, Loader2, Square } from "lucide-react";
 import Aura from "./Aura";
 
 type VisionPreviewProps = {
@@ -17,6 +17,8 @@ type VisionPreviewProps = {
   busy: boolean;
   onConfirm: (question: string) => void;
   onCancel: () => void;
+  /** Stop the analysis already running on the backend (busy state only). */
+  onStop?: () => void;
 };
 
 export default function VisionPreview({
@@ -24,6 +26,7 @@ export default function VisionPreview({
   busy,
   onConfirm,
   onCancel,
+  onStop,
 }: VisionPreviewProps) {
   const [question, setQuestion] = useState("Describe this screenshot.");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -60,6 +63,18 @@ export default function VisionPreview({
             <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
               <Loader2 size={14} className="animate-spin" />
               Analysing…
+              {onStop && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1 px-2 ml-1 text-[var(--text-muted)] hover:text-red-400"
+                  onClick={onStop}
+                >
+                  <Square size={11} />
+                  Stop
+                </Button>
+              )}
             </div>
           ) : (
             <>

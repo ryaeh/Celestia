@@ -10,6 +10,7 @@ import {
   streamChatMessage,
   visionCapture,
   visionAnalyze,
+  visionCancel,
   type ChatMessage,
   type LiveState,
   type ProvenanceEntry,
@@ -174,8 +175,12 @@ export default function Home({ sessionId, onSidebarRefresh, live }: HomeProps) {
     setError(null);
     try {
       const result = await visionAnalyze(visionPending.id, question, sessionId);
-      setMessages(result.messages);
-      onSidebarRefresh?.();
+      if (result.cancelled) {
+        toast("Stopped analysing");
+      } else if (result.messages) {
+        setMessages(result.messages);
+        onSidebarRefresh?.();
+      }
     } catch (e) {
       setError(String(e));
     } finally {
@@ -187,6 +192,12 @@ export default function Home({ sessionId, onSidebarRefresh, live }: HomeProps) {
   function onVisionCancel() {
     setVisionPending(null);
     setVisionBusy(false);
+  }
+
+  // Stop an analysis that's already running on the backend; the pending
+  // visionAnalyze call returns {cancelled: true} and cleans up the UI.
+  function onVisionStop() {
+    visionCancel().catch(() => {});
   }
 
   async function onSend(text: string) {
@@ -347,6 +358,7 @@ export default function Home({ sessionId, onSidebarRefresh, live }: HomeProps) {
                   busy={visionBusy}
                   onConfirm={onVisionConfirm}
                   onCancel={onVisionCancel}
+                  onStop={onVisionStop}
                 />
               )}
 

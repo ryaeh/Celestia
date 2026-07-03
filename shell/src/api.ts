@@ -114,6 +114,23 @@ export type LiveState = {
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
+/** A model resident in Ollama VRAM, from GET /gpu/models (UI V2 / F3). */
+export type GpuModel = { name: string; size_vram: number };
+
+export type GpuInfo = {
+  models: GpuModel[];
+  /** System-wide VRAM (nvidia-smi); null on non-NVIDIA machines. */
+  vram: { total_mb: number; used_mb: number } | null;
+};
+
+/** Resident models + VRAM for the GPU HUD. Slow call (ollama ps + nvidia-smi) —
+ *  fetch on a relaxed cadence, never per turn. */
+export async function fetchGpuInfo(): Promise<GpuInfo> {
+  const r = await apiFetch("/gpu/models");
+  if (!r.ok) throw new Error(`gpu/models ${r.status}`);
+  return r.json();
+}
+
 /** One memory/graph entry that informed a reply ("why did you say that?"). */
 export type ProvenanceEntry = {
   id: string;
@@ -231,7 +248,7 @@ export async function visionAnalyze(
   captureId: string,
   question: string,
   sessionId: string,
-): Promise<{ session_id: string; messages: ChatMessage[] }> {
+): Promise<{ session_id: string; messages?: ChatMessage[]; cancelled?: boolean }> {
   const r = await apiFetch("/vision/analyze", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -242,6 +259,18 @@ export async function visionAnalyze(
     throw new Error((d as { error?: string }).error ?? `vision/analyze ${r.status}`);
   }
   return r.json();
+}
+
+/** Stop the in-flight vision analysis. Returns whether one was running. */
+export async function visionCancel(): Promise<boolean> {
+  const r = await apiFetch("/vision/cancel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  if (!r.ok) return false;
+  const data = await r.json();
+  return Boolean(data.cancelled);
 }
 
 export async function fetchVisionHistory(n = 20): Promise<VisionHistoryEntry[]> {

@@ -45,7 +45,7 @@ def trigger_read_screen(*, session_id: str | None = None) -> dict[str, Any]:
         speak = bool(get("read_hotkey.speak_answer", False))
 
         from skills.vision.capture import capture_active_window, capture_fullscreen
-        from skills.vision.analyze import analyze_image
+        from skills.vision.analyze import VisionCancelled, analyze_image
         from celestia_core.shell_chat import append_raw_turn
         from skills.memory.activity_feed import append_event
 
@@ -53,6 +53,9 @@ def trigger_read_screen(*, session_id: str | None = None) -> dict[str, Any]:
 
         try:
             answer = analyze_image(image_path, question)
+        except VisionCancelled:
+            # Stopped from the shell — nothing to persist.
+            return {"cancelled": True}
         finally:
             try:
                 image_path.unlink(missing_ok=True)

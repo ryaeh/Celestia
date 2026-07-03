@@ -366,15 +366,33 @@ def post_vision_analyze(body: VisionAnalyzeBody):
     if path is None:
         return JSONResponse(status_code=404, content={"error": "Capture not found"})
     try:
-        from skills.vision.analyze import analyze_image
+        from skills.vision.analyze import VisionCancelled, analyze_image
         from celestia_core.shell_chat import append_raw_turn
 
-        answer = analyze_image(path, body.question)
+        try:
+            answer = analyze_image(path, body.question)
+        except VisionCancelled:
+            # Stopped from the shell — no turn is persisted.
+            return {"cancelled": True, "session_id": body.session_id}
         user_msg = f"[screenshot] {body.question}"
         result = append_raw_turn(user_msg, answer, session_id=body.session_id)
         return result
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/vision/cancel")
+def post_vision_cancel():
+    """Stop the in-flight vision analysis (UI V2 / F3).
+
+    Same registry as /chat/cancel, under the fixed vision-op key — the GPU lock
+    guarantees at most one vision analysis runs at a time. Returns cancelled=True
+    only if one was actually running.
+    """
+    from celestia_core import stream_cancel
+
+    cancelled = stream_cancel.request_cancel(stream_cancel.VISION_OP)
+    return {"ok": True, "cancelled": cancelled}
 
 
 @app.get("/vision/history")
@@ -555,6 +573,18 @@ async def ws_state(websocket: WebSocket):
         return
     except Exception:
         return
+
+
+@app.get("/gpu/models")
+def get_gpu_models():
+    """Resident Ollama models + system VRAM for the GPU HUD (UI V2 / F3).
+
+    Deliberately a separate slow-cadence fetch, not part of the /ws/state tick:
+    it hits Ollama over the network (ollama ps) and shells out to nvidia-smi.
+    """
+    from celestia_core import gpu
+
+    return {"models": gpu.loaded_model_info(), "vram": gpu.vram_info()}
 
 
 @app.get("/read-screen/status")

@@ -468,6 +468,25 @@ body {
 .top-bar-check-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
 .top-bar-check-list li { display: flex; align-items: center; gap: 0.45rem; font-size: 0.82rem; color: var(--text-muted); }
 
+/* GPU card — resident models + VRAM bar (UI V2 / F3 follow-up) */
+.gpu-model-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.gpu-model-row { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; font-size: 0.82rem; }
+.gpu-model-name { color: var(--text-muted); font-family: var(--font-mono, ui-monospace, "Cascadia Code", "Consolas", monospace); font-size: 0.78rem; }
+.gpu-model-size { color: var(--text-dim); font-size: 0.72rem; flex-shrink: 0; }
+.gpu-model-empty { margin: 0; font-size: 0.8rem; color: var(--text-dim); }
+.vram-bar-wrap { margin-top: 0.55rem; display: flex; align-items: center; gap: 0.5rem; }
+.vram-bar {
+  flex: 1; min-width: 70px; height: 5px; border-radius: 999px; overflow: hidden;
+  background: color-mix(in oklab, var(--text-dim) 18%, transparent);
+}
+.vram-bar-fill {
+  height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-bright));
+  box-shadow: 0 0 6px color-mix(in oklab, var(--accent-bright) 45%, transparent);
+  transition: width 0.4s var(--ease);
+}
+.vram-bar-label { font-size: 0.68rem; color: var(--text-dim); flex-shrink: 0; }
+
 /* ── Aura — Celestia's living presence ──────────────────────────────────── */
 
 .aura { position: relative; display: inline-grid; place-items: center; flex-shrink: 0; isolation: isolate; }
