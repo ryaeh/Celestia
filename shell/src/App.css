@@ -428,6 +428,26 @@ body {
 .status-pill-armed  { background: color-mix(in oklab, var(--armed) 14%, transparent);  color: var(--armed);  border: 1px solid color-mix(in oklab, var(--armed) 35%, transparent); }
 .status-pill-accent { background: var(--accent-glow); color: var(--accent-bright); border: 1px solid color-mix(in oklab, var(--accent-bright) 35%, transparent); }
 
+/* GPU activity pill (UI V2 / F3) — appears while a model holds the GPU. */
+.gpu-pill {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  height: 1.25rem; padding: 0 0.5rem; border-radius: 999px;
+  font-size: 0.65rem; font-weight: 600; letter-spacing: 0.02em;
+  color: var(--accent-bright);
+  background: var(--accent-glow);
+  border: 1px solid color-mix(in oklab, var(--accent-bright) 30%, transparent);
+}
+.gpu-pill-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+  background: var(--accent-bright);
+  box-shadow: 0 0 6px color-mix(in oklab, var(--accent-bright) 70%, transparent);
+  animation: gpu-pulse 1.1s var(--ease) infinite;
+}
+@keyframes gpu-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(0.7); }
+}
+
 .preflight-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 .preflight-dot.ok   { background: var(--safe); box-shadow: 0 0 6px color-mix(in oklab, var(--safe) 60%, transparent); }
 .preflight-dot.warn { background: var(--scoped); box-shadow: 0 0 6px color-mix(in oklab, var(--scoped) 50%, transparent); }
@@ -447,6 +467,25 @@ body {
 .top-bar-card-label { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-dim); display: block; margin-bottom: 0.5rem; font-weight: 600; }
 .top-bar-check-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
 .top-bar-check-list li { display: flex; align-items: center; gap: 0.45rem; font-size: 0.82rem; color: var(--text-muted); }
+
+/* GPU card — resident models + VRAM bar (UI V2 / F3 follow-up) */
+.gpu-model-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.gpu-model-row { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; font-size: 0.82rem; }
+.gpu-model-name { color: var(--text-muted); font-family: var(--font-mono, ui-monospace, "Cascadia Code", "Consolas", monospace); font-size: 0.78rem; }
+.gpu-model-size { color: var(--text-dim); font-size: 0.72rem; flex-shrink: 0; }
+.gpu-model-empty { margin: 0; font-size: 0.8rem; color: var(--text-dim); }
+.vram-bar-wrap { margin-top: 0.55rem; display: flex; align-items: center; gap: 0.5rem; }
+.vram-bar {
+  flex: 1; min-width: 70px; height: 5px; border-radius: 999px; overflow: hidden;
+  background: color-mix(in oklab, var(--text-dim) 18%, transparent);
+}
+.vram-bar-fill {
+  height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-bright));
+  box-shadow: 0 0 6px color-mix(in oklab, var(--accent-bright) 45%, transparent);
+  transition: width 0.4s var(--ease);
+}
+.vram-bar-label { font-size: 0.68rem; color: var(--text-dim); flex-shrink: 0; }
 
 /* ── Aura — Celestia's living presence ──────────────────────────────────── */
 

@@ -10,7 +10,9 @@ import {
   streamChatMessage,
   visionCapture,
   visionAnalyze,
+  visionCancel,
   type ChatMessage,
+  type LiveState,
   type ProvenanceEntry,
   type Status,
   type VisionCapture,
@@ -36,9 +38,10 @@ const STARTER_CHIPS = [
 type HomeProps = {
   sessionId: string;
   onSidebarRefresh?: () => void;
+  live?: LiveState;
 };
 
-export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
+export default function Home({ sessionId, onSidebarRefresh, live }: HomeProps) {
   const [status, setStatus] = useState<Status | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // Provenance for the most recent reply only (cleared on send / session change).
@@ -66,9 +69,12 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
   }, []);
 
   useEffect(() => {
+    // Mode/incognito/GPU now arrive live over /ws/state, so this poll only needs
+    // to refresh the slow-changing rest of Status (personality, preflight checks,
+    // ollama_ok). Kept as a safety net at a relaxed cadence.
     const t = setInterval(async () => {
       try { setStatus(await fetchStatus()); } catch { /* ignore */ }
-    }, 5000);
+    }, 30000);
     return () => clearInterval(t);
   }, []);
 
@@ -169,8 +175,12 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
     setError(null);
     try {
       const result = await visionAnalyze(visionPending.id, question, sessionId);
-      setMessages(result.messages);
-      onSidebarRefresh?.();
+      if (result.cancelled) {
+        toast("Stopped analysing");
+      } else if (result.messages) {
+        setMessages(result.messages);
+        onSidebarRefresh?.();
+      }
     } catch (e) {
       setError(String(e));
     } finally {
@@ -182,6 +192,12 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
   function onVisionCancel() {
     setVisionPending(null);
     setVisionBusy(false);
+  }
+
+  // Stop an analysis that's already running on the backend; the pending
+  // visionAnalyze call returns {cancelled: true} and cleans up the UI.
+  function onVisionStop() {
+    visionCancel().catch(() => {});
   }
 
   async function onSend(text: string) {
@@ -251,7 +267,7 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
 
   return (
     <div className="home-view flex flex-col h-full overflow-hidden">
-      <StatusHeader status={status} />
+      <StatusHeader status={status} live={live} />
 
       {/* Error banner */}
       {error && !chatBusy && (
@@ -342,6 +358,7 @@ export default function Home({ sessionId, onSidebarRefresh }: HomeProps) {
                   busy={visionBusy}
                   onConfirm={onVisionConfirm}
                   onCancel={onVisionCancel}
+                  onStop={onVisionStop}
                 />
               )}
 

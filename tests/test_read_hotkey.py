@@ -60,6 +60,7 @@ def read_env(tmp_path, monkeypatch):
         return "On screen: a code editor with an error."
 
     ana_mod.analyze_image = _analyze
+    ana_mod.VisionCancelled = type("VisionCancelled", (Exception,), {})
 
     # Fake skills.tts (its __init__ would import the TTS backends)
     tts_mod = types.ModuleType("skills.tts")
@@ -220,6 +221,20 @@ def test_trigger_already_capturing_returns_error(read_env, monkeypatch) -> None:
     result = mod.trigger_read_screen()
     assert result["error"] == "already capturing"
     assert calls["capture"] == []
+
+
+def test_trigger_cancelled_persists_nothing_and_resets(read_env, monkeypatch) -> None:
+    mod, calls, _, ana_mod = read_env
+
+    def _cancelled(path, question):
+        raise ana_mod.VisionCancelled("vision analysis cancelled")
+
+    monkeypatch.setattr(ana_mod, "analyze_image", _cancelled)
+    result = mod.trigger_read_screen()
+    assert result == {"cancelled": True}
+    assert calls["turns"] == []
+    assert calls["events"] == []
+    assert mod.read_screen_status()["phase"] == "idle"
 
 
 def test_trigger_analyze_failure_returns_error_and_resets(read_env, monkeypatch) -> None:

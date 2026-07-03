@@ -194,3 +194,118 @@ def test_cancel_with_no_active_stream_is_noop(client, token):
     assert body["ok"] is True
     assert body["cancelled"] is False  # nothing was streaming
     assert body["session_id"] == sid
+
+
+# ---------------------------------------------------------------------------
+# Live state push WebSocket (UI V2 / F3) — /ws/state
+# ---------------------------------------------------------------------------
+
+from starlette.websockets import WebSocketDisconnect  # noqa: E402
+
+_FAKE_STATE = {
+    "mode": "safe",
+    "mode_label": "safe",
+    "incognito": False,
+    "gpu_busy": False,
+    "gpu_task": None,
+}
+
+
+def test_ws_state_rejects_without_token(client):
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect("/ws/state"):
+            pass
+
+
+def test_ws_state_rejects_bad_token(client):
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect("/ws/state?token=nope"):
+            pass
+
+
+def test_ws_state_rejects_remote_client(isolated, token):
+    remote = TestClient(shell_server.app, client=REMOTE_CLIENT)
+    with pytest.raises(WebSocketDisconnect):
+        with remote.websocket_connect(f"/ws/state?token={token}"):
+            pass
+
+
+def test_ws_state_pushes_initial_snapshot(client, token, monkeypatch):
+    monkeypatch.setattr(shell_server, "_collect_state", lambda: dict(_FAKE_STATE))
+    with client.websocket_connect(f"/ws/state?token={token}") as ws:
+        frame = ws.receive_json()
+    assert frame["type"] == "state"
+    # First frame is the full snapshot.
+    for key, value in _FAKE_STATE.items():
+        assert frame[key] == value
+
+
+def test_ws_state_pushes_only_changed_keys(client, token, monkeypatch):
+    states = iter([dict(_FAKE_STATE), {**_FAKE_STATE, "gpu_busy": True, "gpu_task": "chat"}])
+    last = {"v": dict(_FAKE_STATE)}
+
+    def fake_collect():
+        try:
+            last["v"] = next(states)
+        except StopIteration:
+            pass  # hold the last value
+        return dict(last["v"])
+
+    monkeypatch.setattr(shell_server, "_collect_state", fake_collect)
+    monkeypatch.setattr(shell_server, "_WS_POLL_INTERVAL", 0.01)
+
+    with client.websocket_connect(f"/ws/state?token={token}") as ws:
+        first = ws.receive_json()
+        second = ws.receive_json()
+
+    assert set(_FAKE_STATE).issubset(first)  # full snapshot first
+    # Second frame carries only the keys that changed — not the unchanged ones.
+    assert second == {"type": "state", "gpu_busy": True, "gpu_task": "chat"}
+
+
+# ---------------------------------------------------------------------------
+# GPU HUD (UI V2 / F3 follow-up) — /gpu/models
+# ---------------------------------------------------------------------------
+
+
+def test_gpu_models_returns_models_and_vram(client, token, monkeypatch):
+    from celestia_core import gpu
+
+    monkeypatch.setattr(
+        gpu, "loaded_model_info", lambda: [{"name": "qwen2.5:7b", "size_vram": 5_000_000_000}]
+    )
+    monkeypatch.setattr(gpu, "vram_info", lambda: {"total_mb": 16384, "used_mb": 6000})
+    r = client.get("/gpu/models", headers=auth(token))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["models"] == [{"name": "qwen2.5:7b", "size_vram": 5_000_000_000}]
+    assert body["vram"] == {"total_mb": 16384, "used_mb": 6000}
+
+
+def test_gpu_models_requires_token(client):
+    assert client.get("/gpu/models").status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Vision cancel (UI V2 / F3 follow-up) — /vision/cancel
+# ---------------------------------------------------------------------------
+
+
+def test_vision_cancel_noop_when_idle(client, token):
+    r = client.post("/vision/cancel", headers=auth(token))
+    assert r.status_code == 200
+    assert r.json() == {"ok": True, "cancelled": False}
+
+
+def test_vision_cancel_flags_running_op(client, token):
+    from celestia_core import stream_cancel
+
+    stream_cancel.begin(stream_cancel.VISION_OP)
+    try:
+        r = client.post("/vision/cancel", headers=auth(token))
+        assert r.status_code == 200
+        assert r.json()["cancelled"] is True
+        # The running analysis sees the flag on its next between-chunks poll.
+        assert stream_cancel.is_cancelled(stream_cancel.VISION_OP) is True
+    finally:
+        stream_cancel.end(stream_cancel.VISION_OP)

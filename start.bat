@@ -19,6 +19,27 @@ if exist "venv\Scripts\python.exe" (
     set PYTHON=python
 )
 
+REM Ensure the Tauri shell's frontend deps are installed. --shell runs the Vite
+REM dev server (npm run tauri dev), which fails silently on a fresh clone or after
+REM a deps bump if node_modules is missing.
+if not exist "shell\node_modules" (
+    where npm >nul 2>nul
+    if %errorlevel% neq 0 (
+        echo [error] npm not found. Install Node.js 20+ from https://nodejs.org
+        pause
+        exit /b 1
+    )
+    echo [celestia] Installing shell frontend deps ^(first run^)...
+    pushd shell
+    call npm install
+    popd
+    if %errorlevel% neq 0 (
+        echo [error] npm install failed. Run "cd shell ^&^& npm install" manually.
+        pause
+        exit /b 1
+    )
+)
+
 echo [celestia] Starting shell...
 %PYTHON% run_celestia.py --shell
 

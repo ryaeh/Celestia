@@ -19,6 +19,18 @@ export function apiBase(): string {
   return DEFAULT_API;
 }
 
+/** Build a ws:// (or wss://) URL for `path` from the HTTP API base. In dev the
+ *  base is the relative `/api` proxy, so we resolve it against the page origin
+ *  (Vite proxies the upgrade with `ws: true`); in prod it's an absolute http URL
+ *  we just switch the scheme on. */
+function wsUrl(path: string): string {
+  let base = apiBase();
+  if (base.startsWith("/")) {
+    base = `${window.location.origin}${base}`;
+  }
+  return base.replace(/^http/, "ws") + path;
+}
+
 // ---------------------------------------------------------------------------
 // CC-114: Session auth token
 // Fetched once from GET /token (localhost-only endpoint) and cached in memory.
@@ -89,7 +101,35 @@ export type Status = {
   checks: { ok: boolean; message: string }[];
 };
 
+/** Live, slow-changing state pushed over /ws/state (UI V2 / F3). Each frame may
+ *  carry only the keys that changed, so every field is optional — merge into the
+ *  previous value rather than replacing. */
+export type LiveState = {
+  mode?: string;
+  mode_label?: string;
+  incognito?: boolean;
+  gpu_busy?: boolean;
+  gpu_task?: string | null;
+};
+
 export type ChatMessage = { role: "user" | "assistant"; content: string };
+
+/** A model resident in Ollama VRAM, from GET /gpu/models (UI V2 / F3). */
+export type GpuModel = { name: string; size_vram: number };
+
+export type GpuInfo = {
+  models: GpuModel[];
+  /** System-wide VRAM (nvidia-smi); null on non-NVIDIA machines. */
+  vram: { total_mb: number; used_mb: number } | null;
+};
+
+/** Resident models + VRAM for the GPU HUD. Slow call (ollama ps + nvidia-smi) —
+ *  fetch on a relaxed cadence, never per turn. */
+export async function fetchGpuInfo(): Promise<GpuInfo> {
+  const r = await apiFetch("/gpu/models");
+  if (!r.ok) throw new Error(`gpu/models ${r.status}`);
+  return r.json();
+}
 
 /** One memory/graph entry that informed a reply ("why did you say that?"). */
 export type ProvenanceEntry = {
@@ -208,7 +248,7 @@ export async function visionAnalyze(
   captureId: string,
   question: string,
   sessionId: string,
-): Promise<{ session_id: string; messages: ChatMessage[] }> {
+): Promise<{ session_id: string; messages?: ChatMessage[]; cancelled?: boolean }> {
   const r = await apiFetch("/vision/analyze", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -219,6 +259,18 @@ export async function visionAnalyze(
     throw new Error((d as { error?: string }).error ?? `vision/analyze ${r.status}`);
   }
   return r.json();
+}
+
+/** Stop the in-flight vision analysis. Returns whether one was running. */
+export async function visionCancel(): Promise<boolean> {
+  const r = await apiFetch("/vision/cancel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  if (!r.ok) return false;
+  const data = await r.json();
+  return Boolean(data.cancelled);
 }
 
 export async function fetchVisionHistory(n = 20): Promise<VisionHistoryEntry[]> {
@@ -687,6 +739,78 @@ export function subscribeActivityStream(
   return () => {
     closed = true;
     es?.close();
+  };
+}
+
+/**
+ * Opens the live-state WebSocket (/ws/state) and calls `onState` with each
+ * pushed frame (partial — merge into prior state). Auto-reconnects with capped
+ * exponential backoff; `onConnected` reports link up/down so callers can fall
+ * back to polling while it's down. Returns a cleanup function (closes the socket
+ * and stops reconnecting).
+ */
+export function connectStateChannel(
+  onState: (s: LiveState) => void,
+  onConnected?: (connected: boolean) => void,
+): () => void {
+  let closed = false;
+  let ws: WebSocket | null = null;
+  let retry = 0;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const scheduleReconnect = () => {
+    if (closed || reconnectTimer) return;
+    retry += 1;
+    const delay = Math.min(1000 * 2 ** Math.min(retry, 5), 30000);
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      void open();
+    }, delay);
+  };
+
+  const open = async () => {
+    if (closed) return;
+    const token = await acquireToken();
+    if (closed) return;
+    const url = wsUrl("/ws/state") + (token ? `?token=${encodeURIComponent(token)}` : "");
+    let sock: WebSocket;
+    try {
+      sock = new WebSocket(url);
+    } catch {
+      scheduleReconnect();
+      return;
+    }
+    ws = sock;
+    sock.onopen = () => {
+      retry = 0;
+      onConnected?.(true);
+    };
+    sock.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data) as Record<string, unknown> & { type?: string };
+        if (msg.type !== "state") return;
+        const rest = { ...msg };
+        delete rest.type;
+        onState(rest as LiveState);
+      } catch {
+        /* malformed — skip */
+      }
+    };
+    sock.onclose = () => {
+      if (ws === sock) ws = null;
+      onConnected?.(false);
+      scheduleReconnect();
+    };
+    sock.onerror = () => sock.close();
+  };
+
+  void open();
+
+  return () => {
+    closed = true;
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+    ws?.close();
   };
 }
 

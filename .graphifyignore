@@ -1,0 +1,14 @@
+venv/
+.venv/
+node_modules/
+shell/node_modules/
+shell/src-tauri/target/
+dist/
+build/
+__pycache__/
+.pytest_cache/
+.git/
+graphify-out/
+data/
+*.lock
+*.log

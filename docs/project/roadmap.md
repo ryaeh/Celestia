@@ -43,8 +43,9 @@ and lays substrate the next step reuses.
 **UI V2** is the cohesive polish pass (markdown rendering, cancel/stop, toasts, GPU pill,
 model pickers, Settings expansion, the **graph viewer**) and runs **after** the cluster
 above starts landing surfaces — features first, polish once. Framed as foundations + phased
-surfaces in [ui-v2-plan.md](ui-v2-plan.md); the two foundations (**markdown rendering** +
-**toast primitive**) shipped Jun 2026, the rest interleaves with the feature work above.
+surfaces in [ui-v2-plan.md](ui-v2-plan.md); all three foundations shipped Jun 2026
+(**markdown rendering**, **toast primitive**, and **F3** — cancel/stop + the `/ws/state`
+state-push channel + GPU HUD), the rest interleaves with the feature work above.
 
 ---
 

@@ -7,11 +7,18 @@ process. Thread-safe; the flag auto-clears when the stream ends.
 
 Keyed by session id: at most one stream runs per session, and that's the unit the
 shell's stop button targets.
+
+Non-chat ops can register under a fixed key instead of a session id. Vision uses
+``VISION_OP``: the GPU lock (`gpu_task("vision")`) already serialises vision ops,
+so one key is enough for "the vision op currently running, if any".
 """
 
 from __future__ import annotations
 
 import threading
+
+# Fixed registry key for the (single) in-flight vision analysis (UI V2 / F3).
+VISION_OP = "vision-op"
 
 _lock = threading.Lock()
 _active: set[str] = set()      # sessions currently streaming

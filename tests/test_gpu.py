@@ -109,3 +109,42 @@ def test_loaded_models_parses_and_tolerates_errors(monkeypatch) -> None:
 
     monkeypatch.setitem(sys.modules, "ollama", _Bad())
     assert gpu.loaded_models() == []
+
+
+def test_loaded_model_info_includes_vram(monkeypatch) -> None:
+    import sys
+
+    class _OK:
+        def ps(self):
+            return {
+                "models": [
+                    {"name": "qwen2.5:7b", "size_vram": 5_000_000_000},
+                    {"model": "moondream"},  # no size_vram reported
+                ]
+            }
+
+    monkeypatch.setitem(sys.modules, "ollama", _OK())
+    info = gpu.loaded_model_info()
+    assert info[0] == {"name": "qwen2.5:7b", "size_vram": 5_000_000_000}
+    assert info[1] == {"name": "moondream", "size_vram": 0}
+
+
+def test_vram_info_parses_nvidia_smi(monkeypatch) -> None:
+    import subprocess
+
+    class _Proc:
+        returncode = 0
+        stdout = "16384, 5120\n"
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Proc())
+    assert gpu.vram_info() == {"total_mb": 16384, "used_mb": 5120}
+
+
+def test_vram_info_none_when_unavailable(monkeypatch) -> None:
+    import subprocess
+
+    def _missing(*a, **k):
+        raise FileNotFoundError("nvidia-smi not found")
+
+    monkeypatch.setattr(subprocess, "run", _missing)
+    assert gpu.vram_info() is None

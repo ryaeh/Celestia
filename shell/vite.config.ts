@@ -28,6 +28,7 @@ export default defineConfig(async () => ({
       "/api": {
         target: "http://127.0.0.1:8765",
         changeOrigin: true,
+        ws: true, // proxy the /ws/state live-state socket in dev too
         rewrite: (p) => p.replace(/^\/api/, ""),
       },
     },
