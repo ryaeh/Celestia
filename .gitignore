@@ -4,6 +4,9 @@
 config.yaml
 security.policy.yaml
 
+# --- Graphify (local code-graph dev tool; rebuild with `graphify update .`) ---
+graphify-out/
+
 # --- Python ---
 venv/
 __pycache__/
