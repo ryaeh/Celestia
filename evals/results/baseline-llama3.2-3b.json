@@ -1,0 +1,297 @@
+{
+  "model": "llama3.2:3b",
+  "ts": "2026-07-03T22:41:12",
+  "aggregate": {
+    "cases": 18,
+    "precision": 0.261,
+    "recall": 0.312,
+    "f1": 0.284,
+    "negatives_clean": 2,
+    "negatives_total": 5,
+    "forbidden_hits": 0
+  },
+  "cases": [
+    {
+      "id": "editor-01",
+      "n_extracted": 1,
+      "n_expected": 1,
+      "tp_precision": 0,
+      "tp_recall": 0,
+      "spurious": [
+        "VS Code — switched to — Neovim"
+      ],
+      "missed": [
+        "user — use|switch|editor|prefer — neovim"
+      ],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 49.4
+    },
+    {
+      "id": "project-01",
+      "n_extracted": 1,
+      "n_expected": 1,
+      "tp_precision": 0,
+      "tp_recall": 0,
+      "spurious": [
+        "Celestia — is — my main project"
+      ],
+      "missed": [
+        "user — main project|project|work|build — celestia"
+      ],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 18.3
+    },
+    {
+      "id": "location-01",
+      "n_extracted": 2,
+      "n_expected": 1,
+      "tp_precision": 0,
+      "tp_recall": 0,
+      "spurious": [
+        "Berlin — is_cold — this time of year",
+        "Ankara — is_live_in — none"
+      ],
+      "missed": [
+        "user — live|located|reside — ankara"
+      ],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 6.2
+    },
+    {
+      "id": "likes-01",
+      "n_extracted": 1,
+      "n_expected": 2,
+      "tp_precision": 0,
+      "tp_recall": 0,
+      "spurious": [
+        "Hollow Knight — likes — Celeste"
+      ],
+      "missed": [
+        "user — like|enjoy|play|comfort — hollow knight",
+        "user — like|enjoy|play|comfort — celeste"
+      ],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 18.2
+    },
+    {
+      "id": "pets-01",
+      "n_extracted": 1,
+      "n_expected": 1,
+      "tp_precision": 1,
+      "tp_recall": 0,
+      "spurious": [],
+      "missed": [
+        "['user', 'miso'] — cat|has|own|pet|is — ['miso', 'cat']"
+      ],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 16.6
+    },
+    {
+      "id": "job-01",
+      "n_extracted": 2,
+      "n_expected": 1,
+      "tp_precision": 0,
+      "tp_recall": 0,
+      "spurious": [
+        "job — started_at — Vestel",
+        "weekdays — are — full"
+      ],
+      "missed": [
+        "user — work|job|employ|engineer|started — vestel"
+      ],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 22.9
+    },
+    {
+      "id": "stack-01",
+      "n_extracted": 1,
+      "n_expected": 1,
+      "tp_precision": 1,
+      "tp_recall": 1,
+      "spurious": [],
+      "missed": [],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 13.1
+    },
+    {
+      "id": "supersede-01",
+      "n_extracted": 1,
+      "n_expected": 1,
+      "tp_precision": 1,
+      "tp_recall": 1,
+      "spurious": [],
+      "missed": [],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 20.2
+    },
+    {
+      "id": "family-01",
+      "n_extracted": 2,
+      "n_expected": 2,
+      "tp_precision": 0,
+      "tp_recall": 0,
+      "spurious": [
+        "Deniz — is a doctor — my sister",
+        "Izmir — is located in — Deniz lives"
+      ],
+      "missed": [
+        "['deniz', 'sister'] — is|doctor|work — doctor",
+        "['deniz', 'sister'] — live|located — izmir"
+      ],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 22.3
+    },
+    {
+      "id": "hardware-01",
+      "n_extracted": 2,
+      "n_expected": 1,
+      "tp_precision": 1,
+      "tp_recall": 1,
+      "spurious": [
+        "TTS — fits alongside — 14b model"
+      ],
+      "missed": [],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 28.0
+    },
+    {
+      "id": "routine-01",
+      "n_extracted": 0,
+      "n_expected": 1,
+      "tp_precision": 0,
+      "tp_recall": 0,
+      "spurious": [],
+      "missed": [
+        "user — stream|twitch — ['twitch', 'friday', 'friday nights']"
+      ],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 2.7
+    },
+    {
+      "id": "mixed-01",
+      "n_extracted": 1,
+      "n_expected": 1,
+      "tp_precision": 1,
+      "tp_recall": 1,
+      "spurious": [],
+      "missed": [],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 15.3
+    },
+    {
+      "id": "turkish-01",
+      "n_extracted": 2,
+      "n_expected": 2,
+      "tp_precision": 1,
+      "tp_recall": 1,
+      "spurious": [
+        "Celestia — ana proje — ben"
+      ],
+      "missed": [
+        "['user', 'ben'] — project|proje|work — celestia"
+      ],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 0.4
+    },
+    {
+      "id": "neg-greeting",
+      "n_extracted": 0,
+      "n_expected": 0,
+      "tp_precision": 0,
+      "tp_recall": 0,
+      "spurious": [],
+      "missed": [],
+      "forbidden_hits": [],
+      "clean_negative": true,
+      "is_negative": true,
+      "seconds": 0.2
+    },
+    {
+      "id": "neg-meta",
+      "n_extracted": 0,
+      "n_expected": 0,
+      "tp_precision": 0,
+      "tp_recall": 0,
+      "spurious": [],
+      "missed": [],
+      "forbidden_hits": [],
+      "clean_negative": true,
+      "is_negative": true,
+      "seconds": 0.2
+    },
+    {
+      "id": "neg-assistant-only",
+      "n_extracted": 1,
+      "n_expected": 0,
+      "tp_precision": 0,
+      "tp_recall": 0,
+      "spurious": [
+        "Rust — suit — you"
+      ],
+      "missed": [],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": true,
+      "seconds": 0.3
+    },
+    {
+      "id": "neg-task",
+      "n_extracted": 3,
+      "n_expected": 0,
+      "tp_precision": 0,
+      "tp_recall": 0,
+      "spurious": [
+        "trash — remind — tonight",
+        "tonight — before — 9",
+        "9 — before — tonight"
+      ],
+      "missed": [],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": true,
+      "seconds": 0.4
+    },
+    {
+      "id": "neg-secret",
+      "n_extracted": 2,
+      "n_expected": 0,
+      "tp_precision": 0,
+      "tp_recall": 0,
+      "spurious": [
+        "API key — use — deploy script",
+        "script — deploy — API key"
+      ],
+      "missed": [],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": true,
+      "seconds": 0.4
+    }
+  ]
+}
