@@ -1,0 +1,281 @@
+{
+  "model": "qwen2.5:7b",
+  "ts": "2026-07-03T22:22:19",
+  "aggregate": {
+    "cases": 18,
+    "precision": 0.6,
+    "recall": 0.5,
+    "f1": 0.545,
+    "negatives_clean": 3,
+    "negatives_total": 5,
+    "forbidden_hits": 1
+  },
+  "cases": [
+    {
+      "id": "editor-01",
+      "n_extracted": 1,
+      "n_expected": 1,
+      "tp_precision": 0,
+      "tp_recall": 0,
+      "spurious": [
+        "VS Code — switched_from — Neovim"
+      ],
+      "missed": [
+        "user — use|switch|editor|prefer — neovim"
+      ],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 0.6
+    },
+    {
+      "id": "project-01",
+      "n_extracted": 1,
+      "n_expected": 1,
+      "tp_precision": 0,
+      "tp_recall": 0,
+      "spurious": [
+        "Celestia — is_main_project — myself"
+      ],
+      "missed": [
+        "user — main project|project|work|build — celestia"
+      ],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 0.6
+    },
+    {
+      "id": "location-01",
+      "n_extracted": 2,
+      "n_expected": 1,
+      "tp_precision": 2,
+      "tp_recall": 1,
+      "spurious": [],
+      "missed": [],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 0.8
+    },
+    {
+      "id": "likes-01",
+      "n_extracted": 2,
+      "n_expected": 2,
+      "tp_precision": 2,
+      "tp_recall": 2,
+      "spurious": [],
+      "missed": [],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 0.7
+    },
+    {
+      "id": "pets-01",
+      "n_extracted": 1,
+      "n_expected": 1,
+      "tp_precision": 1,
+      "tp_recall": 0,
+      "spurious": [],
+      "missed": [
+        "['user', 'miso'] — cat|has|own|pet|is — ['miso', 'cat']"
+      ],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 0.5
+    },
+    {
+      "id": "job-01",
+      "n_extracted": 1,
+      "n_expected": 1,
+      "tp_precision": 0,
+      "tp_recall": 0,
+      "spurious": [
+        "job — started — data engineer"
+      ],
+      "missed": [
+        "user — work|job|employ|engineer|started — vestel"
+      ],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 0.5
+    },
+    {
+      "id": "stack-01",
+      "n_extracted": 0,
+      "n_expected": 1,
+      "tp_precision": 0,
+      "tp_recall": 0,
+      "spurious": [],
+      "missed": [
+        "celestia — run|use|built — ollama"
+      ],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 0.9
+    },
+    {
+      "id": "supersede-01",
+      "n_extracted": 1,
+      "n_expected": 1,
+      "tp_precision": 1,
+      "tp_recall": 1,
+      "spurious": [],
+      "missed": [],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 0.6
+    },
+    {
+      "id": "family-01",
+      "n_extracted": 3,
+      "n_expected": 2,
+      "tp_precision": 3,
+      "tp_recall": 2,
+      "spurious": [],
+      "missed": [],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 1.0
+    },
+    {
+      "id": "hardware-01",
+      "n_extracted": 3,
+      "n_expected": 1,
+      "tp_precision": 2,
+      "tp_recall": 1,
+      "spurious": [
+        "TTS — requires — less VRAM than 14b model"
+      ],
+      "missed": [],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 1.2
+    },
+    {
+      "id": "routine-01",
+      "n_extracted": 0,
+      "n_expected": 1,
+      "tp_precision": 0,
+      "tp_recall": 0,
+      "spurious": [],
+      "missed": [
+        "user — stream|twitch — ['twitch', 'friday', 'friday nights']"
+      ],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 1.3
+    },
+    {
+      "id": "mixed-01",
+      "n_extracted": 3,
+      "n_expected": 1,
+      "tp_precision": 1,
+      "tp_recall": 1,
+      "spurious": [
+        "build — failed — again",
+        "dog — named — Boncuk"
+      ],
+      "missed": [],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 1.0
+    },
+    {
+      "id": "turkish-01",
+      "n_extracted": 0,
+      "n_expected": 2,
+      "tp_precision": 0,
+      "tp_recall": 0,
+      "spurious": [],
+      "missed": [
+        "['user', 'ben'] — live|yaşı|located — ankara",
+        "['user', 'ben'] — project|proje|work — celestia"
+      ],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": false,
+      "seconds": 2.2
+    },
+    {
+      "id": "neg-greeting",
+      "n_extracted": 0,
+      "n_expected": 0,
+      "tp_precision": 0,
+      "tp_recall": 0,
+      "spurious": [],
+      "missed": [],
+      "forbidden_hits": [],
+      "clean_negative": true,
+      "is_negative": true,
+      "seconds": 0.3
+    },
+    {
+      "id": "neg-meta",
+      "n_extracted": 1,
+      "n_expected": 0,
+      "tp_precision": 0,
+      "tp_recall": 0,
+      "spurious": [
+        "summary — summarize — file"
+      ],
+      "missed": [],
+      "forbidden_hits": [],
+      "clean_negative": false,
+      "is_negative": true,
+      "seconds": 0.8
+    },
+    {
+      "id": "neg-assistant-only",
+      "n_extracted": 0,
+      "n_expected": 0,
+      "tp_precision": 0,
+      "tp_recall": 0,
+      "spurious": [],
+      "missed": [],
+      "forbidden_hits": [],
+      "clean_negative": true,
+      "is_negative": true,
+      "seconds": 0.5
+    },
+    {
+      "id": "neg-task",
+      "n_extracted": 0,
+      "n_expected": 0,
+      "tp_precision": 0,
+      "tp_recall": 0,
+      "spurious": [],
+      "missed": [],
+      "forbidden_hits": [],
+      "clean_negative": true,
+      "is_negative": true,
+      "seconds": 0.2
+    },
+    {
+      "id": "neg-secret",
+      "n_extracted": 1,
+      "n_expected": 0,
+      "tp_precision": 0,
+      "tp_recall": 0,
+      "spurious": [
+        "deploy_script — uses — API_key_sk-abc123xyz789"
+      ],
+      "missed": [],
+      "forbidden_hits": [
+        "sk-abc123xyz789"
+      ],
+      "clean_negative": false,
+      "is_negative": true,
+      "seconds": 0.6
+    }
+  ]
+}
