@@ -803,6 +803,16 @@ def post_memory_last_session_refresh():
     return {"ok": True, **_memory_last_session_payload()}
 
 
+@app.post("/memory/tidy")
+def post_memory_tidy(dry_run: bool = False):
+    """Run the GPU-idle tidy pass now (manual trigger, bypasses AFK/throttle
+    gates but still yields to a busy GPU). ``dry_run=true`` reports the entity
+    merges that *would* happen without touching the graph."""
+    from skills.memory.tidy import run_tidy
+
+    return run_tidy(force=True, dry_run=dry_run)
+
+
 @app.post("/memory/decay")
 def post_memory_decay(dry_run: bool = False):
     """Run the memory decay sweep now (manual trigger, bypasses the throttle).
@@ -957,6 +967,12 @@ def start_server(port: int | None = None, *, daemon: bool = True) -> int:
     except Exception as e:
         print(f"[read-screen] hotkey listener skipped: {e}")
 
+    try:
+        from skills.memory.tidy import start_tidy_daemon
+        start_tidy_daemon()
+    except Exception as e:
+        print(f"[tidy] idle daemon skipped: {e}")
+
     return p
 
 
@@ -985,4 +1001,9 @@ def run_server_forever(port: int | None = None) -> None:
         start_read_hotkey_listener()
     except Exception as e:
         print(f"[read-screen] hotkey listener skipped: {e}")
+    try:
+        from skills.memory.tidy import start_tidy_daemon
+        start_tidy_daemon()
+    except Exception as e:
+        print(f"[tidy] idle daemon skipped: {e}")
     uvicorn.run(app, host="127.0.0.1", port=p, log_level="error", access_log=False)

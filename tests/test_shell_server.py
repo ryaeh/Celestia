@@ -287,6 +287,32 @@ def test_gpu_models_requires_token(client):
 
 
 # ---------------------------------------------------------------------------
+# Idle tidy pass (Phase 2) — /memory/tidy
+# ---------------------------------------------------------------------------
+
+
+def test_memory_tidy_manual_trigger(client, token, monkeypatch):
+    import skills.memory.tidy as tidy
+
+    seen = {}
+
+    def _run(*, force=False, dry_run=False):
+        seen.update(force=force, dry_run=dry_run)
+        return {"ran": True, "dry_run": dry_run, "entity_resolution": {"merges": []}}
+
+    monkeypatch.setattr(tidy, "run_tidy", _run)
+    r = client.post("/memory/tidy?dry_run=true", headers=auth(token))
+    assert r.status_code == 200
+    assert r.json()["ran"] is True
+    # Manual trigger forces past enabled/throttle gates and honors dry_run.
+    assert seen == {"force": True, "dry_run": True}
+
+
+def test_memory_tidy_requires_token(client):
+    assert client.post("/memory/tidy").status_code == 401
+
+
+# ---------------------------------------------------------------------------
 # Vision cancel (UI V2 / F3 follow-up) — /vision/cancel
 # ---------------------------------------------------------------------------
 

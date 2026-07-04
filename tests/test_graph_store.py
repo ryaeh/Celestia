@@ -57,6 +57,65 @@ def test_upsert_fills_empty_type_later(graph) -> None:
     assert graph.get_node(nid)["type"] == "person"
 
 
+def test_all_nodes_reports_degree(graph) -> None:
+    graph.add_relation("user", "uses", "Neovim")
+    graph.add_relation("user", "likes", "Celeste")
+    nodes = {n["canonical_name"]: n for n in graph.all_nodes()}
+    assert nodes["user"]["degree"] == 2
+    assert nodes["Neovim"]["degree"] == 1
+
+
+def test_merge_nodes_repoints_edges_and_aliases(graph) -> None:
+    graph.add_relation("user", "uses", "VS Code")
+    graph.add_relation("vscode", "has extension", "Vim plugin")
+    keep = graph.resolve_node("VS Code")
+    dup = graph.resolve_node("vscode")
+    assert keep != dup
+
+    assert graph.merge_nodes(keep, dup) is True
+    # The old spelling now resolves to the keeper (alias cache).
+    assert graph.resolve_node("vscode") == keep
+    assert graph.get_node(dup) is None
+    # Both relations now hang off the keeper.
+    lines = [graph.relation_text(e) for e in graph.neighbors(keep)]
+    assert any("uses" in ln for ln in lines)
+    assert any("has extension" in ln for ln in lines)
+
+
+def test_merge_nodes_collapses_duplicate_current_edges(graph) -> None:
+    graph.add_relation("user", "uses", "VS Code")
+    graph.add_relation("user", "uses", "vscode")  # same fact, split entity
+    keep = graph.resolve_node("VS Code")
+    dup = graph.resolve_node("vscode")
+
+    graph.merge_nodes(keep, dup)
+    edges = [e for e in graph.neighbors(keep) if e["valid_until"] is None]
+    assert len(edges) == 1  # one current 'user uses VS Code', not two
+
+
+def test_merge_nodes_drops_self_loops(graph) -> None:
+    graph.add_relation("VS Code", "is", "vscode")  # the dup pair related to itself
+    keep = graph.resolve_node("VS Code")
+    dup = graph.resolve_node("vscode")
+
+    graph.merge_nodes(keep, dup)
+    assert graph.neighbors(keep) == []
+
+
+def test_merge_nodes_fills_missing_type(graph) -> None:
+    keep = graph.upsert_node("VS Code")
+    dup = graph.upsert_node("vscode", "tool")
+    graph.merge_nodes(keep, dup)
+    assert graph.get_node(keep)["type"] == "tool"
+
+
+def test_merge_nodes_rejects_bad_ids(graph) -> None:
+    nid = graph.upsert_node("Celestia")
+    assert graph.merge_nodes(nid, nid) is False
+    assert graph.merge_nodes(nid, "missing") is False
+    assert graph.merge_nodes("", nid) is False
+
+
 def test_upsert_empty_name_raises(graph) -> None:
     with pytest.raises(ValueError):
         graph.upsert_node("   ")
