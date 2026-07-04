@@ -70,6 +70,23 @@ memory:
     protect_kinds: [instruction]
     min_interval_hours: 24    # at most one automatic sweep per this many hours
     scan_limit: 500
+  # GPU-idle "tidying" pass (memory lifecycle — the smart half): when you're AFK
+  # and the whole-system GPU is quiet, run hygiene too heavy for the chat hot
+  # path. v1 job: graph entity resolution (embedding pre-filter → LLM confirm →
+  # merge duplicates + alias cache) plus an opportunistic decay sweep. The judge
+  # model loads only for the pass and is unloaded after. OFF by default — set
+  # enabled: true (then --trust-config). Manual trigger: POST /memory/tidy.
+  tidy:
+    enabled: false
+    model: qwen2.5:7b            # judge model for same-entity checks (idle-only)
+    check_interval_minutes: 10   # how often the daemon re-checks for idleness
+    min_afk_minutes: 10          # required minutes since last keyboard/mouse input
+    max_gpu_utilization: 20      # skip while system GPU is busier than this (%)
+    min_interval_hours: 6        # at most one automatic pass per this many hours
+    entity_similarity: 0.60      # embedding cosine threshold for merge candidates
+                                 # (recall-leaning — the LLM judge supplies precision;
+                                 # spacing variants also match lexically regardless)
+    max_merges_per_run: 10
   vector_store: chroma
   chroma:
     path: data/chroma

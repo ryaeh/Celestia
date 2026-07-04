@@ -211,6 +211,77 @@ def get_node(node_id: str) -> dict[str, Any] | None:
     return d
 
 
+def all_nodes(limit: int = 2000) -> list[dict[str, Any]]:
+    """Every node with its edge count (``degree``) — feeds the idle
+    entity-resolution pass. Oldest first, so ids are stable across runs."""
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT n.*, (SELECT COUNT(*) FROM edges e "
+        " WHERE e.subject_id = n.id OR e.object_id = n.id) AS degree "
+        "FROM nodes n ORDER BY n.created_at LIMIT ?",
+        (limit,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def merge_nodes(keep_id: str, dup_id: str) -> bool:
+    """Fold a duplicate entity into its canonical node (entity resolution).
+
+    Edges are repointed to ``keep_id`` and the duplicate's names become aliases
+    of the keeper — so every old spelling still resolves (the alias cache that
+    keeps repeat mentions off the LLM). The duplicate node row is then removed.
+
+    Two merge artifacts are cleaned up because they carry no unique history:
+    exact-duplicate *current* edges (the same fact asserted under both
+    spellings) keep only the earliest row, and self-loop edges created by the
+    repoint (the two names related to each other) are dropped.
+
+    Returns False when either id is missing or they are the same node.
+    """
+    if not keep_id or not dup_id or keep_id == dup_id:
+        return False
+    with _write_lock:
+        conn = _get_conn()
+        keep = conn.execute("SELECT * FROM nodes WHERE id = ?", (keep_id,)).fetchone()
+        dup = conn.execute("SELECT * FROM nodes WHERE id = ?", (dup_id,)).fetchone()
+        if keep is None or dup is None:
+            return False
+        now = _now()
+
+        conn.execute("UPDATE edges SET subject_id = ? WHERE subject_id = ?", (keep_id, dup_id))
+        conn.execute("UPDATE edges SET object_id = ? WHERE object_id = ?", (keep_id, dup_id))
+        # Self-loops can only arise from the repoint (extraction rejects
+        # subject == object), so they are merge artifacts.
+        conn.execute(
+            "DELETE FROM edges WHERE subject_id = ? AND object_id = ?", (keep_id, keep_id)
+        )
+        # Collapse exact-duplicate current edges on the keeper: the same fact
+        # asserted under both spellings — keep the earliest assertion.
+        conn.execute(
+            "DELETE FROM edges WHERE id IN ("
+            " SELECT id FROM ("
+            "  SELECT id, ROW_NUMBER() OVER ("
+            "   PARTITION BY subject_id, predicate, object_id ORDER BY created_at, id) AS rn"
+            "  FROM edges WHERE valid_until IS NULL AND (subject_id = ? OR object_id = ?))"
+            " WHERE rn > 1)",
+            (keep_id, keep_id),
+        )
+
+        # Duplicate's canonical name + aliases become aliases of the keeper.
+        conn.execute(
+            "INSERT OR IGNORE INTO aliases (node_id, alias) "
+            "SELECT ?, alias FROM aliases WHERE node_id = ?",
+            (keep_id, dup_id),
+        )
+        conn.execute("DELETE FROM aliases WHERE node_id = ?", (dup_id,))
+        if dup["type"] and not keep["type"]:
+            conn.execute("UPDATE nodes SET type = ? WHERE id = ?", (dup["type"], keep_id))
+        conn.execute("UPDATE nodes SET updated_at = ? WHERE id = ?", (now, keep_id))
+        conn.execute("DELETE FROM nodes WHERE id = ?", (dup_id,))
+        conn.commit()
+        return True
+
+
 # ---------------------------------------------------------------------------
 # Edges
 # ---------------------------------------------------------------------------
