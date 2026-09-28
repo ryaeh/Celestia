@@ -97,11 +97,14 @@ def score_case(
     calls: list[dict[str, Any]],
     reply: str,
     offered: set[str],
+    error: str = "",
 ) -> dict[str, Any]:
     """Score one case from the model's first response.
 
     ``calls`` is ``[{"name": str, "arguments": dict}, ...]`` in order;
-    ``offered`` is the set of tool names the model was given.
+    ``offered`` is the set of tool names the model was given. A request that
+    *errored* (Ollama down, model without tool support, timeout) fails outright —
+    it must never count as a clean "no tool" answer on a negative case.
     """
     expect = case.get("expect")
     expected_tools = set(_as_list(expect.get("tool"))) if expect else set()
@@ -124,6 +127,8 @@ def score_case(
         args_ok = tool_ok
         claimed = False
 
+    if error:
+        tool_ok = args_ok = claimed = False
     passed = tool_ok and args_ok and not unknown and not forbidden_hits and not claimed
     return {
         "id": case.get("id", "?"),
@@ -138,6 +143,7 @@ def score_case(
         "forbidden_hits": forbidden_hits,
         "claimed": claimed,
         "passed": passed,
+        "error": error[:300],
         "reply": (reply or "")[:300],
     }
 
@@ -145,6 +151,7 @@ def score_case(
 def aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
     pos = [r for r in results if not r["is_negative"]]
     neg = [r for r in results if r["is_negative"]]
+    prompt_toks = [r["prompt_tokens"] for r in results if r.get("prompt_tokens")]
     tool_right = [r for r in pos if r["tool_ok"]]
     secs = [r["seconds"] for r in results if "seconds" in r]
 
@@ -161,8 +168,10 @@ def aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
         "forbidden_hits": sum(len(r["forbidden_hits"]) for r in results),
         "unknown_tools": sum(len(r["unknown"]) for r in results),
         "claimed_actions": sum(r["claimed"] for r in results),
+        "errors": sum(1 for r in results if r.get("error")),
         "latency_mean_s": round(statistics.mean(secs), 2) if secs else None,
         "latency_p50_s": round(statistics.median(secs), 2) if secs else None,
+        "prompt_tokens_max": max(prompt_toks) if prompt_toks else None,
     }
 
 
@@ -225,18 +234,51 @@ def parse_response(resp: Any) -> tuple[list[dict[str, Any]], str]:
     return calls, str(_field(msg, "content") or "")
 
 
-def _chat(client: Any, model: str, messages: list, tools: list, think: bool | None) -> Any:
+def usage(resp: Any) -> tuple[int | None, int | None]:
+    """(prompt_tokens, output_tokens) as Ollama reports them, when present."""
+    return _field(resp, "prompt_eval_count"), _field(resp, "eval_count")
+
+
+def _chat(
+    client: Any,
+    model: str,
+    messages: list,
+    tools: list,
+    think: bool | None,
+    num_ctx: int | None = None,
+) -> Any:
     from celestia_core.config import get
 
+    options: dict[str, Any] = {"num_predict": int(get("llm.max_tokens", 1024)), "temperature": 0.0}
+    if num_ctx:
+        options["num_ctx"] = num_ctx
     kwargs: dict[str, Any] = {
         "model": model,
         "messages": messages,
         "tools": tools,
-        "options": {"num_predict": int(get("llm.max_tokens", 1024)), "temperature": 0.0},
+        "options": options,
     }
     if think is not None:
         kwargs["think"] = think
     return client.chat(**kwargs)
+
+
+def preflight(client: Any, model: str) -> str:
+    """Load *model* (so case latency excludes load time) and confirm it accepts
+    tools. Returns an error message, or "" when the model is usable."""
+    probe = [{
+        "type": "function",
+        "function": {"name": "ping", "description": "Ping.", "parameters": {"type": "object", "properties": {}}},
+    }]
+    try:
+        client.chat(model=model, messages=[{"role": "user", "content": "hi"}],
+                    tools=probe, options={"num_predict": 1})
+    except Exception as e:  # noqa: BLE001 — surfaced to the caller as a skip reason
+        msg = str(e)
+        if "does not support tools" in msg:
+            return f"{model} does not support tool calling in Ollama (pick a model tagged 'tools')"
+        return msg
+    return ""
 
 
 def run_model(
@@ -245,6 +287,8 @@ def run_model(
     *,
     think: bool | None,
     verbose: bool,
+    num_ctx: int | None = None,
+    timeout: float | None = None,
 ) -> dict[str, Any]:
     import ollama
 
@@ -252,29 +296,32 @@ def run_model(
 
     client = ollama.Client(
         host=get("llm.host", "http://127.0.0.1:11434"),
-        timeout=float(get("llm.request_timeout_seconds", 60)) * 3,
+        timeout=timeout or float(get("llm.request_timeout_seconds", 60)) * 3,
     )
 
     print(f"\ntool-call eval — model: {model}, cases: {len(cases)}")
-    # Warm-up so the first case's latency doesn't include the model load.
-    try:
-        client.chat(model=model, messages=[{"role": "user", "content": "hi"}],
-                    options={"num_predict": 1})
-    except Exception as e:  # noqa: BLE001 — report and skip this model
-        print(f"  !! could not load {model}: {e}")
-        return {"model": model, "error": str(e)}
+    problem = preflight(client, model)
+    if problem:
+        print(f"  !! skipped {model}: {problem}")
+        return {"model": model, "error": problem}
 
     results = []
     for case in cases:
         messages, schemas = build_request(case)
         offered = {s["function"]["name"] for s in schemas}
         started = time.monotonic()
+        error = ""
+        prompt_tokens = output_tokens = None
         try:
-            calls, reply = parse_response(_chat(client, model, messages, schemas, think))
-        except Exception as e:  # noqa: BLE001 — a failed call scores as a miss
-            calls, reply = [], f"<error: {e}>"
-        r = score_case(case, calls, reply, offered)
+            resp = _chat(client, model, messages, schemas, think, num_ctx)
+            calls, reply = parse_response(resp)
+            prompt_tokens, output_tokens = usage(resp)
+        except Exception as e:  # noqa: BLE001 — recorded as an error, never as a clean answer
+            calls, reply, error = [], "", f"{type(e).__name__}: {e}"
+        r = score_case(case, calls, reply, offered, error=error)
         r["seconds"] = round(time.monotonic() - started, 2)
+        r["prompt_tokens"] = prompt_tokens
+        r["output_tokens"] = output_tokens
         results.append(r)
 
         flags = []
@@ -284,7 +331,9 @@ def run_model(
             flags.append("UNKNOWN " + ",".join(r["unknown"]))
         if r["claimed"]:
             flags.append("CLAIMED")
-        status = "ok  " if r["passed"] else ("ARGS" if r["tool_ok"] else "FAIL")
+        if r["error"]:
+            flags.append("ERROR " + r["error"][:80])
+        status = "ok  " if r["passed"] else ("ERR " if r["error"] else ("ARGS" if r["tool_ok"] else "FAIL"))
         called = ", ".join(c.split("(")[0] for c in r["called"]) or "—"
         want = "|".join(r["expected"]) or "none"
         tail = f"  !! {' · '.join(flags)}" if flags else ""
@@ -300,36 +349,79 @@ def run_model(
         f"\n  pass {agg['pass_rate']}  tool {agg['tool_accuracy']}  args {agg['arg_accuracy']}"
         f"  |  negatives clean {agg['negatives_clean']}/{agg['negatives_total']}"
         f"  |  forbidden {agg['forbidden_hits']}  unknown {agg['unknown_tools']}"
-        f"  claimed {agg['claimed_actions']}  |  p50 {agg['latency_p50_s']}s"
+        f"  claimed {agg['claimed_actions']}  errors {agg['errors']}"
+        f"  |  p50 {agg['latency_p50_s']}s  max prompt {agg['prompt_tokens_max']} tok"
     )
-    return {
+    run: dict[str, Any] = {
         "model": model,
         "think": think,
+        "num_ctx": num_ctx,
         "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "aggregate": agg,
         "cases": results,
     }
+    if agg["errors"] == len(results):
+        run["error"] = f"every case errored (first: {results[0]['error']})"
+    return run
 
 
 def _slug(model: str) -> str:
     return re.sub(r"[^a-zA-Z0-9.]+", "-", model).strip("-")
 
 
-def print_comparison(runs: list[dict[str, Any]]) -> None:
+_COLS = ("pass", "tool", "args", "neg", "forb", "unk", "claim", "err", "p50 s", "max tok")
+
+
+def _row(a: dict[str, Any]) -> tuple:
+    return (
+        a["pass_rate"], a["tool_accuracy"], a["arg_accuracy"],
+        f"{a['negatives_clean']}/{a['negatives_total']}",
+        a["forbidden_hits"], a["unknown_tools"], a["claimed_actions"], a.get("errors", 0),
+        a["latency_p50_s"], a.get("prompt_tokens_max"),
+    )
+
+
+def _ranked(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ok = [r for r in runs if "aggregate" in r]
+    return sorted(ok, key=lambda r: -r["aggregate"]["pass_rate"])
+
+
+def print_comparison(runs: list[dict[str, Any]]) -> None:
+    ok = _ranked(runs)
     if len(ok) < 2:
         return
-    cols = ("pass", "tool", "args", "neg", "forb", "unk", "claim", "p50 s")
     width = max(len(r["model"]) for r in ok) + 2
-    print("\n" + "model".ljust(width) + "".join(c.rjust(8) for c in cols))
-    for r in sorted(ok, key=lambda r: -r["aggregate"]["pass_rate"]):
-        a = r["aggregate"]
-        vals = (
-            a["pass_rate"], a["tool_accuracy"], a["arg_accuracy"],
-            f"{a['negatives_clean']}/{a['negatives_total']}",
-            a["forbidden_hits"], a["unknown_tools"], a["claimed_actions"], a["latency_p50_s"],
-        )
-        print(r["model"].ljust(width) + "".join(str(v).rjust(8) for v in vals))
+    print("\n" + "model".ljust(width) + "".join(c.rjust(8) for c in _COLS))
+    for r in ok:
+        print(r["model"].ljust(width) + "".join(str(v).rjust(8) for v in _row(r["aggregate"])))
+
+
+def markdown_report(runs: list[dict[str, Any]]) -> str:
+    """Comparison table + per-model misses, as Markdown (CI job summary / PR)."""
+    lines = ["## Tool-call eval", "", "| model | " + " | ".join(_COLS) + " |",
+             "|---|" + "---:|" * len(_COLS)]
+    for r in _ranked(runs):
+        lines.append(f"| `{r['model']}` | " + " | ".join(str(v) for v in _row(r["aggregate"])) + " |")
+    for r in runs:
+        if r.get("error"):
+            lines.append(f"\n> ⚠️ `{r['model']}`: {r['error']}")
+    lines.append(
+        "\npass = right tool + args, no red flags · neg = correctly called nothing · "
+        "forb/unk/claim = forbidden tool / hallucinated tool name / claimed an action it didn't take · "
+        "err = request failed · max tok = largest prompt (tokens)"
+    )
+    for r in _ranked(runs):
+        misses = [c for c in r["cases"] if not c["passed"]]
+        if not misses:
+            continue
+        lines += ["", f"<details><summary><code>{r['model']}</code> — {len(misses)} misses</summary>", "",
+                  "| case | mode | wanted | got | note |", "|---|---|---|---|---|"]
+        for c in misses:
+            got = ", ".join(x.replace("|", "\\|") for x in c["called"]) or "—"
+            note = c["error"] or ("claimed action" if c["claimed"] else (c["reply"][:80].replace("\n", " ").replace("|", "\\|")))
+            lines.append(f"| {c['id']} | {c['mode']} | {'/'.join(c['expected']) or 'none'} | {got[:120]} | {note} |")
+        lines += ["", "</details>"]
+    return "\n".join(lines) + "\n"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -342,6 +434,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--only", help="comma-separated case ids to run")
     parser.add_argument("--mode", choices=_MODES, help="run only cases for this security mode")
     parser.add_argument("--out-dir", type=Path, help="write toolcall-<model>.json per model here")
+    parser.add_argument("--markdown", type=Path, help="write a Markdown comparison report here")
+    parser.add_argument("--report", type=Path, metavar="DIR",
+                        help="don't run: merge toolcall-*.json files in DIR into one comparison "
+                             "(use with --markdown; e.g. results from parallel CI jobs)")
+    parser.add_argument("--timeout", type=float,
+                        help="per-request timeout in seconds (default 3× llm.request_timeout_seconds; "
+                             "raise it for CPU-only runs)")
+    parser.add_argument("--num-ctx", type=int, help="Ollama context window override (default: model/Ollama default)")
     think = parser.add_mutually_exclusive_group()
     think.add_argument("--think", dest="think", action="store_true", default=None,
                        help="force thinking on (reasoning models)")
@@ -349,6 +449,19 @@ def main(argv: list[str] | None = None) -> int:
                        help="force thinking off (reasoning models; faster)")
     parser.add_argument("-v", "--verbose", action="store_true", help="print calls/replies on misses")
     args = parser.parse_args(argv)
+
+    if args.report:
+        runs = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(args.report.rglob("toolcall-*.json"))]
+        if not runs:
+            raise SystemExit(f"no toolcall-*.json under {args.report}")
+        print_comparison(runs)
+        report = markdown_report(runs)
+        if args.markdown:
+            args.markdown.parent.mkdir(parents=True, exist_ok=True)
+            args.markdown.write_text(report, encoding="utf-8")
+        else:
+            print(report)
+        return 1 if any(r.get("error") for r in runs) else 0
 
     from celestia_core.config import get
 
@@ -362,8 +475,17 @@ def main(argv: list[str] | None = None) -> int:
     if not cases:
         raise SystemExit("no cases selected")
 
-    runs = [run_model(m, cases, think=args.think, verbose=args.verbose) for m in models]
+    runs = [
+        run_model(m, cases, think=args.think, verbose=args.verbose,
+                  num_ctx=args.num_ctx, timeout=args.timeout)
+        for m in models
+    ]
     print_comparison(runs)
+
+    if args.markdown:
+        args.markdown.parent.mkdir(parents=True, exist_ok=True)
+        args.markdown.write_text(markdown_report(runs), encoding="utf-8")
+        print(f"  report → {args.markdown}")
 
     if args.out_dir:
         args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -371,7 +493,9 @@ def main(argv: list[str] | None = None) -> int:
             out = args.out_dir / f"toolcall-{_slug(run['model'])}.json"
             out.write_text(json.dumps(run, indent=2, ensure_ascii=False), encoding="utf-8")
             print(f"  results → {out}")
-    return 0
+    # Non-zero when a model couldn't be evaluated at all, so CI/scripts notice
+    # "Ollama was down" instead of reading an empty run as a result.
+    return 1 if any(r.get("error") for r in runs) else 0
 
 
 if __name__ == "__main__":

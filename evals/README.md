@@ -106,11 +106,34 @@ Per model:
 | **forb** 🚩 | a forbidden tool was called (e.g. `run_powershell` for an advice question) |
 | **unk** 🚩 | called a tool that wasn't offered (hallucinated name / mode leak) |
 | **claim** 🚩 | no tool call but the reply claims the action happened ("I've opened it!") |
+| **err** | the request failed (timeout, Ollama error) — counted apart, never as a clean "no tool" |
 | **p50 s** | median latency per case, after a warm-up call (load time excluded) |
+| **max tok** | largest prompt Ollama reported (`prompt_eval_count`) — compare with the context window |
+
+Before scoring, each model gets a one-tool probe: a model Ollama says "does not
+support tools" is **skipped with a reason**, not scored (it would otherwise
+"pass" every negative case). The exit code is non-zero when any model couldn't
+be evaluated. Useful flags: `--markdown report.md` (comparison + misses),
+`--timeout 900` (CPU-only runs), `--num-ctx 8192` (try a larger context window),
+`--report DIR` (merge saved `toolcall-*.json` runs without re-running).
 
 Red flags matter more than the headline pass rate. `--think` / `--no-think` pass
 Ollama's `think` flag for reasoning models (omitted = model default); compare
 both, since thinking usually helps accuracy but costs latency on the hot path.
+
+### Run it on GitHub (no local GPU needed)
+
+`.github/workflows/evals.yml` installs Ollama on a GitHub CPU runner, pulls each
+model, and runs both evals — one parallel job per model, then a merged table on
+the run's **Summary** page (full JSON in the `eval-results-*` artifacts). It runs
+on PRs that touch prompts/tools/evals, or on demand: **Actions → Evals (real
+models) → Run workflow**, with a comma-separated model list. CPU runners suit
+≤4B models (~15–30 min each); benchmark 7–14B models on your GPU.
+
+The harness itself is covered end-to-end by `tests/test_toolcall_eval_e2e.py`: a
+fake Ollama HTTP server with a deliberately imperfect rule-based "model", so the
+real client, wire format, scoring, CLI and reports are checked against exact
+expected scores on every CI run.
 
 ### What to benchmark
 
