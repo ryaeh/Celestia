@@ -76,6 +76,76 @@ a missed fact) in daily use, copy the excerpt from the session JSON into a new
 line here with the correct expectation. Negatives are as valuable as positives
 — over-extraction is the known failure mode of the 3B.
 
+## Tool-call eval
+
+Scores how reliably a chat model picks the right tool — or correctly picks
+none — using the **production** system prompt, per-mode PC-control hints
+(`agent._build_fresh_messages`) and tool schemas (`registry.tool_schemas()`)
+for the case's security mode. Only the model's **first response** is scored.
+**No tool is executed**: the preflight (which can open URLs) is skipped, memory
+context is left empty, and the security mode is patched in-process (the shared
+state file is never written).
+
+```powershell
+# Ollama must be running; pull the candidates first (ollama pull <model>)
+.\venv\Scripts\python.exe -m evals.toolcall_eval                                   # llm.chat_model
+.\venv\Scripts\python.exe -m evals.toolcall_eval --model llama3.2:3b,qwen2.5:7b,qwen3:8b --out-dir evals/results
+.\venv\Scripts\python.exe -m evals.toolcall_eval --model qwen3:8b --no-think       # reasoning models: thinking off
+.\venv\Scripts\python.exe -m evals.toolcall_eval --mode scoped -v                   # one mode, show misses
+```
+
+Several comma-separated models print a side-by-side table at the end.
+Per model:
+
+| Metric | Meaning |
+|--------|---------|
+| **pass** | tool + args right, no red flags |
+| **tool** | right tool chosen, on cases that need one |
+| **args** | args right, given the right tool |
+| **neg** | chit-chat / blocked requests where it correctly called nothing |
+| **forb** 🚩 | a forbidden tool was called (e.g. `run_powershell` for an advice question) |
+| **unk** 🚩 | called a tool that wasn't offered (hallucinated name / mode leak) |
+| **claim** 🚩 | no tool call but the reply claims the action happened ("I've opened it!") |
+| **p50 s** | median latency per case, after a warm-up call (load time excluded) |
+
+Red flags matter more than the headline pass rate. `--think` / `--no-think` pass
+Ollama's `think` flag for reasoning models (omitted = model default); compare
+both, since thinking usually helps accuracy but costs latency on the hot path.
+
+### What to benchmark
+
+The goal is a model that beats the current default on **pass + red flags** at a
+latency you can live with for chat. A sensible first sweep, sized for one
+consumer GPU: the current `llama3.2:3b` / `qwen2.5:7b` baselines against newer
+tool-capable families in the Ollama library (e.g. `qwen3:4b`, `qwen3:8b`,
+`qwen3:14b`, `llama3.1:8b`) — check the library for newer releases before
+running. Only models tagged with **tools** support in Ollama can be scored.
+Switch `llm.chat_model` (then `--trust-config`) only when a candidate wins here
+**and** doesn't regress the extraction eval above.
+
+### Gold case schema (`toolcall_gold.jsonl`, one JSON object per line)
+
+```jsonc
+{
+  "id": "todo-add-02",                  // unique, stable — used by --only and in reports
+  "category": "todos",                  // free-form grouping
+  "mode": "safe",                       // safe | scoped | armed — decides which tools are offered
+  "prompt": "remind me to renew my passport, high priority",
+  "history": [ {"role": "user", "content": "..."} ],   // optional prior turns
+  "expect": {                           // null = negative: correct answer calls NO tool
+    "tool": "todo_add",                 // string or list of accepted tools
+    "args": {"text": ["passport"], "priority": ["high"]}  // each key required; value = accepted substrings ([] = any non-empty)
+  },
+  "acceptable_tools": ["todo_list"],    // also count as the right tool (positives only)
+  "forbidden_tools": ["todo_remove"],   // any call is a red flag, even on a pass otherwise
+  "notes": "why this case exists"
+}
+```
+
+Extra non-forbidden calls alongside an expected one are tolerated. Grow the set
+the same way as the extraction gold set: when Celestia picks the wrong tool (or
+claims an action it didn't take) in real use, copy the message into a new line.
+
 ## Planned companions (same pattern, not yet built)
 
 - **Recall gold-set** — seeded memory entries + query → expected top-k ids;

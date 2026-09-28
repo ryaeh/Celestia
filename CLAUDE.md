@@ -27,6 +27,9 @@ python -m py_compile celestia_core/shell_chat.py
 # Gate A eval — score graph extraction against the hand-labeled gold set (needs Ollama)
 .\venv\Scripts\python.exe -m evals.extraction_eval --model qwen2.5:7b
 
+# Gate A eval — score tool-calling (right tool / no tool / red flags); comma-separate models to compare
+.\venv\Scripts\python.exe -m evals.toolcall_eval --model llama3.2:3b,qwen2.5:7b --out-dir evals/results
+
 # Start interactive chat
 .\venv\Scripts\python.exe run_celestia.py -i
 
@@ -81,7 +84,7 @@ shell/                    # Tauri v2 + React 19 + Vite + Tailwind + shadcn/ui de
   src/api.ts              # All fetch calls to shell_server.py; reads token from /token endpoint
 personalities/*.yaml      # Personality packs — name, traits, extra prompt lines
 tests/                    # pytest; all heavy deps (Ollama, Chroma, mem0, Whisper) are mocked
-evals/                    # Gate A eval harness — extraction gold-set + scoring runner (hits live Ollama; see evals/README.md)
+evals/                    # Gate A eval harness — extraction + tool-call gold-sets + scoring runners (hits live Ollama; see evals/README.md)
 ```
 
 ## Key design patterns

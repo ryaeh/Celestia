@@ -11,6 +11,11 @@ Roadmap for upcoming work: [`docs/project/roadmap.md`](docs/project/roadmap.md).
 ## Unreleased
 
 ### Added
+- **Tool-calling eval (Gate A).** `evals/toolcall_eval.py` + a 40-case
+  `toolcall_gold.jsonl` score right-tool / right-args / correctly-no-tool across
+  safe/scoped/armed using the production prompt + schemas (no tool is executed),
+  flag forbidden calls, hallucinated tool names and fabricated "I've opened it"
+  claims, and compare several models side by side (`--model a,b,c`).
 - **Temporal knowledge-graph memory (Feature 10 substrate).** Graph store
   (`skills/memory/graph_store.py`), relation extraction (`graph_extract.py`),
   hybrid graph-walk recall in `build_context`, and a `--graph` CLI to inspect it.
