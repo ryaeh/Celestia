@@ -227,3 +227,18 @@ def test_think_flag_only_sent_when_set() -> None:
 @pytest.mark.parametrize("model,slug", [("qwen2.5:7b", "qwen2.5-7b"), ("hf.co/x/y:Q4", "hf.co-x-y-Q4")])
 def test_slug(model: str, slug: str) -> None:
     assert te._slug(model) == slug
+
+
+@pytest.mark.parametrize("reply", [
+    "Sure thing! I've updated the priority of 'finish the thesis draft' to high.",  # real qwen2.5:3b miss
+    "I have now set that to high priority.",
+    "Tamam, güncelledim.",
+])
+def test_claim_detects_update_style_fabrications(reply: str) -> None:
+    r = te.score_case(_case(expect={"tool": "todo_update"}), [], reply, _OFFERED)
+    assert r["claimed"] and not r["passed"]
+
+
+def test_claim_ignores_promises_and_questions() -> None:
+    for reply in ("Got it. I'll always respond in English.", "Should I set that to high priority?"):
+        assert not te.score_case(_case(expect={"tool": "memory_add"}), [], reply, _OFFERED)["claimed"]

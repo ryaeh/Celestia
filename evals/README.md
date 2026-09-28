@@ -135,6 +135,24 @@ fake Ollama HTTP server with a deliberately imperfect rule-based "model", so the
 real client, wire format, scoring, CLI and reports are checked against exact
 expected scores on every CI run.
 
+### First real-model results (GitHub CPU runners, Sep 2026)
+
+From [the first `evals.yml` run](https://github.com/ryaeh/Celestia/actions/runs/36475137010) (40 cases, temperature 0):
+
+| model | pass | tool | args | negatives clean | red flags | p50 | max prompt |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `qwen2.5:3b` | 0.90 | 0.86 | 1.00 | 12/12 | 0 | 3.8 s | 2657 tok |
+| `llama3.2:3b` | 0.70 | 0.93 | 0.96 | **3/12** | 0 | 2.2 s | 2699 tok |
+
+`llama3.2:3b` (the `config.example.yaml` default) reaches for tools on plain chat —
+`memory_add` on "how's it going", `morning_briefing` on "I'm nervous about my exam",
+`web_search` for a joke — and once wrote a tool call as raw JSON text instead of
+calling it. `qwen2.5:3b` never called a tool it shouldn't; its misses were answering
+memory requests without `memory_add`/`memory_search`, and one fabricated
+"I've updated the priority…" with no tool call (the claim detector was widened to
+catch that wording after this run). Extraction on the same runners: `llama3.2:3b`
+F1 0.273 (your local baseline: 0.284 — consistent), `qwen2.5:3b` F1 0.20.
+
 ### What to benchmark
 
 The goal is a model that beats the current default on **pass + red flags** at a
