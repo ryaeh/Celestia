@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Toaster } from "sonner";
 import { fetchChatSessions, initialRoute } from "./api";
+import { installMainCloseHandler } from "./lib/overlayWindow";
 import { useLiveState } from "./hooks/useLiveState";
 import Sidebar from "./components/Sidebar";
 import Activity from "./pages/Activity";
@@ -69,6 +70,20 @@ export default function App() {
     setPrevRoute(route);
     setRoute(dest);
   }
+
+  // Closing the main window while the bubble is up keeps Celestia in the bubble.
+  useEffect(() => {
+    let unlisten = () => {};
+    let disposed = false;
+    void installMainCloseHandler().then((u) => {
+      if (disposed) u(); // unmounted before the listener registered
+      else unlisten = u;
+    });
+    return () => {
+      disposed = true;
+      unlisten();
+    };
+  }, []);
 
   useEffect(() => {
     fetchChatSessions()

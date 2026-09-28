@@ -57,7 +57,7 @@ Each idea notes a rough **value/effort** read. "Tiny/Low/Medium/High."
 
 | Idea | Value/Effort | Notes |
 |------|--------------|-------|
-| **Companion overlay bubble** ⭐ | High / Medium | A second Tauri window: tiny, always-on-top, frameless, draggable — just the Aura orb + PTT. Celestia is *present on the desktop* while you work/game without the full shell open; click to expand into mini-chat. Biggest "companion, not app" upgrade available; mostly window config + a slim page reusing existing components. |
+| **Companion overlay bubble** ⭐ ✅ | High / Medium | A second Tauri window: tiny, always-on-top, frameless, draggable — just the Aura orb + PTT. Celestia is *present on the desktop* while you work/game without the full shell open; click to expand into mini-chat. Biggest "companion, not app" upgrade available; mostly window config + a slim page reusing existing components. **v1 shipped** (Sep 2026): `shell/src/pages/Overlay.tsx` + `lib/overlayWindow.ts`, window `overlay` in `tauri.conf.json`, hotkey `ui.overlay_hotkey` via `celestia_core/shell_overlay.py`. **Next:** click-through when idle, a *speaking* Aura state from TTS, nudge cards (01). |
 | **Tauri supervises the Python sidecar** | Medium / Medium | Invert startup: Tauri's sidecar feature spawns the API server, restarts on crash, kills on window close. One icon, no orphaned Python. Sets up packaging. |
 | **Real packaging / installer** | High / High | PyInstaller the backend, Tauri bundler makes the installer, first-run wizard pulls Ollama models. Plus audit F-07 = something a friend could install. Worth doing before the feature list grows further. |
 | **Native notifications + autostart** | Medium / Low | Official Tauri plugins. Notifications become Feature 01's nudge channel; autostart + start-in-tray makes her ambient. |
@@ -160,7 +160,7 @@ axes; the table is what to *take*, not who to copy. Two to actively watch:
 
 ## Top 3 to do next (opinion)
 
-1. **Companion overlay bubble** — the biggest companion-feel jump; moderate effort.
+1. ~~**Companion overlay bubble**~~ ✅ v1 shipped (Sep 2026).
 2. ~~**"Why did you say that?" provenance**~~ ✅ shipped (Jun 2026) — live-reply v1; persist-across-reload is the follow-up.
 3. ~~**Prompt-injection hardening**~~ ✅ v1 shipped (Jun 2026) — tool-result wrapping + system clause; read-screen wrap + confirm-gating are the follow-ups.
 

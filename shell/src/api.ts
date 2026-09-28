@@ -110,6 +110,11 @@ export type LiveState = {
   incognito?: boolean;
   gpu_busy?: boolean;
   gpu_task?: string | null;
+  /** A chat turn or vision op is running (Aura "thinking"). */
+  busy?: boolean;
+  /** Bumped by the global bubble hotkey / POST /overlay/toggle; the overlay
+   *  window flips visibility on each change. */
+  overlay_seq?: number;
 };
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };

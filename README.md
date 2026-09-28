@@ -17,6 +17,7 @@ A local AI companion for Windows — chat, voice, memory, screen reading, and PC
 - **Screen / Vision** — capture a region, window, or full screen and ask questions about it
 - **MCP tools** — plug in any Model Context Protocol server (calendar, GitHub, Home Assistant, …), gated by security mode
 - **PC Control** — open apps, read/write files, clipboard access, run PowerShell — all gated by a security mode system
+- **Companion bubble** — a small always-on-top Aura orb that stays on your desktop; click for a mini chat with push-to-talk, `Ctrl+Alt+O` to show/hide
 - **Desktop Shell** — native Tauri + React window with streaming chat, memory management, and settings
 - **System Tray** — global hotkeys, mode switching, screen capture, push-to-talk from anywhere
 

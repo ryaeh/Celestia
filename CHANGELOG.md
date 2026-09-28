@@ -11,6 +11,13 @@ Roadmap for upcoming work: [`docs/project/roadmap.md`](docs/project/roadmap.md).
 ## Unreleased
 
 ### Added
+- **Companion overlay bubble.** A second Tauri window (`overlay`): frameless,
+  transparent, always-on-top Aura orb that mirrors listening/thinking state.
+  Drag to move (position remembered), click to expand into a mini chat on the
+  active session with push-to-talk, right-click to hide. Toggle from the header
+  button, the global `ui.overlay_hotkey` (default `ctrl+alt+o`) or
+  `POST /overlay/toggle`; closing the main window while the bubble is up keeps
+  Celestia running in the bubble. Live state gains `busy` + `overlay_seq`.
 - **MCP client.** Any Model Context Protocol server configured under `mcp.servers`
   becomes `mcp__<server>__<tool>` tools (`skills/mcp/`). Per-server/tool `min_mode`
   (default `armed`) filters what's offered and is re-checked at call time

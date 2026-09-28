@@ -58,6 +58,7 @@ celestia_core/
   shell_chat.py           # Session store: per-session files in data/shell_chat/sessions/<uuid>.json
   shell_launch.py         # Starts shell_server + Tauri process
   shell_ptt.py            # Shell push-to-talk state machine + global hotkey
+  shell_overlay.py        # Companion bubble server side: overlay_seq toggle counter (hotkey ui.overlay_hotkey / POST /overlay/toggle)
   security.py             # Mode state (safe/scoped/armed), gate_pc_tool(), audit log
   scope.py                # Workspace path allowlist, protected path checks
   config.py               # Reads config.yaml; get(key, default) accessor — always use this, never read config directly
@@ -83,6 +84,8 @@ skills/
 shell/                    # Tauri v2 + React 19 + Vite + Tailwind + shadcn/ui desktop app
   src/pages/Home.tsx      # Main chat page with SSE streaming
   src/pages/Todos.tsx     # To-do page — add/complete/edit/delete; talks to /todos API
+  src/pages/Overlay.tsx   # Companion bubble (Tauri window "overlay", ?view=overlay): Aura orb → mini chat + PTT
+  src/lib/overlayWindow.ts # All Tauri window calls for the bubble (show/hide/position/expand); no-op outside Tauri
   src/api.ts              # All fetch calls to shell_server.py; reads token from /token endpoint
 personalities/*.yaml      # Personality packs — name, traits, extra prompt lines
 tests/                    # pytest; all heavy deps (Ollama, Chroma, mem0, Whisper) are mocked

@@ -189,6 +189,8 @@ ui:
   shell_ptt_enabled: true
   shell_ptt_hotkey: ctrl+alt+shift+v   # hold = talk; empty = mic button only (tray uses ctrl+alt+v)
   shell_ptt_max_seconds: 45
+  overlay_enabled: true        # companion bubble: small always-on-top Aura orb + mini chat
+  overlay_hotkey: ctrl+alt+o   # show/hide the bubble from anywhere; empty = shell button only
 
 read_hotkey:
   enabled: true

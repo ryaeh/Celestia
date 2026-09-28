@@ -12,11 +12,29 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Celestia",
         "width": 960,
         "height": 640,
         "minWidth": 720,
         "minHeight": 480
+      },
+      {
+        "label": "overlay",
+        "title": "Celestia bubble",
+        "url": "index.html?view=overlay",
+        "width": 88,
+        "height": 88,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "shadow": false,
+        "visible": false,
+        "focus": false,
+        "maximizable": false,
+        "minimizable": false
       }
     ],
     "security": {
