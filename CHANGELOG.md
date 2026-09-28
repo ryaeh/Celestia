@@ -11,6 +11,12 @@ Roadmap for upcoming work: [`docs/project/roadmap.md`](docs/project/roadmap.md).
 ## Unreleased
 
 ### Added
+- **MCP client.** Any Model Context Protocol server configured under `mcp.servers`
+  becomes `mcp__<server>__<tool>` tools (`skills/mcp/`). Per-server/tool `min_mode`
+  (default `armed`) filters what's offered and is re-checked at call time
+  (`security.gate_mcp_tool`); calls are audited and results wrapped as untrusted.
+  `--mcp` CLI, `GET /mcp` + `POST /mcp/reload`, `--check` line. Off by default.
+  Guide: `docs/guide/mcp.md`.
 - **Tool-calling eval (Gate A).** `evals/toolcall_eval.py` + a 40-case
   `toolcall_gold.jsonl` score right-tool / right-args / correctly-no-tool across
   safe/scoped/armed using the production prompt + schemas (no tool is executed),

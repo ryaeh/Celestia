@@ -77,6 +77,8 @@ skills/
   vision/                 # Capture → preprocess → Ollama vision model → optional confirm flow
   pc_control/tools.py     # open_path, open_url, run_powershell — all gated through security.gate_pc_tool()
   todos/                  # To-do list: store.py (locked JSON in data/todos.json) + tools.py (todo_add/list/complete/update/remove)
+  mcp/manager.py          # MCP client: stdio servers from mcp.servers on a background asyncio loop; mcp__<server>__<tool> naming
+  mcp/tools.py            # MCP tools → schemas filtered by min_mode (default armed) + gated executor (security.gate_mcp_tool)
   conversations/tools.py  # Conversation search (Feature 03 / #86): search_conversations tool over past sessions (shell_chat.search_sessions)
 shell/                    # Tauri v2 + React 19 + Vite + Tailwind + shadcn/ui desktop app
   src/pages/Home.tsx      # Main chat page with SSE streaming
@@ -99,7 +101,9 @@ evals/                    # Gate A eval harness — extraction + tool-call gold-
 
 **Skills / tools**: To add a new LLM-callable tool: (1) define schema + function in `skills/<name>/tools.py`, (2) import and add to `registry.py` in both `tool_schemas()` and `execute_tool()`. The security gate in `execute_tool()` calls `security.gate_pc_tool()` before running any PC-touching tool.
 
-**Heavy deps are lazy**: `mem0`, `chromadb`, `faster-whisper`, `llama-cpp`, `torch`, `pystray`, `pynput` are all imported inside functions — never at module top-level. This keeps startup fast and lets tests run without installing them.
+**MCP tools** (`skills/mcp/`): third-party servers from `mcp.servers` become `mcp__<server>__<tool>` tools. Each tool has a `min_mode` (server `min_mode` / per-tool `tool_modes`, default `armed`): filtered out of `tool_schemas()` below it *and* re-checked by `security.gate_mcp_tool()` at call time; every result is wrapped untrusted. Off by default (`mcp.enabled`). Guide: `docs/guide/mcp.md`.
+
+**Heavy deps are lazy**: `mcp`, `mem0`, `chromadb`, `faster-whisper`, `llama-cpp`, `torch`, `pystray`, `pynput` are all imported inside functions — never at module top-level. This keeps startup fast and lets tests run without installing them.
 
 **Memory lifecycle** (`skills/memory/ranking.py` + `decay.py`): memories are *saved* freely (auto-consolidation), then **ranked and decayed** so one-offs don't crowd recall. Each entry gets a write-time `importance` (by kind: instruction 1.0 > fact 0.7 > task 0.4 > summary 0.3); `recall_count`/`last_recalled`/`keep` live in a JSON **sidecar** (`data/memory/recall_stats.json`) keyed by memory id, so a recall never rewrites a vector. `build_context` blends similarity with importance+recall+recency (`rank_order`) and bumps recall on injected entries. `decay.sweep_decay()` deletes only unprotected, low-importance, **never-recalled**, old entries (ever-recalled or pinned = exempt) — off by default (`memory.decay.enabled`), throttled, run on session-finalize + `POST /memory/decay`. The two GPU model tiers split here: cheap 3B heuristics on the hot path, a bigger model on a future GPU-idle pass for smarter re-scoring + graph entity-resolution.
 

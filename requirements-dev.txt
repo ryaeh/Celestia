@@ -10,3 +10,4 @@ httpx>=0.28
 duckduckgo-search>=8.0
 html2text>=2024.0
 fastapi>=0.115
+mcp>=1.2       # MCP client integration tests (tests/test_mcp.py)

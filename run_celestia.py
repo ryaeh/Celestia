@@ -130,6 +130,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Inspect the knowledge graph: stats + last N current relations (Feature 10)",
     )
     parser.add_argument(
+        "--mcp",
+        action="store_true",
+        help="Connect configured MCP servers and list their tools + required modes",
+    )
+    parser.add_argument(
         "--graph-extract",
         action="store_true",
         help="Extract relations from the active chat into the knowledge graph now (Feature 10)",
@@ -549,6 +554,9 @@ def main() -> int:
     if args.check:
         return 0 if run_checks() else 1
 
+    if args.mcp:
+        return _run_mcp()
+
     if args.screen is not None:
         return _run_screen(args)
 
@@ -585,6 +593,28 @@ def main() -> int:
         reply, _ = run_turn(args.message, speak=speak, source="cli")
         print(f"{tag}>", reply)
     return 0
+
+
+def _run_mcp() -> int:
+    from skills.mcp import manager
+
+    if not manager.enabled():
+        print("[mcp] disabled — set mcp.enabled: true in config.yaml (then --trust-config)")
+        return 1
+    manager.list_tools()
+    rows = manager.status()
+    if not rows:
+        print("[mcp] enabled, but no servers under mcp.servers")
+        return 1
+    for row in rows:
+        print(f"{row['name']}: {row['status']}  ({row['command']})")
+        if row["error"]:
+            print(f"    error: {row['error']}")
+        for t in row["tools"]:
+            flag = "" if t["allowed"] else "  [denied]"
+            print(f"    {t['qualified']:<48} needs {t['min_mode']}{flag}")
+    manager.shutdown()
+    return 0 if all(r["status"] == "ready" for r in rows) else 1
 
 
 if __name__ == "__main__":

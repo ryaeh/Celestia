@@ -35,7 +35,15 @@ _TOOL_SOURCE = {
 }
 
 
+# MCP tools (``mcp__<server>__<tool>``) are third-party servers: every result is
+# untrusted, whatever the tool does.
+_MCP_PREFIX = "mcp__"
+
+
 def source_for_tool(name: str) -> str:
+    if name.startswith(_MCP_PREFIX):
+        server = name[len(_MCP_PREFIX):].split("__", 1)[0]
+        return f"MCP server '{server}'"
     return _TOOL_SOURCE.get(name, "an external source")
 
 
@@ -51,6 +59,6 @@ def wrap(text: str, source: str) -> str:
 
 def wrap_tool_result(name: str, result: str) -> str:
     """Wrap a tool result if the tool ingests untrusted content; else pass through."""
-    if name in UNTRUSTED_CONTENT_TOOLS:
+    if name in UNTRUSTED_CONTENT_TOOLS or name.startswith(_MCP_PREFIX):
         return wrap(result, source_for_tool(name))
     return result

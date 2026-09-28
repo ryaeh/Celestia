@@ -575,6 +575,24 @@ async def ws_state(websocket: WebSocket):
         return
 
 
+@app.get("/mcp")
+def get_mcp():
+    """MCP servers: connection status + tools (with the mode each needs)."""
+    from skills.mcp import manager
+
+    return {"enabled": manager.enabled(), "servers": manager.status()}
+
+
+@app.post("/mcp/reload")
+def post_mcp_reload():
+    """Reconnect every MCP server from current config (after editing config.yaml)."""
+    from celestia_core.config import load_config
+    from skills.mcp import manager
+
+    load_config(reload=True)
+    return {"enabled": manager.enabled(), "servers": manager.reload()}
+
+
 @app.get("/gpu/models")
 def get_gpu_models():
     """Resident Ollama models + system VRAM for the GPU HUD (UI V2 / F3).
@@ -1006,4 +1024,11 @@ def run_server_forever(port: int | None = None) -> None:
         start_tidy_daemon()
     except Exception as e:
         print(f"[tidy] idle daemon skipped: {e}")
+    try:
+        # Connect MCP servers in the background so the first chat turn
+        # doesn't pay their startup cost (no-op unless mcp.enabled).
+        from skills.mcp.manager import ensure_started
+        ensure_started()
+    except Exception as e:
+        print(f"[mcp] startup skipped: {e}")
     uvicorn.run(app, host="127.0.0.1", port=p, log_level="error", access_log=False)

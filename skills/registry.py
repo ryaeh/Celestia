@@ -15,6 +15,7 @@ from skills.pc_control.tools import (
 from skills.web.tools import WEB_TOOL_SCHEMAS, fetch_page, web_search
 from skills.conversations.tools import CONVERSATION_TOOL_SCHEMAS, search_conversations
 from skills.briefing.tools import BRIEFING_TOOL_SCHEMA, morning_briefing
+from skills.mcp.tools import execute_mcp_tool, is_mcp_tool, mcp_tool_schemas
 from skills.todos.tools import (
     TODO_TOOL_SCHEMAS,
     todo_add,
@@ -184,7 +185,7 @@ def tool_schemas() -> list:
         # To-dos are user-owned data, not PC actions — safe in all modes.
         if get("todos.enabled", True):
             tools += TODO_TOOL_SCHEMAS
-        return tools
+        return tools + _mcp_schemas(mode)
 
     tools = list(PC_TOOL_SCHEMAS) + list(FILE_TOOL_SCHEMAS) + list(CLIPBOARD_TOOL_SCHEMAS)
     if get("memory.enabled", True):
@@ -196,7 +197,18 @@ def tool_schemas() -> list:
     tools += BRIEFING_TOOL_SCHEMA
     if get("todos.enabled", True):
         tools += TODO_TOOL_SCHEMAS
-    return tools
+    return tools + _mcp_schemas(mode)
+
+
+def _mcp_schemas(mode: str) -> list:
+    """Connected MCP tools allowed in *mode* (empty unless ``mcp.enabled``).
+    A misbehaving server must never break the built-in tool list."""
+    if not get("mcp.enabled", False):
+        return []
+    try:
+        return mcp_tool_schemas(mode)
+    except Exception:
+        return []
 
 
 def execute_tool(
@@ -209,6 +221,11 @@ def execute_tool(
     try:
         if name in _TOOL_DISPATCH:
             result = _TOOL_DISPATCH[name](arguments, user_id)
+        elif is_mcp_tool(name):
+            result, blocked = execute_mcp_tool(name, arguments)
+            if blocked:
+                security.audit_tool(name, arguments, result, source=source)
+                return result
         else:
             blocked = security.gate_pc_tool(name, arguments)
             if blocked:

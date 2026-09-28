@@ -14,6 +14,7 @@ Everything for Celestia is under `docs/`. Start with **getting-started** if this
 - [guide/memory.md](guide/memory.md) — what she remembers and how to clean it up
 - [guide/personality.md](guide/personality.md) — YAML packs in `personalities/`
 - [guide/skills.md](guide/skills.md) — how to add a new tool skill
+- [guide/mcp.md](guide/mcp.md) — MCP servers as plug-in tools (gated, audited, untrusted output)
 
 ## Troubleshooting
 

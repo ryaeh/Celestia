@@ -15,6 +15,7 @@ A local AI companion for Windows — chat, voice, memory, screen reading, and PC
 - **Voice** — push-to-talk with local STT (faster-whisper) and TTS (Orpheus or Edge TTS)
 - **Memory** — remembers facts, instructions, preferences, and tasks; auto-extracts summaries from conversations
 - **Screen / Vision** — capture a region, window, or full screen and ask questions about it
+- **MCP tools** — plug in any Model Context Protocol server (calendar, GitHub, Home Assistant, …), gated by security mode
 - **PC Control** — open apps, read/write files, clipboard access, run PowerShell — all gated by a security mode system
 - **Desktop Shell** — native Tauri + React window with streaming chat, memory management, and settings
 - **System Tray** — global hotkeys, mode switching, screen capture, push-to-talk from anywhere
@@ -98,6 +99,7 @@ Type `help` once you're in. Or double-click `start_shell.bat` to launch the desk
 | [docs/guide/memory.md](docs/guide/memory.md) | How memory works, how to clean it |
 | [docs/guide/vision.md](docs/guide/vision.md) | Screen capture and OCR |
 | [docs/guide/skills.md](docs/guide/skills.md) | How to add a new tool |
+| [docs/guide/mcp.md](docs/guide/mcp.md) | Plug in MCP servers as tools (gated, audited) |
 | [docs/reference/architecture.md](docs/reference/architecture.md) | Folder map, data flows, API overview |
 | [docs/reference/api.md](docs/reference/api.md) | Full shell API reference |
 | [docs/testing/checklist.md](docs/testing/checklist.md) | Manual test pass |
