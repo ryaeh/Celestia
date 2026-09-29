@@ -122,6 +122,10 @@ evals/                    # Gate A eval harness — extraction + tool-call gold-
 | `security.policy.yaml` | URL/app allowlists (gitignored — copy from `security.policy.example.yaml`) |
 | `.env` | Secrets: `HF_TOKEN` etc. |
 
+## Work plan
+
+The current plan is `docs/project/landscape-2026-09.md` (tasks T01–T14, decisions D1–D9); `docs/project/roadmap.md` follows its build order. Work one task ID per branch/PR, and don't change a locked stance (model choice, no cloud by default, mem0 + SQLite graph) without an eval result.
+
 ## Commit convention
 
 Every commit that closes a GitHub issue must include `Closes #N` in the footer. The `commit-msg` hook warns if missing. Issue tracker: GitHub Issues only (Linear is no longer used).

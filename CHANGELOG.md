@@ -10,6 +10,16 @@ Roadmap for upcoming work: [`docs/project/roadmap.md`](docs/project/roadmap.md).
 
 ## Unreleased
 
+### Changed
+- **Docs re-planned from the Sep 2026 landscape review.** New
+  `docs/project/landscape-2026-09.md` (tasks T01–T14, decisions D1–D9, repo facts corrected
+  to the current branch). `roadmap.md` follows its build order (security & model sprint
+  first), records decisions + new shipped rows, and no longer claims `qwen2.5:7b` is locked
+  in. README/getting-started/deployment now pull the model `config.example.yaml` actually
+  uses (`llama3.2:3b`), flag English-only default STT, the silent Edge TTS fallback and
+  non-expiring armed mode as known gaps, and mark MCP + the bubble as preview. Feature
+  briefs 01/02/04/10/11/12 carry Sep 2026 revision callouts.
+
 ### Added
 - **Companion overlay bubble.** A second Tauri window (`overlay`): frameless,
   transparent, always-on-top Aura orb that mirrors listening/thinking state.

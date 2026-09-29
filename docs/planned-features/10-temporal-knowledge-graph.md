@@ -7,6 +7,8 @@ and "you used to use Llama 3 but switched to Qwen last month" because every edge
 it was true. No cloud assistant can do this: it requires retaining your full local history
 and grounding it in things you'd never upload.
 
+> **Revision (Sep 2026)** — [landscape plan](../project/landscape-2026-09.md): Store, extraction, hybrid recall and GPU-idle entity resolution have shipped. Edges already carry `valid_from`/`valid_until`/`created_at` with versioned supersede; the remaining gap is **transaction time** — `invalidated_at` + `edges_as_of(t_world, t_known)` (**T07**). Stay on mem0 + SQLite; no Graphiti/Zep (D4). Graph `source` gets the origin vocabulary from T04.
+
 ## Why this is a Celestia feature
 
 It is the **Remembers** pillar taken to its limit, and it only works because everything is

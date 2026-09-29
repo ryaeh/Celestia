@@ -7,6 +7,8 @@ memory ingestion, and surfaces relevant nudges. One concept that unifies resourc
 active features, privacy, and how much she interrupts — so the companion never competes with
 what you're actually doing.
 
+> **Revision (Sep 2026)** — [landscape plan](../project/landscape-2026-09.md): **Reduced scope.** If the model re-baseline (T02) finds one model for chat + vision, the chat↔VL swap goes away and modes shrink to budgets/toggles. Comes after 02 in the revised order.
+
 ## Why this is a Celestia feature
 
 It exists *because* she is **Local** — a cloud assistant has no GPU to budget and nothing to

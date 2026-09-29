@@ -5,6 +5,8 @@ Celestia shows the *full plan* first, you approve once (or per-step), then it ex
 a live checklist. Real agentic PC work — with the brakes the security design already
 implies.
 
+> **Revision (Sep 2026)** — [landscape plan](../project/landscape-2026-09.md): v1 = **file-ops plan preview + reversible undo journal** (T12) on top of armed-mode expiry + per-command PowerShell confirm (T08) and **UI Automation first, VLM fallback** (T10, D8). VLM-grounded clicks always confirm; pixel-level "click anywhere" is descoped (D9). MCP tools reach it only through the gated client (T11).
+
 > **Build decision (Jun 2026).** Two honest constraints shape v1:
 > - **Undo is a promise we can only keep for some actions.** You can't un-send a message or
 >   un-close an app. So v1 autonomy is **file-ops-first**, where undo is *real* (move-to-

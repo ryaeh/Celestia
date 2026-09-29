@@ -91,9 +91,9 @@ copy .env.example .env
 copy config.example.yaml config.yaml
 
 # Pull LLM models
-ollama pull qwen2.5:7b
-ollama pull qwen2.5vl:7b
-ollama pull nomic-embed-text
+ollama pull llama3.2:3b          # chat — the llm.chat_model default in config.example.yaml
+ollama pull qwen2.5vl:7b         # screen reading
+ollama pull nomic-embed-text     # memory embeddings
 
 # Trust the config files
 .\venv\Scripts\python.exe run_celestia.py --trust-config
