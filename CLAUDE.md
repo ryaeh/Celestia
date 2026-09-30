@@ -30,6 +30,9 @@ python -m py_compile celestia_core/shell_chat.py
 # Gate A eval — score tool-calling (right tool / no tool / red flags); comma-separate models to compare
 .\venv\Scripts\python.exe -m evals.toolcall_eval --model llama3.2:3b,qwen2.5:7b --out-dir evals/results
 
+# T15 eval — score the memory writer (think on/off) against today's consolidation on the same cases
+.\venv\Scripts\python.exe -m evals.consolidation_eval --model qwen3.5:4b
+
 # Start interactive chat
 .\venv\Scripts\python.exe run_celestia.py -i
 
@@ -73,6 +76,7 @@ skills/
   memory/decay.py         # Memory lifecycle: TTL decay-delete of low-importance, never-recalled, old entries (off by default)
   memory/graph_store.py   # Temporal knowledge graph (Feature 10): SQLite nodes/edges with versioned-supersede + multi-hop walk
   memory/graph_extract.py # Background LLM pass: chat excerpt → (subject,predicate,object) triples into graph_store
+  memory/writer.py        # T15 memory writer (prompt + parser): chat + summary + existing memories → add/update/supersede/forget ops, each with text + triples
   tts/                    # Orpheus (llama-cpp local) or Edge TTS; queue.py handles sentence streaming
   stt/engine.py           # faster-whisper; model lazily loaded, idle-unloaded after N minutes
   vision/                 # Capture → preprocess → Ollama vision model → optional confirm flow

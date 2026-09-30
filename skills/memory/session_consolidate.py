@@ -176,6 +176,26 @@ def _reject_entry(text: str, kind: MemoryKind) -> str | None:
     return None
 
 
+def build_prompt(known_block: str, excerpt: str) -> str:
+    """The typed-memory consolidation prompt (also used by the T15 consolidation
+    eval as the "legacy" baseline, so it must stay the production prompt)."""
+    return (
+        "Review this chat excerpt. Extract durable memories in four categories.\n"
+        "Rules:\n"
+        "- 0 items per category is valid.\n"
+        "- NEVER duplicate items under KNOWN MEMOS.\n"
+        "- facts: user-stated preferences, projects, names, habits\n"
+        "- instructions: standing rules the user wants you to follow\n"
+        "- summaries: brief recap of what was discussed (1-2 lines max)\n"
+        "- tasks: open todos or things the user plans to do\n"
+        "- Do NOT store greetings, assistant opinions, 'helps with X' reasoning, or guesses.\n"
+        "JSON only:\n"
+        '{"facts":[{"text":"..."}],"instructions":[{"text":"..."}],'
+        '"summaries":[{"text":"..."}],"tasks":[{"text":"..."}]}\n\n'
+        f"KNOWN:\n{known_block}\n\n--- Excerpt ---\n{excerpt}"
+    )
+
+
 def consolidate_session_messages(
     messages: list[dict[str, Any]],
     user_id: str,
@@ -221,21 +241,7 @@ def consolidate_session_messages(
     model = get("memory.session_consolidate_model") or get("llm.chat_model", "llama3.2:3b")
     max_per_kind = int(get("memory.session_consolidate_max_facts", 3))
 
-    prompt = (
-        "Review this chat excerpt. Extract durable memories in four categories.\n"
-        "Rules:\n"
-        "- 0 items per category is valid.\n"
-        "- NEVER duplicate items under KNOWN MEMOS.\n"
-        "- facts: user-stated preferences, projects, names, habits\n"
-        "- instructions: standing rules the user wants you to follow\n"
-        "- summaries: brief recap of what was discussed (1-2 lines max)\n"
-        "- tasks: open todos or things the user plans to do\n"
-        "- Do NOT store greetings, assistant opinions, 'helps with X' reasoning, or guesses.\n"
-        "JSON only:\n"
-        '{"facts":[{"text":"..."}],"instructions":[{"text":"..."}],'
-        '"summaries":[{"text":"..."}],"tasks":[{"text":"..."}]}\n\n'
-        f"KNOWN:\n{known_block}\n\n--- Excerpt ---\n{excerpt}"
-    )
+    prompt = build_prompt(known_block, excerpt)
 
     try:
         resp = ollama.chat(

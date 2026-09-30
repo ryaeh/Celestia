@@ -76,6 +76,83 @@ a missed fact) in daily use, copy the excerpt from the session JSON into a new
 line here with the correct expectation. Negatives are as valuable as positives
 — over-extraction is the known failure mode of the 3B.
 
+## Consolidation eval (T15)
+
+Scores the **memory writer** — the single pass that decides how long-term
+memory changes after a chat ([#134](https://github.com/ryaeh/Celestia/issues/134)).
+Each case gives the memories that already exist, an optional rolling session
+summary, and a transcript. The pass returns operations on text memory, each with
+its own graph triples:
+
+| op | meaning |
+|---|---|
+| `add` | new durable fact / instruction / task nothing existing covers |
+| `update` | existing memory still true, user added detail |
+| `supersede` | existing memory no longer true (moved, changed jobs, reversed a rule) |
+| `forget` | user retracted it or asked to forget it |
+
+Emitting nothing for a restated fact is the correct answer, so duplicates are
+measured directly.
+
+```powershell
+.\venv\Scripts\python.exe -m evals.consolidation_eval --model qwen3.5:4b                  # writer (think on + off) and legacy
+.\venv\Scripts\python.exe -m evals.consolidation_eval --model qwen3.5:4b --pipeline writer --think on
+.\venv\Scripts\python.exe -m evals.consolidation_eval --model qwen2.5:3b,qwen3.5:4b --markdown out/c.md --json out/c.json
+.\venv\Scripts\python.exe -m evals.consolidation_eval --model qwen3.5:4b --only move-01,dup-01 -v
+```
+
+Pipelines on the same cases:
+
+- **writer** — `skills/memory/writer.py` (prompt + parser, no store writes).
+  `--think on,off` runs it with and without thinking; `on` is skipped for models
+  that can't think.
+- **legacy** — today's production path: the typed-consolidation prompt with
+  word-overlap dedupe, plus the separate graph extraction. It can only add, so
+  it scores 0 on corrections by construction. That's the gap T15 must close.
+
+Reported per run:
+
+| metric | meaning |
+|---|---|
+| passed | cases with every expected op found and nothing wrong |
+| f1 (p, r) | ops that were justified / expected ops that were found |
+| corrections | expected `update` / `supersede` / `forget` ops found |
+| duplicates | `add` ops that restate an existing memory |
+| wrong target | ops that edit a memory the case says must stay as is |
+| forbidden | secrets or stale / hypothetical values in any op, triple or summary |
+| graph sync | matched ops whose triples agree with the text (legacy: whether its separate graph pass found it) |
+| negatives clean | cases where the right answer is no change |
+| errors | failed requests (always fail the case; exit code 1) |
+
+### Gold case schema (`consolidation_gold.jsonl`)
+
+```jsonc
+{
+  "id": "move-01",
+  "notes": "relocation supersedes the old city",
+  "existing": [                                  // prompt ids m1..mN, as the writer sees them
+    {"id": "m1", "kind": "fact", "text": "User lives in Ankara.", "key": [["ankara"]]}
+  ],                                             // key: mention groups that identify a restatement (duplicate)
+  "summary": "",                                 // optional rolling session summary
+  "transcript": "User: ...\nAssistant: ...",
+  "expected": [{
+    "op_any": ["supersede", "update"],           // accepted ops
+    "target": "m1",                              // required for update/supersede/forget
+    "kind": "instruction",                       // optional
+    "mentions": [["izmir"]],                     // all groups must appear in the text; any alternative per group
+    "triple": {"subject": "user", "predicate_any": ["live"], "object": "izmir"}   // optional; drives graph sync
+  }],
+  "optional": [ /* same shape — rescue precision only */ ],
+  "untouched": ["m2"],                           // ids no op may target
+  "untouched_ops": {"m1": ["supersede", "forget"]},  // ops banned on an id
+  "forbidden": ["sunflower2024"],                // never in any op, triple, graph or summary
+  "forbidden_add": ["berlin"]                    // never in an add op
+}
+```
+
+`tests/test_consolidation_eval.py` builds a perfect answer from every case's
+specs and checks it passes, so a mislabeled case fails CI offline.
+
 ## Tool-call eval
 
 Scores how reliably a chat model picks the right tool — or correctly picks

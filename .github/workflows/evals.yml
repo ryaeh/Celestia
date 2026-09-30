@@ -12,10 +12,14 @@ on:
     inputs:
       models:
         description: "Ollama models, comma-separated (must support tools)"
-        default: "llama3.2:3b,qwen2.5:3b"
+        default: "llama3.2:3b,qwen2.5:3b,qwen3:4b,qwen3.5:4b"
         required: true
       extraction:
         description: "Also run the graph-extraction eval"
+        type: boolean
+        default: true
+      consolidation:
+        description: "Also run the T15 consolidation eval (writer think on/off + legacy)"
         type: boolean
         default: true
   pull_request:
@@ -28,6 +32,8 @@ on:
       - "celestia_core/personality.py"
       - "personalities/**"
       - "skills/memory/graph_extract.py"
+      - "skills/memory/session_consolidate.py"
+      - "skills/memory/writer.py"
       - ".github/workflows/evals.yml"
 
 concurrency:
@@ -42,7 +48,7 @@ jobs:
     steps:
       - id: m
         env:
-          MODELS: ${{ inputs.models || 'llama3.2:3b,qwen2.5:3b' }}
+          MODELS: ${{ inputs.models || 'llama3.2:3b,qwen2.5:3b,qwen3:4b,qwen3.5:4b' }}
         run: |
           python3 -c "import json,os; print('models=' + json.dumps([m.strip() for m in os.environ['MODELS'].split(',') if m.strip()]))" >> "$GITHUB_OUTPUT"
 
@@ -57,6 +63,7 @@ jobs:
     env:
       MODEL: ${{ matrix.model }}
       RUN_EXTRACTION: ${{ github.event_name == 'pull_request' || inputs.extraction }}
+      RUN_CONSOLIDATION: ${{ github.event_name == 'pull_request' || inputs.consolidation }}
     steps:
       - uses: actions/checkout@v4
 
@@ -101,6 +108,15 @@ jobs:
         run: |
           python -m evals.extraction_eval --model "$MODEL" -v \
             --json "out/extraction-${{ steps.slug.outputs.slug }}.json"
+
+      - name: Consolidation eval
+        if: env.RUN_CONSOLIDATION == 'true'
+        run: |
+          # Writer with thinking on and off (on is skipped for non-thinking
+          # models) plus today's legacy pipeline, on the same cases.
+          python -m evals.consolidation_eval --model "$MODEL" -v --think on,off \
+            --json "out/consolidation-${{ steps.slug.outputs.slug }}.json" \
+            --markdown "out/consolidation-${{ steps.slug.outputs.slug }}.md"
 
       - name: Upload results
         if: always()
@@ -147,6 +163,14 @@ jobs:
                   a = r["aggregate"]
                   print(f"| `{r['model']}` | {a['precision']} | {a['recall']} | {a['f1']} | "
                         f"{a['negatives_clean']}/{a['negatives_total']} | {a['forbidden_hits']} |")
+          EOF
+          python - >> summary.md <<'EOF'
+          import json, pathlib
+          from evals.consolidation_eval import markdown_table
+          runs = [r for p in sorted(pathlib.Path("results").rglob("consolidation-*.json"))
+                  for r in json.loads(p.read_text())["runs"]]
+          if runs:
+              print("\n" + markdown_table(runs))
           EOF
           cat summary.md >> "$GITHUB_STEP_SUMMARY"
           cat summary.md

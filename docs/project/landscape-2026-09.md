@@ -88,6 +88,7 @@ well, it's out of scope (same rule as `docs/planned-features/README.md`).
 | T12 | Plan preview + undo journal (04 v1) | P1 | Open |
 | T13 | n8n stays optional | P2 | Standing rule |
 | T14 | Companion safety basics | P2 | Open |
+| T15 | Three-layer memory, one reasoning writer ([#134](https://github.com/ryaeh/Celestia/issues/134)) | P1 | In progress — consolidation eval first |
 
 Size: **S** ≤ 1 week · **M** 2–4 weeks · **L** 1–2+ months.
 Priority: **P0** now (blocks the rest) · **P1** next · **P2** later.
@@ -191,6 +192,12 @@ Priority: **P0** now (blocks the rest) · **P1** next · **P2** later.
 
 ### T14: Companion safety basics · P2 · S
 - Add a non-human disclosure line + crisis-resource response to `personality._BASE` (applies to all packs in `personalities/`). Keep personality packs free of dependency/romance-optimization mechanics. Cheap insurance if packs are ever distributed (CA SB 243 in force since Jan 1 2026; NY companion law since Nov 5 2025).
+
+### T15: Three-layer memory, one reasoning writer · P1 · M · [#134](https://github.com/ryaeh/Celestia/issues/134)
+- Layers: **working memory** (session messages + a rolling session summary instead of losing trimmed messages), **text memory** (mem0 typed entries — the source of truth the user edits), **graph** (SQLite; each edge linked to its text entry).
+- One reasoning pass (`skills/memory/writer.py`) replaces turn-count consolidation + separate graph extraction: it sees the chat since the last checkpoint, the session summary and relevant existing memories, and emits `add / update / supersede / forget` ops that carry both text and triples, so the two stores can't drift.
+- Runs at end of chat (new session, app close, ~20 min idle) and at a mid-chat checkpoint (~60 min or before messages are trimmed), with a visible notice; crash-safe via a `consolidated_through` cursor. Tasks → To-do list.
+- Gate: `evals/consolidation_eval.py` (writer vs today's pipeline on corrections, duplicates, wrong targets, graph sync). Reasoning model for the pass is chosen from that result, not assumed.
 
 ### Later (P2, unscheduled)
 - **Desktop-pet Aura overlay** (transparent, click-through, always-on-top Tauri window). Inspired by AIRI / Open-LLM-VTuber / Desktop Mate. **v1 built in PR #117** (not click-through yet); remaining: click-through when idle, a *speaking* state from TTS, Windows verification.
