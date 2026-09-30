@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  approveMemoryEntry,
   createMemoryEntry,
   deleteMemoryEntry,
   fetchLastSession,
@@ -19,7 +20,8 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { Star, Sparkles } from "lucide-react";
+import { Star, Sparkles, ShieldAlert } from "lucide-react";
+import { originLabel } from "@/lib/memoryOrigin";
 
 const KINDS: MemoryKind[] = ["instruction", "fact", "summary", "task"];
 const KIND_LABELS: Record<MemoryKind, string> = {
@@ -73,11 +75,25 @@ export default function Memory() {
       fact: [], instruction: [], summary: [], task: [],
     };
     for (const e of entries) {
+      if (e.quarantined) continue; // shown in the Review list instead
       const k = KINDS.includes(e.kind as MemoryKind) ? (e.kind as MemoryKind) : "fact";
       map[k].push(e);
     }
     return map;
   }, [entries]);
+
+  const review = useMemo(() => entries.filter((e) => e.quarantined), [entries]);
+
+  async function handleApprove(id: string) {
+    setBusy(true);
+    try {
+      setEntries(await approveMemoryEntry(id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function handleAdd() {
     const text = newText.trim();
@@ -216,6 +232,52 @@ export default function Memory() {
       {error && <p className="memory-error">{error}</p>}
       {loading && <p className="muted">Loading…</p>}
 
+      {/* Review — memories held back because they came from untrusted content (T04) */}
+      {review.length > 0 && (
+        <section className="memory-card memory-review" aria-label="Memories to review">
+          <div className="memory-card-head">
+            <h2 className="flex items-center gap-1.5">
+              <ShieldAlert size={15} className="text-[var(--scoped)]" />
+              Review ({review.length})
+            </h2>
+          </div>
+          <p className="muted text-sm mt-0 mb-2">
+            These came from a file, web page, clipboard or tool output — text Celestia read, not
+            something you said. They're not used until you approve them.
+          </p>
+          <ul className="memory-list">
+            {review.map((entry) => (
+              <li key={entry.id} className="memory-item">
+                <div className="flex items-center gap-2 w-full">
+                  <div className="flex-1 min-w-0">
+                    <span className="memory-text">{entry.text}</span>
+                    <span className="memory-meta block text-[0.66rem] text-[var(--text-dim)] mt-0.5">
+                      {originLabel(entry.origin) ? `from ${originLabel(entry.origin)}` : "source unknown"}
+                      {entry.requested_kind && entry.requested_kind !== entry.kind
+                        ? ` · wants to be ${entry.requested_kind === "instruction" ? "an instruction" : `a ${entry.requested_kind}`}`
+                        : ""}
+                    </span>
+                  </div>
+                  <span className="memory-actions flex gap-1 shrink-0 items-center">
+                    <Button type="button" variant="ghost" size="xs" disabled={busy}
+                      onClick={() => handleApprove(entry.id)}
+                      title="Keep it and let Celestia use it">
+                      Approve
+                    </Button>
+                    <Button type="button" variant="ghost" size="xs" disabled={busy}
+                      onClick={() => handleDelete(entry.id)}
+                      className="text-[var(--armed)]"
+                      title="Delete it">
+                      Reject
+                    </Button>
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* Last session card */}
       <section className="memory-card last-session-card">
         <div className="memory-card-head">
@@ -330,6 +392,7 @@ export default function Memory() {
                           <span className="memory-text">{entry.text}</span>
                           <span className="memory-meta block text-[0.66rem] text-[var(--text-dim)] mt-0.5">
                             importance {(entry.importance ?? 0).toFixed(2)}
+                            {originLabel(entry.origin) ? ` · from ${originLabel(entry.origin)}` : ""}
                             {entry.recall_count ? ` · recalled ${entry.recall_count}×` : ""}
                             {entry.keep ? " · kept" : ""}
                           </span>

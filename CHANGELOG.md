@@ -10,6 +10,16 @@ Roadmap for upcoming work: [`docs/project/roadmap.md`](docs/project/roadmap.md).
 
 ## Unreleased
 
+### Security
+- **Memory-poisoning defense (T04, #121).** Every memory records its origin
+  (`user` / `assistant` / `consolidation` / `screen` / `tool:<name>`). In a turn
+  that read untrusted content (file, web page, clipboard, MCP), `memory_add` is
+  stored as a quarantined fact — never an instruction, never injected — and
+  `memory_edit`/`memory_delete` are refused. Consolidation keeps an item live only
+  if the user's own messages back it; unbacked graph relations are dropped. The
+  Memory page gains a **Review** list (Approve / Reject); origin shows on the
+  Memory page and in reply provenance. `POST /memory/{id}/approve`.
+
 ### Changed
 - **Docs re-planned from the Sep 2026 landscape review.** New
   `docs/project/landscape-2026-09.md` (tasks T01–T14, decisions D1–D9, repo facts corrected

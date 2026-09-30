@@ -17,6 +17,8 @@ Keep the delimiter strings and the system-prompt clause in sync.
 
 from __future__ import annotations
 
+import re
+
 # Tools whose results carry content from outside Celestia's trust boundary. Their
 # output is wrapped before being handed back to the model in the agent loop.
 UNTRUSTED_CONTENT_TOOLS = frozenset(
@@ -62,3 +64,62 @@ def wrap_tool_result(name: str, result: str) -> str:
     if name in UNTRUSTED_CONTENT_TOOLS or name.startswith(_MCP_PREFIX):
         return wrap(result, source_for_tool(name))
     return result
+
+
+def is_wrapped(text: str | None) -> bool:
+    """True when *text* contains an untrusted-data block."""
+    return bool(text) and _OPEN in str(text)
+
+
+def turn_tainted(messages: list[dict]) -> bool:
+    """Has the *current turn* pulled untrusted content into the context?
+
+    Scans back from the newest message to the latest user message and reports
+    whether any tool result in between carries an untrusted-data block. A new
+    user message starts a clean turn: the user's own words are their intent.
+    (Older turns' tool results stay in history; their influence on later turns
+    is a known residual risk — see docs/guide/memory.md.)
+
+    Callers pass this to ``registry.execute_tool(untrusted_context=...)`` so
+    memory writes in a tainted turn are quarantined and edits/deletes refused.
+    """
+    for m in reversed(messages or []):
+        role = m.get("role") if isinstance(m, dict) else getattr(m, "role", None)
+        if role == "user":
+            return False
+        content = m.get("content") if isinstance(m, dict) else getattr(m, "content", None)
+        if role == "tool" and is_wrapped(content):
+            return True
+    return False
+
+
+# Common words that carry no content, EN + TR; they never count as support.
+_STOPWORDS = frozenset(
+    "the and for you your that this with from have has are was were will would should "
+    "can could about into over them they their there then than what when where which who "
+    "always never every please just also only very user assistant kullanıcı asistan "
+    "bir ve ile için bu şu o da de ki mi mı mu mü ben sen biz siz onlar gibi daha çok "
+    "her hep asla lütfen sadece ama fakat veya ya".split()
+)
+_WORD = re.compile(r"[^\W\d_]{3,}", re.UNICODE)
+
+
+def _terms(text: str) -> list[str]:
+    return [w for w in (m.group().lower() for m in _WORD.finditer(text or "")) if w not in _STOPWORDS]
+
+
+def supported_by(text: str, reference: str, *, threshold: float = 0.6) -> bool:
+    """Is *text* grounded in *reference* (e.g. the user's own messages)?
+
+    True when at least ``threshold`` of text's content words appear in the
+    reference. Words match on a shared 4-letter prefix, so Turkish suffixes
+    ("dosyaları" ~ "dosya") and English inflection still count. Used to decide
+    whether a memory distilled from a turn that read untrusted content is backed
+    by what the *user* said, or only by the injected text.
+    """
+    terms = _terms(text)
+    if not terms:
+        return False
+    ref_prefixes = {w[:4] for w in _terms(reference)}
+    hits = sum(1 for t in terms if t[:4] in ref_prefixes)
+    return hits / len(terms) >= threshold

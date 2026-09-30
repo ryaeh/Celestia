@@ -73,7 +73,7 @@ def test_execute_tool_memory_add(monkeypatch) -> None:
     monkeypatch.setattr(reg, "memory", mock_store)
     result = reg.execute_tool("memory_add", {"content": "I like coffee"}, "user1")
     assert result == "Stored."
-    mock_store.add_json.assert_called_once_with("I like coffee", "user1", kind="fact")
+    mock_store.add_json.assert_called_once_with("I like coffee", "user1", kind="fact", origin="assistant")
 
 
 def test_execute_tool_memory_search(monkeypatch) -> None:

@@ -196,6 +196,18 @@ def consolidate_session_messages(
         return len(messages), []
 
     excerpt = _dialog_excerpt(messages, start_index)
+
+    # T04 — memory-poisoning defense. If this window pulled untrusted content
+    # (file / web / clipboard / MCP tool results), the assistant's replies may be
+    # repeating injected text. A distilled memory then stays trusted only when
+    # the *user's* own messages back it; otherwise it's stored quarantined (a
+    # fact awaiting review, never an instruction) and unbacked graph relations
+    # are dropped.
+    from celestia_core.untrusted import is_wrapped, supported_by
+
+    window = messages[start_index:]
+    tainted = any(m.get("role") == "tool" and is_wrapped(m.get("content")) for m in window)
+    user_text = "\n".join(str(m.get("content") or "") for m in window if m.get("role") == "user")
     if not excerpt.strip() or len(excerpt) < 30:
         return len(messages), []
 
@@ -261,10 +273,11 @@ def consolidate_session_messages(
                 continue
             if _is_duplicate(text, existing):
                 continue
+            untrusted = tainted and not supported_by(text, user_text)
             try:
-                add(text, user_id, kind=kind)
+                add(text, user_id, kind=kind, origin="consolidation", untrusted=untrusted)
                 existing.append(text)
-                append_event(action="saved", text=text, kind=kind)
+                append_event(action="held for review" if untrusted else "saved", text=text, kind=kind)
                 if get("memory.session_consolidate_verbose", False):
                     stored_lines.append(f"[{kind}] {text}")
             except Exception as e:
@@ -278,7 +291,13 @@ def consolidate_session_messages(
         try:
             from skills.memory.graph_extract import extract_and_store
 
-            stored_lines += extract_and_store(excerpt, user_id=user_id, source="chat", model=model)
+            stored_lines += extract_and_store(
+                excerpt,
+                user_id=user_id,
+                source="consolidation",
+                model=model,
+                ground_in=user_text if tainted else None,
+            )
         except Exception as e:
             stored_lines.append(f"(graph extract failed: {e})")
 
