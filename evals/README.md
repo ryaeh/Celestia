@@ -70,7 +70,7 @@ extracts nothing.
 
 ### Growing the set
 
-The 18 seed cases are synthetic-but-realistic. The set becomes trustworthy at
+The 30 seed cases (18 English + 12 Turkish, `"lang": "tr"`) are synthetic-but-realistic. The set becomes trustworthy at
 **50+ cases labeled from your real chats**: when you see a bad graph entry (or
 a missed fact) in daily use, copy the excerpt from the session JSON into a new
 line here with the correct expectation. Negatives are as valuable as positives
@@ -115,11 +115,33 @@ support tools" is **skipped with a reason**, not scored (it would otherwise
 "pass" every negative case). The exit code is non-zero when any model couldn't
 be evaluated. Useful flags: `--markdown report.md` (comparison + misses),
 `--timeout 900` (CPU-only runs), `--num-ctx 8192` (try a larger context window),
+`--lang tr` (one language only), `--repeat N --temperature model` (see below),
 `--report DIR` (merge saved `toolcall-*.json` runs without re-running).
 
 Red flags matter more than the headline pass rate. `--think` / `--no-think` pass
 Ollama's `think` flag for reasoning models (omitted = model default); compare
 both, since thinking usually helps accuracy but costs latency on the hot path.
+
+### Repeats, sampling and languages
+
+Celestia's chat loop doesn't set a temperature, so the model samples at its own
+default. A single run at temperature 0 is reproducible but **not** what users get,
+and repeating it on the same machine mostly repeats the same answers. For model
+comparisons use `--repeat 3 --temperature model`: every case is attempted three
+times with seeds 1–3, the table shows the pooled pass rate plus its **± sd** across
+repeats, and cases that pass only sometimes are listed as *unstable*. Two models
+closer than about two standard deviations aren't meaningfully different.
+
+Every case carries a `lang` (`en` default, `tr` for the Turkish subset), and the
+table reports pass rate per language. Each run also records the Ollama version,
+time-to-first-token (load + prompt evaluation), output tokens/s and — after the
+run — how much of the model sits in VRAM (`ollama ps`). On a GPU those last three
+are what the residency plan needs.
+
+`--no-think` turns thinking off for Qwen3-style reasoning models; models without a
+thinking switch get the flag dropped automatically (noted in the output). The
+extraction eval takes `--repeat`, `--lang` and `--no-think` too; it stays at
+temperature 0 like the production extractor.
 
 ### Run it on GitHub (no local GPU needed)
 
@@ -169,6 +191,7 @@ Switch `llm.chat_model` (then `--trust-config`) only when a candidate wins here
 ```jsonc
 {
   "id": "todo-add-02",                  // unique, stable — used by --only and in reports
+  "lang": "en",                         // en (default) | tr — per-language pass rates
   "category": "todos",                  // free-form grouping
   "mode": "safe",                       // safe | scoped | armed — decides which tools are offered
   "prompt": "remind me to renew my passport, high priority",

@@ -72,22 +72,22 @@ well, it's out of scope (same rule as `docs/planned-features/README.md`).
 <a id="task-index"></a>
 **Task index**
 
-| ID | Task | Priority | Status |
-|----|------|----------|--------|
-| T01 | Evals on `main` | P0 | In review — [PR #117](https://github.com/ryaeh/Celestia/pull/117) |
-| T02 | Model re-baseline | P0 | Harness ready (`--think/--no-think`, `evals.yml`); first 3B results in `evals/README.md`; Turkish subset + qwen3/3.5 runs open |
-| T03 | Prompt-injection eval track | P0 | Open |
-| T04 | Memory-poisoning defense | P0 | Open |
-| T05 | Fully local TR + EN voice | P0 | Open |
-| T06 | Voice barge-in | P1 | Open |
-| T07 | Graph transaction-time gap | P1 | Open |
-| T08 | Harden armed mode | P1 | Open |
-| T09 | Time machine capture (02) | P1 | Open |
-| T10 | UI Automation first | P1 | Open |
-| T11 | MCP client, gated | P1 | Partly done in PR #117 — hash pinning + T03 fixture open |
-| T12 | Plan preview + undo journal (04 v1) | P1 | Open |
-| T13 | n8n stays optional | P2 | Standing rule |
-| T14 | Companion safety basics | P2 | Open |
+| ID | Issue | Task | Priority | Status |
+|----|-------|------|----------|--------|
+| T01 | [#118](https://github.com/ryaeh/Celestia/issues/118) | Evals on `main` | P0 | Done — [PR #117](https://github.com/ryaeh/Celestia/pull/117) merged 2026-09-30 |
+| T02 | [#119](https://github.com/ryaeh/Celestia/issues/119) | Model re-baseline | P0 | In progress — Turkish subsets (19 tool-call / 12 extraction), `--repeat` at production sampling, Ollama version + TTFT/VRAM recorded; CI runs on 4 candidates; GPU runs of 8–9B need the owner |
+| T03 | [#120](https://github.com/ryaeh/Celestia/issues/120) | Prompt-injection eval track | P0 | Open |
+| T04 | [#121](https://github.com/ryaeh/Celestia/issues/121) | Memory-poisoning defense | P0 | Open |
+| T05 | [#122](https://github.com/ryaeh/Celestia/issues/122) | Fully local TR + EN voice | P0 | Open |
+| T06 | [#123](https://github.com/ryaeh/Celestia/issues/123) | Voice barge-in | P1 | Open |
+| T07 | [#124](https://github.com/ryaeh/Celestia/issues/124) | Graph transaction-time gap | P1 | Open |
+| T08 | [#125](https://github.com/ryaeh/Celestia/issues/125) | Harden armed mode | P1 | Open |
+| T09 | [#126](https://github.com/ryaeh/Celestia/issues/126) | Time machine capture (02) | P1 | Open |
+| T10 | [#127](https://github.com/ryaeh/Celestia/issues/127) | UI Automation first | P1 | Open |
+| T11 | [#128](https://github.com/ryaeh/Celestia/issues/128) | MCP client, gated | P1 | Partly done in PR #117 — hash pinning + T03 fixture open |
+| T12 | [#129](https://github.com/ryaeh/Celestia/issues/129) | Plan preview + undo journal (04 v1) | P1 | Open |
+| T13 | [#130](https://github.com/ryaeh/Celestia/issues/130) | n8n stays optional | P2 | Standing rule |
+| T14 | [#131](https://github.com/ryaeh/Celestia/issues/131) | Companion safety basics | P2 | Open |
 
 Size: **S** ≤ 1 week · **M** 2–4 weeks · **L** 1–2+ months.
 Priority: **P0** now (blocks the rest) · **P1** next · **P2** later.

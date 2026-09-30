@@ -52,7 +52,7 @@ _CLAIM_RE = re.compile(
     # "set" is also present tense ("Should I set…?"), so only the perfect form counts.
     r"i(?:'ve| have) (?:just |now |already )?set\b|"
     r"(?:opened|launched|added|saved|deleted|removed|updated)[.!]|"
-    r"açtım|ekledim|kaydettim|sildim|güncelledim|değiştirdim|tamamladım)",
+    r"açtım|ekledim|kaydettim|sildim|güncelledim|değiştirdim|tamamladım|işaretledim|not ettim|not aldım)",
     re.IGNORECASE,
 )
 
@@ -136,6 +136,7 @@ def score_case(
     return {
         "id": case.get("id", "?"),
         "mode": case.get("mode", "safe"),
+        "lang": case.get("lang", "en"),
         "category": case.get("category", ""),
         "is_negative": not expect,
         "expected": sorted(expected_tools),
@@ -157,9 +158,16 @@ def aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
     prompt_toks = [r["prompt_tokens"] for r in results if r.get("prompt_tokens")]
     tool_right = [r for r in pos if r["tool_ok"]]
     secs = [r["seconds"] for r in results if "seconds" in r]
+    ttft = [r["ttft_s"] for r in results if r.get("ttft_s") is not None]
+    tok_s = [r["tok_per_s"] for r in results if r.get("tok_per_s")]
 
     def _rate(n: int, d: int) -> float:
         return round(n / d, 3) if d else 1.0
+
+    by_lang: dict[str, float] = {}
+    for lang in sorted({r.get("lang", "en") for r in results}):
+        subset = [r for r in results if r.get("lang", "en") == lang]
+        by_lang[lang] = _rate(sum(r["passed"] for r in subset), len(subset))
 
     return {
         "cases": len(results),
@@ -175,6 +183,33 @@ def aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
         "latency_mean_s": round(statistics.mean(secs), 2) if secs else None,
         "latency_p50_s": round(statistics.median(secs), 2) if secs else None,
         "prompt_tokens_max": max(prompt_toks) if prompt_toks else None,
+        "ttft_p50_s": round(statistics.median(ttft), 2) if ttft else None,
+        "tok_per_s_p50": round(statistics.median(tok_s), 1) if tok_s else None,
+        "pass_by_lang": by_lang,
+    }
+
+
+def repeat_spread(results: list[dict[str, Any]]) -> dict[str, Any]:
+    """Run-to-run spread when cases were attempted several times (``--repeat``).
+
+    Returns the pass rate of each repeat, their standard deviation, and the
+    cases that passed on some attempts but not others ("unstable") — the ones a
+    single run would score by luck.
+    """
+    repeats = sorted({r.get("repeat", 0) for r in results})
+    per_repeat = []
+    for k in repeats:
+        subset = [r for r in results if r.get("repeat", 0) == k]
+        per_repeat.append(round(sum(r["passed"] for r in subset) / len(subset), 3) if subset else 0.0)
+    by_case: dict[str, list[bool]] = {}
+    for r in results:
+        by_case.setdefault(r["id"], []).append(bool(r["passed"]))
+    unstable = sorted(cid for cid, oks in by_case.items() if any(oks) and not all(oks))
+    return {
+        "repeats": len(repeats),
+        "pass_rate_by_repeat": per_repeat,
+        "pass_rate_sd": round(statistics.pstdev(per_repeat), 3) if len(per_repeat) > 1 else 0.0,
+        "unstable_cases": unstable,
     }
 
 
@@ -242,6 +277,54 @@ def usage(resp: Any) -> tuple[int | None, int | None]:
     return _field(resp, "prompt_eval_count"), _field(resp, "eval_count")
 
 
+def timing(resp: Any) -> tuple[float | None, float | None]:
+    """(time_to_first_token_s, output_tokens_per_s) from Ollama's durations (ns).
+
+    TTFT ≈ load + prompt evaluation — what the user waits before the first
+    token of a streamed reply. Both are None when the fields are missing.
+    """
+    prompt_ns = _field(resp, "prompt_eval_duration")
+    load_ns = _field(resp, "load_duration") or 0
+    eval_ns, eval_n = _field(resp, "eval_duration"), _field(resp, "eval_count")
+    ttft = round((prompt_ns + load_ns) / 1e9, 3) if prompt_ns is not None else None
+    tps = round(eval_n / (eval_ns / 1e9), 1) if eval_ns and eval_n else None
+    return ttft, tps
+
+
+def parse_temperature(value: str | None) -> float | None:
+    """``"model"`` (or None) → don't set it: the model's default, which is what
+    Celestia's chat loop uses. Anything else must be a number."""
+    if value is None or str(value).strip().lower() in ("", "model", "default"):
+        return None
+    return float(value)
+
+
+def ollama_version(host: str) -> str | None:
+    """The server's version (``GET /api/version``), recorded with every run so
+    results from different Ollama builds aren't compared blindly."""
+    try:
+        import httpx
+
+        return str(httpx.get(host.rstrip("/") + "/api/version", timeout=5).json().get("version"))
+    except Exception:  # noqa: BLE001 — informational only
+        return None
+
+
+def resident_memory(client: Any, model: str) -> dict[str, Any] | None:
+    """Size and VRAM share of *model* as loaded (``ollama ps``) — the number the
+    GPU residency plan needs. None when unavailable."""
+    try:
+        listing = client.ps()
+    except Exception:  # noqa: BLE001 — informational only
+        return None
+    wanted = {model, model if ":" in model else f"{model}:latest"}
+    for m in _field(listing, "models") or []:
+        name = str(_field(m, "model") or _field(m, "name") or "")
+        if name in wanted:
+            return {"size_bytes": _field(m, "size"), "size_vram_bytes": _field(m, "size_vram")}
+    return None
+
+
 def _chat(
     client: Any,
     model: str,
@@ -249,10 +332,16 @@ def _chat(
     tools: list,
     think: bool | None,
     num_ctx: int | None = None,
+    temperature: float | None = 0.0,
+    seed: int | None = None,
 ) -> Any:
     from celestia_core.config import get
 
-    options: dict[str, Any] = {"num_predict": int(get("llm.max_tokens", 1024)), "temperature": 0.0}
+    options: dict[str, Any] = {"num_predict": int(get("llm.max_tokens", 1024))}
+    if temperature is not None:
+        options["temperature"] = temperature
+    if seed is not None:
+        options["seed"] = seed
     if num_ctx:
         options["num_ctx"] = num_ctx
     kwargs: dict[str, Any] = {
@@ -266,22 +355,39 @@ def _chat(
     return client.chat(**kwargs)
 
 
-def preflight(client: Any, model: str) -> str:
-    """Load *model* (so case latency excludes load time) and confirm it accepts
-    tools. Returns an error message, or "" when the model is usable."""
+def preflight(client: Any, model: str, think: bool | None = None) -> tuple[str, bool | None]:
+    """Load *model* (so case latency excludes load time), confirm it accepts
+    tools, and settle the ``think`` flag.
+
+    Returns ``(error, think)``: error is "" when the model is usable. A model
+    that rejects the think flag ("does not support thinking") gets ``think``
+    dropped to None instead of failing, so one ``--no-think`` works across a
+    mixed list of thinking and non-thinking models.
+    """
     probe = [{
         "type": "function",
         "function": {"name": "ping", "description": "Ping.", "parameters": {"type": "object", "properties": {}}},
     }]
-    try:
-        client.chat(model=model, messages=[{"role": "user", "content": "hi"}],
-                    tools=probe, options={"num_predict": 1})
-    except Exception as e:  # noqa: BLE001 — surfaced to the caller as a skip reason
-        msg = str(e)
+
+    def _try(t: bool | None) -> str:
+        kwargs: dict[str, Any] = {"model": model, "messages": [{"role": "user", "content": "hi"}],
+                                  "tools": probe, "options": {"num_predict": 1}}
+        if t is not None:
+            kwargs["think"] = t
+        try:
+            client.chat(**kwargs)
+        except Exception as e:  # noqa: BLE001 — surfaced to the caller as a skip reason
+            return str(e)
+        return ""
+
+    msg = _try(think)
+    if msg and think is not None and "think" in msg.lower():
+        think, msg = None, _try(None)
+    if msg:
         if "does not support tools" in msg:
-            return f"{model} does not support tool calling in Ollama (pick a model tagged 'tools')"
-        return msg
-    return ""
+            return f"{model} does not support tool calling in Ollama (pick a model tagged 'tools')", think
+        return msg, think
+    return "", think
 
 
 def run_model(
@@ -292,75 +398,118 @@ def run_model(
     verbose: bool,
     num_ctx: int | None = None,
     timeout: float | None = None,
+    repeat: int = 1,
+    temperature: float | None = 0.0,
 ) -> dict[str, Any]:
     import ollama
 
     from celestia_core.config import get
 
+    host = get("llm.host", "http://127.0.0.1:11434")
     client = ollama.Client(
-        host=get("llm.host", "http://127.0.0.1:11434"),
+        host=host,
         timeout=timeout or float(get("llm.request_timeout_seconds", 60)) * 3,
     )
+    repeat = max(1, int(repeat))
+    version = ollama_version(host)
 
-    print(f"\ntool-call eval — model: {model}, cases: {len(cases)}")
-    problem = preflight(client, model)
+    temp_label = "model default" if temperature is None else str(temperature)
+    print(f"\ntool-call eval — model: {model}, cases: {len(cases)} × {repeat}, "
+          f"temperature: {temp_label}, ollama: {version or '?'}")
+    requested_think = think
+    problem, think = preflight(client, model, think)
     if problem:
         print(f"  !! skipped {model}: {problem}")
-        return {"model": model, "error": problem}
+        return {"model": model, "error": problem, "ollama_version": version}
+    if requested_think is not None and think is None:
+        print(f"  (note: {model} has no thinking switch — think flag dropped)")
 
     results = []
-    for case in cases:
-        messages, schemas = build_request(case)
-        offered = {s["function"]["name"] for s in schemas}
-        started = time.monotonic()
-        error = ""
-        prompt_tokens = output_tokens = None
-        try:
-            resp = _chat(client, model, messages, schemas, think, num_ctx)
-            calls, reply = parse_response(resp)
-            prompt_tokens, output_tokens = usage(resp)
-        except Exception as e:  # noqa: BLE001 — recorded as an error, never as a clean answer
-            calls, reply, error = [], "", f"{type(e).__name__}: {e}"
-        r = score_case(case, calls, reply, offered, error=error)
-        r["seconds"] = round(time.monotonic() - started, 2)
-        r["prompt_tokens"] = prompt_tokens
-        r["output_tokens"] = output_tokens
-        results.append(r)
+    for rep in range(repeat):
+        if repeat > 1:
+            print(f"  — repeat {rep + 1}/{repeat}")
+        for case in cases:
+            r = _run_case(client, model, case, think=think, num_ctx=num_ctx,
+                          temperature=temperature, seed=(rep + 1) if repeat > 1 else None)
+            r["repeat"] = rep
+            results.append(r)
+            _print_case(r, verbose)
+    resident = resident_memory(client, model)
+    return _finish_run(model, results, think=think, requested_think=requested_think,
+                       num_ctx=num_ctx, temperature=temperature, version=version, resident=resident)
 
-        flags = []
-        if r["forbidden_hits"]:
-            flags.append("FORBIDDEN " + ",".join(r["forbidden_hits"]))
-        if r["unknown"]:
-            flags.append("UNKNOWN " + ",".join(r["unknown"]))
-        if r["claimed"]:
-            flags.append("CLAIMED")
-        if r["error"]:
-            flags.append("ERROR " + r["error"][:80])
-        status = "ok  " if r["passed"] else ("ERR " if r["error"] else ("ARGS" if r["tool_ok"] else "FAIL"))
-        called = ", ".join(c.split("(")[0] for c in r["called"]) or "—"
-        want = "|".join(r["expected"]) or "none"
-        tail = f"  !! {' · '.join(flags)}" if flags else ""
-        print(f"  [{status}] {r['id']:<24} {r['mode']:<6} want {want:<22} got {called} ({r['seconds']}s){tail}")
-        if verbose and not r["passed"]:
-            for c in r["called"]:
-                print(f"          call:  {c}")
-            if r["reply"]:
-                print(f"          reply: {r['reply'][:160]!r}")
 
+def _run_case(client: Any, model: str, case: dict[str, Any], *, think: bool | None,
+              num_ctx: int | None, temperature: float | None, seed: int | None) -> dict[str, Any]:
+    messages, schemas = build_request(case)
+    offered = {s["function"]["name"] for s in schemas}
+    started = time.monotonic()
+    error = ""
+    prompt_tokens = output_tokens = ttft = tps = None
+    try:
+        resp = _chat(client, model, messages, schemas, think, num_ctx, temperature, seed)
+        calls, reply = parse_response(resp)
+        prompt_tokens, output_tokens = usage(resp)
+        ttft, tps = timing(resp)
+    except Exception as e:  # noqa: BLE001 — recorded as an error, never as a clean answer
+        calls, reply, error = [], "", f"{type(e).__name__}: {e}"
+    r = score_case(case, calls, reply, offered, error=error)
+    r["seconds"] = round(time.monotonic() - started, 2)
+    r["prompt_tokens"] = prompt_tokens
+    r["output_tokens"] = output_tokens
+    r["ttft_s"] = ttft
+    r["tok_per_s"] = tps
+    return r
+
+
+def _print_case(r: dict[str, Any], verbose: bool) -> None:
+    flags = []
+    if r["forbidden_hits"]:
+        flags.append("FORBIDDEN " + ",".join(r["forbidden_hits"]))
+    if r["unknown"]:
+        flags.append("UNKNOWN " + ",".join(r["unknown"]))
+    if r["claimed"]:
+        flags.append("CLAIMED")
+    if r["error"]:
+        flags.append("ERROR " + r["error"][:80])
+    status = "ok  " if r["passed"] else ("ERR " if r["error"] else ("ARGS" if r["tool_ok"] else "FAIL"))
+    called = ", ".join(c.split("(")[0] for c in r["called"]) or "—"
+    want = "|".join(r["expected"]) or "none"
+    tail = f"  !! {' · '.join(flags)}" if flags else ""
+    print(f"  [{status}] {r['id']:<24} {r['mode']:<6} want {want:<22} got {called} ({r['seconds']}s){tail}")
+    if verbose and not r["passed"]:
+        for c in r["called"]:
+            print(f"          call:  {c}")
+        if r["reply"]:
+            print(f"          reply: {r['reply'][:160]!r}")
+
+
+def _finish_run(model: str, results: list[dict[str, Any]], *, think: bool | None,
+                requested_think: bool | None, num_ctx: int | None, temperature: float | None,
+                version: str | None, resident: dict[str, Any] | None) -> dict[str, Any]:
     agg = aggregate(results)
+    spread = repeat_spread(results)
     print(
         f"\n  pass {agg['pass_rate']}  tool {agg['tool_accuracy']}  args {agg['arg_accuracy']}"
         f"  |  negatives clean {agg['negatives_clean']}/{agg['negatives_total']}"
         f"  |  forbidden {agg['forbidden_hits']}  unknown {agg['unknown_tools']}"
         f"  claimed {agg['claimed_actions']}  errors {agg['errors']}"
         f"  |  p50 {agg['latency_p50_s']}s  max prompt {agg['prompt_tokens_max']} tok"
+        f"  |  by lang {agg['pass_by_lang']}"
+        + (f"  |  repeats {spread['pass_rate_by_repeat']} sd {spread['pass_rate_sd']}"
+           if spread["repeats"] > 1 else "")
     )
     run: dict[str, Any] = {
         "model": model,
         "think": think,
+        "think_requested": requested_think,
         "num_ctx": num_ctx,
+        "temperature": "model" if temperature is None else temperature,
+        "ollama_version": version,
+        "resident": resident,
         "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "aggregate": agg,
+        "spread": spread,
         "cases": results,
     }
     if agg["errors"] == len(results):
@@ -372,15 +521,21 @@ def _slug(model: str) -> str:
     return re.sub(r"[^a-zA-Z0-9.]+", "-", model).strip("-")
 
 
-_COLS = ("pass", "tool", "args", "neg", "forb", "unk", "claim", "err", "p50 s", "max tok")
+_COLS = ("pass", "± sd", "en", "tr", "tool", "args", "neg", "forb", "unk", "claim", "err",
+         "p50 s", "ttft s", "tok/s", "max tok")
 
 
-def _row(a: dict[str, Any]) -> tuple:
+def _row(run: dict[str, Any]) -> tuple:
+    a = run["aggregate"]
+    spread = run.get("spread") or {}
+    langs = a.get("pass_by_lang") or {}
     return (
-        a["pass_rate"], a["tool_accuracy"], a["arg_accuracy"],
+        a["pass_rate"], spread.get("pass_rate_sd", "—") if spread.get("repeats", 1) > 1 else "—",
+        langs.get("en", "—"), langs.get("tr", "—"),
+        a["tool_accuracy"], a["arg_accuracy"],
         f"{a['negatives_clean']}/{a['negatives_total']}",
         a["forbidden_hits"], a["unknown_tools"], a["claimed_actions"], a.get("errors", 0),
-        a["latency_p50_s"], a.get("prompt_tokens_max"),
+        a["latency_p50_s"], a.get("ttft_p50_s", "—"), a.get("tok_per_s_p50", "—"), a.get("prompt_tokens_max"),
     )
 
 
@@ -396,7 +551,7 @@ def print_comparison(runs: list[dict[str, Any]]) -> None:
     width = max(len(r["model"]) for r in ok) + 2
     print("\n" + "model".ljust(width) + "".join(c.rjust(8) for c in _COLS))
     for r in ok:
-        print(r["model"].ljust(width) + "".join(str(v).rjust(8) for v in _row(r["aggregate"])))
+        print(r["model"].ljust(width) + "".join(str(v).rjust(8) for v in _row(r)))
 
 
 def markdown_report(runs: list[dict[str, Any]]) -> str:
@@ -404,25 +559,47 @@ def markdown_report(runs: list[dict[str, Any]]) -> str:
     lines = ["## Tool-call eval", "", "| model | " + " | ".join(_COLS) + " |",
              "|---|" + "---:|" * len(_COLS)]
     for r in _ranked(runs):
-        lines.append(f"| `{r['model']}` | " + " | ".join(str(v) for v in _row(r["aggregate"])) + " |")
+        lines.append(f"| `{r['model']}` | " + " | ".join(str(v) for v in _row(r)) + " |")
     for r in runs:
         if r.get("error"):
             lines.append(f"\n> ⚠️ `{r['model']}`: {r['error']}")
     lines.append(
-        "\npass = right tool + args, no red flags · neg = correctly called nothing · "
-        "forb/unk/claim = forbidden tool / hallucinated tool name / claimed an action it didn't take · "
-        "err = request failed · max tok = largest prompt (tokens)"
+        "\npass = right tool + args, no red flags (en/tr = per language) · ± sd = spread across "
+        "repeats · neg = correctly called nothing · forb/unk/claim = forbidden tool / hallucinated "
+        "tool name / claimed an action it didn't take · err = request failed · ttft = time to first "
+        "token (load + prompt) · max tok = largest prompt (tokens)"
     )
+    meta = []
+    for r in _ranked(runs):
+        spread = r.get("spread") or {}
+        res = r.get("resident") or {}
+        vram = res.get("size_vram_bytes")
+        meta.append(
+            f"`{r['model']}`: ollama {r.get('ollama_version') or '?'}, temperature {r.get('temperature', 0.0)}, "
+            f"think {r.get('think')}, repeats {spread.get('repeats', 1)}"
+            + (f", VRAM {vram / 1024**3:.1f} GB" if vram else "")
+        )
+    if meta:
+        lines += ["", "<sub>" + " · ".join(meta) + "</sub>"]
     for r in _ranked(runs):
         misses = [c for c in r["cases"] if not c["passed"]]
         if not misses:
             continue
-        lines += ["", f"<details><summary><code>{r['model']}</code> — {len(misses)} misses</summary>", "",
-                  "| case | mode | wanted | got | note |", "|---|---|---|---|---|"]
+        attempts: dict[str, int] = {}
+        for c in r["cases"]:
+            attempts[c["id"]] = attempts.get(c["id"], 0) + 1
+        seen: dict[str, dict[str, Any]] = {}
+        fails: dict[str, int] = {}
         for c in misses:
+            fails[c["id"]] = fails.get(c["id"], 0) + 1
+            seen.setdefault(c["id"], c)
+        lines += ["", f"<details><summary><code>{r['model']}</code> — {len(seen)} cases missed</summary>", "",
+                  "| case | lang | mode | failed | wanted | got (first miss) | note |", "|---|---|---|---|---|---|---|"]
+        for cid, c in seen.items():
             got = ", ".join(x.replace("|", "\\|") for x in c["called"]) or "—"
             note = c["error"] or ("claimed action" if c["claimed"] else (c["reply"][:80].replace("\n", " ").replace("|", "\\|")))
-            lines.append(f"| {c['id']} | {c['mode']} | {'/'.join(c['expected']) or 'none'} | {got[:120]} | {note} |")
+            lines.append(f"| {cid} | {c.get('lang', 'en')} | {c['mode']} | {fails[cid]}/{attempts[cid]} | "
+                         f"{'/'.join(c['expected']) or 'none'} | {got[:120]} | {note} |")
         lines += ["", "</details>"]
     return "\n".join(lines) + "\n"
 
@@ -436,6 +613,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cases", type=Path, default=_GOLD_PATH, help="gold JSONL path")
     parser.add_argument("--only", help="comma-separated case ids to run")
     parser.add_argument("--mode", choices=_MODES, help="run only cases for this security mode")
+    parser.add_argument("--lang", help="run only cases in this language (en, tr)")
+    parser.add_argument("--repeat", type=int, default=1,
+                        help="attempt every case N times and report the spread (use with sampling, "
+                             "e.g. --temperature model; at temperature 0 repeats are near-identical)")
+    parser.add_argument("--temperature", default="0",
+                        help="sampling temperature, or 'model' for the model's default — what "
+                             "Celestia's chat loop uses (default: 0, deterministic)")
     parser.add_argument("--out-dir", type=Path, help="write toolcall-<model>.json per model here")
     parser.add_argument("--markdown", type=Path, help="write a Markdown comparison report here")
     parser.add_argument("--report", type=Path, metavar="DIR",
@@ -475,12 +659,15 @@ def main(argv: list[str] | None = None) -> int:
         cases = [c for c in cases if c.get("id") in wanted]
     if args.mode:
         cases = [c for c in cases if c.get("mode", "safe") == args.mode]
+    if args.lang:
+        cases = [c for c in cases if c.get("lang", "en") == args.lang]
     if not cases:
         raise SystemExit("no cases selected")
 
     runs = [
         run_model(m, cases, think=args.think, verbose=args.verbose,
-                  num_ctx=args.num_ctx, timeout=args.timeout)
+                  num_ctx=args.num_ctx, timeout=args.timeout, repeat=args.repeat,
+                  temperature=parse_temperature(args.temperature))
         for m in models
     ]
     print_comparison(runs)

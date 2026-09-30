@@ -2,7 +2,12 @@ name: Evals (real models)
 
 # Runs the Gate A evals (tool-calling + graph extraction) against real Ollama
 # models on GitHub's CPU runners, so results don't need a local GPU.
-# Small models only by default — a 3B model takes roughly 15–30 min on CPU.
+# Small models by default (≤ 4B): each takes ~30–60 min on CPU with 3 repeats.
+# 7–9B models work too via "Run workflow" (expect 1–3 h each; use repeat 1–2).
+#
+# Tool-calling runs at the model's own temperature ("model"), like Celestia's chat
+# loop, with several repeats so run-to-run noise shows up as a ± spread.
+# Extraction runs at temperature 0, like the production extractor.
 #
 # Results: the run's Summary page (comparison table + misses) and the
 # "eval-results-*" artifacts (full per-case JSON).
@@ -12,8 +17,20 @@ on:
     inputs:
       models:
         description: "Ollama models, comma-separated (must support tools)"
-        default: "llama3.2:3b,qwen2.5:3b"
+        default: "llama3.2:3b,qwen2.5:3b,qwen3:4b,qwen3.5:4b"
         required: true
+      repeat:
+        description: "Tool-call repeats per case (spread needs ≥ 2)"
+        default: "3"
+      temperature:
+        description: "Tool-call sampling: 'model' (production) or a number"
+        default: "model"
+      think:
+        description: "Thinking for reasoning models: off | on | default"
+        default: "off"
+      ollama_version:
+        description: "Pin the Ollama version (e.g. 0.12.3); empty = latest"
+        default: ""
       extraction:
         description: "Also run the graph-extraction eval"
         type: boolean
@@ -42,14 +59,14 @@ jobs:
     steps:
       - id: m
         env:
-          MODELS: ${{ inputs.models || 'llama3.2:3b,qwen2.5:3b' }}
+          MODELS: ${{ inputs.models || 'llama3.2:3b,qwen2.5:3b,qwen3:4b,qwen3.5:4b' }}
         run: |
           python3 -c "import json,os; print('models=' + json.dumps([m.strip() for m in os.environ['MODELS'].split(',') if m.strip()]))" >> "$GITHUB_OUTPUT"
 
   eval:
     needs: plan
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 300
     strategy:
       fail-fast: false
       matrix:
@@ -57,6 +74,12 @@ jobs:
     env:
       MODEL: ${{ matrix.model }}
       RUN_EXTRACTION: ${{ github.event_name == 'pull_request' || inputs.extraction }}
+      REPEAT: ${{ inputs.repeat || '3' }}
+      TEMPERATURE: ${{ inputs.temperature || 'model' }}
+      THINK: ${{ inputs.think || 'off' }}
+      # Pinned so results stay comparable across runs; bump deliberately and
+      # re-baseline. Each results JSON records the version that actually ran.
+      OLLAMA_VERSION: ${{ inputs.ollama_version || '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -80,6 +103,7 @@ jobs:
 
       - name: Install + start Ollama
         run: |
+          # install.sh honours OLLAMA_VERSION (empty = latest release)
           curl -fsSL https://ollama.com/install.sh | sh
           # The installer may start a systemd service (as user 'ollama', with its own
           # model dir). Run our own server as the runner user so the cache above works.
@@ -87,6 +111,16 @@ jobs:
           nohup ollama serve > /tmp/ollama.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:11434/api/version && break; sleep 1; done
           curl -sf http://127.0.0.1:11434/api/version
+          ollama --version
+
+      - name: Think flag
+        id: think
+        run: |
+          case "$THINK" in
+            off) echo "flag=--no-think" >> "$GITHUB_OUTPUT" ;;
+            on)  echo "flag=--think" >> "$GITHUB_OUTPUT" ;;
+            *)   echo "flag=" >> "$GITHUB_OUTPUT" ;;
+          esac
 
       - name: Pull model
         run: ollama pull "$MODEL"
@@ -94,12 +128,14 @@ jobs:
       - name: Tool-call eval
         run: |
           python -m evals.toolcall_eval --model "$MODEL" -v --timeout 900 \
+            --repeat "$REPEAT" --temperature "$TEMPERATURE" ${{ steps.think.outputs.flag }} \
             --out-dir out --markdown "out/toolcall-${{ steps.slug.outputs.slug }}.md"
 
       - name: Extraction eval
         if: env.RUN_EXTRACTION == 'true'
         run: |
-          python -m evals.extraction_eval --model "$MODEL" -v \
+          NO_THINK=""; [ "$THINK" = "off" ] && NO_THINK="--no-think"
+          python -m evals.extraction_eval --model "$MODEL" -v $NO_THINK \
             --json "out/extraction-${{ steps.slug.outputs.slug }}.json"
 
       - name: Upload results
@@ -141,11 +177,13 @@ jobs:
           rows = [json.loads(p.read_text()) for p in sorted(pathlib.Path("results").rglob("extraction-*.json"))]
           if rows:
               print("\n## Extraction eval\n")
-              print("| model | precision | recall | f1 | negatives clean | forbidden hits |")
-              print("|---|---:|---:|---:|---:|---:|")
+              print("| model | precision | recall | f1 | f1 en | f1 tr | negatives clean | forbidden hits |")
+              print("|---|---:|---:|---:|---:|---:|---:|---:|")
               for r in sorted(rows, key=lambda r: -r["aggregate"]["f1"]):
                   a = r["aggregate"]
+                  by = a.get("f1_by_lang", {})
                   print(f"| `{r['model']}` | {a['precision']} | {a['recall']} | {a['f1']} | "
+                        f"{by.get('en', '—')} | {by.get('tr', '—')} | "
                         f"{a['negatives_clean']}/{a['negatives_total']} | {a['forbidden_hits']} |")
           EOF
           cat summary.md >> "$GITHUB_STEP_SUMMARY"
