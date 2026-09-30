@@ -124,27 +124,30 @@ Reported per run:
 | negatives clean | cases where the right answer is no change |
 | errors | failed requests (always fail the case; exit code 1) |
 
-### First results (GitHub CPU runners, Sep 30 2026)
+### Results (GitHub CPU runners, Sep 30 2026)
 
-[Run 36746524491](https://github.com/ryaeh/Celestia/actions/runs/36746524491), writer at commit
-`cf79190`:
+Latest: [run 36768684847](https://github.com/ryaeh/Celestia/actions/runs/36768684847), writer at
+`62f0fd8` (no example values in the prompt, JSON-schema output). Thinking-on row from
+[run 36746524491](https://github.com/ryaeh/Celestia/actions/runs/36746524491) (writer at `cf79190`).
 
 | model | pipeline | passed | f1 | corrections | duplicates | wrong target | forbidden | negatives clean | time / case |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| `qwen3.5:4b` | **writer, think off** | **15/20** | **0.775** | **7/9** | 0 | 2 | 0 | **6/6** | ~30 s |
-| `qwen3.5:4b` | writer, think on | 14/20 | 0.727 | 4/9 | 0 | 0 | 0 | 6/6 | 130–510 s |
+| `qwen3.5:4b` | **writer, think off** | **16/20** | **0.828** | **9/9** | 0 | 3 | 0 | **6/6** | ~35 s |
+| `qwen3.5:4b` | writer, think on (`cf79190`) | 14/20 | 0.727 | 4/9 | 0 | 0 | 0 | 6/6 | 130–510 s |
 | `qwen3.5:4b` | legacy (today) | 5/20 | 0.329 | 0/9 | 4 | 0 | 2 | 3/6 | ~40 s |
-| `qwen2.5:3b` | writer, think off | 8/20 | 0.516 | 5/9 | 1 | 3 | 1 | 2/6 | ~7 s |
-| `qwen2.5:3b` | legacy (today) | 2/20 | 0.207 | 0/9 | 4 | 0 | 3 | 1/6 | ~13 s |
+| `qwen2.5:3b` | writer, think off | 9/20 | 0.465 | 3/9 | 0 | 0 | 1 | 4/6 | ~7 s |
+| `qwen2.5:3b` | legacy (today) | 2/20 | 0.242 | 0/9 | 5 | 0 | 2 | 2/6 | ~13 s |
 
-- The writer beats today's pipeline on every column with either model; `qwen3.5:4b` with
-  thinking **off** is the pick for the memory pass.
-- Thinking on is ~10× slower and not better: its misses are the slowest cases, which
-  ran out of output budget. Worth re-testing on a GPU, not on CPU. The workflow now
-  defaults to `consolidation_think: off`.
+- The writer beats today's pipeline on every column; `qwen3.5:4b` with thinking **off**
+  is the pick for the memory pass. `qwen2.5:3b` is too weak for it.
+- Thinking on is ~10× slower and not better on CPU: its misses were the slowest cases,
+  which ran out of output budget. Worth re-testing on a GPU. The workflow defaults to
+  `consolidation_think: off`.
+- Remaining writer weakness: it sometimes rewrites a memory that was only *mentioned*
+  (the dog on a move, jazz when quitting guitar) or folds a new fact into an existing
+  one (Rust into the Celestia project) instead of adding it.
 - Today's pipeline stores the prompt's own rules ("Never duplicate items under KNOWN
-  MEMOS") and the natural-language wifi password in the `secret-01` case — both go
-  away with the writer.
+  MEMOS") and the natural-language wifi password in `secret-01`; the writer does neither.
 
 ### Gold case schema (`consolidation_gold.jsonl`)
 
