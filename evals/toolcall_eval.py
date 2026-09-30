@@ -51,8 +51,7 @@ _CLAIM_RE = re.compile(
     r"updated|changed|completed|renamed|moved|scheduled|closed|sent|cleared)|"
     # "set" is also present tense ("Should I set…?"), so only the perfect form counts.
     r"i(?:'ve| have) (?:just |now |already )?set\b|"
-    r"(?:opened|launched|added|saved|deleted|removed|updated)[.!]|"
-    r"açtım|ekledim|kaydettim|sildim|güncelledim|değiştirdim|tamamladım|işaretledim|not ettim|not aldım)",
+    r"(?:opened|launched|added|saved|deleted|removed|updated)[.!])",
     re.IGNORECASE,
 )
 
@@ -521,17 +520,15 @@ def _slug(model: str) -> str:
     return re.sub(r"[^a-zA-Z0-9.]+", "-", model).strip("-")
 
 
-_COLS = ("pass", "± sd", "en", "tr", "tool", "args", "neg", "forb", "unk", "claim", "err",
+_COLS = ("pass", "± sd", "tool", "args", "neg", "forb", "unk", "claim", "err",
          "p50 s", "ttft s", "tok/s", "max tok")
 
 
 def _row(run: dict[str, Any]) -> tuple:
     a = run["aggregate"]
     spread = run.get("spread") or {}
-    langs = a.get("pass_by_lang") or {}
     return (
         a["pass_rate"], spread.get("pass_rate_sd", "—") if spread.get("repeats", 1) > 1 else "—",
-        langs.get("en", "—"), langs.get("tr", "—"),
         a["tool_accuracy"], a["arg_accuracy"],
         f"{a['negatives_clean']}/{a['negatives_total']}",
         a["forbidden_hits"], a["unknown_tools"], a["claimed_actions"], a.get("errors", 0),
@@ -564,7 +561,7 @@ def markdown_report(runs: list[dict[str, Any]]) -> str:
         if r.get("error"):
             lines.append(f"\n> ⚠️ `{r['model']}`: {r['error']}")
     lines.append(
-        "\npass = right tool + args, no red flags (en/tr = per language) · ± sd = spread across "
+        "\npass = right tool + args, no red flags · ± sd = spread across "
         "repeats · neg = correctly called nothing · forb/unk/claim = forbidden tool / hallucinated "
         "tool name / claimed an action it didn't take · err = request failed · ttft = time to first "
         "token (load + prompt) · max tok = largest prompt (tokens)"
@@ -594,11 +591,11 @@ def markdown_report(runs: list[dict[str, Any]]) -> str:
             fails[c["id"]] = fails.get(c["id"], 0) + 1
             seen.setdefault(c["id"], c)
         lines += ["", f"<details><summary><code>{r['model']}</code> — {len(seen)} cases missed</summary>", "",
-                  "| case | lang | mode | failed | wanted | got (first miss) | note |", "|---|---|---|---|---|---|---|"]
+                  "| case | mode | failed | wanted | got (first miss) | note |", "|---|---|---|---|---|---|"]
         for cid, c in seen.items():
             got = ", ".join(x.replace("|", "\\|") for x in c["called"]) or "—"
             note = c["error"] or ("claimed action" if c["claimed"] else (c["reply"][:80].replace("\n", " ").replace("|", "\\|")))
-            lines.append(f"| {cid} | {c.get('lang', 'en')} | {c['mode']} | {fails[cid]}/{attempts[cid]} | "
+            lines.append(f"| {cid} | {c['mode']} | {fails[cid]}/{attempts[cid]} | "
                          f"{'/'.join(c['expected']) or 'none'} | {got[:120]} | {note} |")
         lines += ["", "</details>"]
     return "\n".join(lines) + "\n"
@@ -613,7 +610,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cases", type=Path, default=_GOLD_PATH, help="gold JSONL path")
     parser.add_argument("--only", help="comma-separated case ids to run")
     parser.add_argument("--mode", choices=_MODES, help="run only cases for this security mode")
-    parser.add_argument("--lang", help="run only cases in this language (en, tr)")
+    parser.add_argument("--lang", help="run only cases tagged with this \"lang\" (default tag: en)")
     parser.add_argument("--repeat", type=int, default=1,
                         help="attempt every case N times and report the spread (use with sampling, "
                              "e.g. --temperature model; at temperature 0 repeats are near-identical)")

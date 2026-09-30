@@ -85,9 +85,9 @@ def update_from_messages(messages: list[dict[str, Any]] | None) -> None:
     model = get("memory.session_consolidate_model") or get("llm.chat_model", "llama3.2:3b")
 
     try:
-        import ollama
+        from skills.memory.llm import background_chat
 
-        resp = ollama.chat(
+        resp = background_chat(
             model=model,
             messages=[
                 {

@@ -232,7 +232,6 @@ def test_slug(model: str, slug: str) -> None:
 @pytest.mark.parametrize("reply", [
     "Sure thing! I've updated the priority of 'finish the thesis draft' to high.",  # real qwen2.5:3b miss
     "I have now set that to high priority.",
-    "Tamam, güncelledim.",
 ])
 def test_claim_detects_update_style_fabrications(reply: str) -> None:
     r = te.score_case(_case(expect={"tool": "todo_update"}), [], reply, _OFFERED)
@@ -245,24 +244,17 @@ def test_claim_ignores_promises_and_questions() -> None:
 
 
 # ---------------------------------------------------------------------------
-# T02 additions: languages, repeats, sampling, timing, thinking
+# T02 additions: language tags, repeats, sampling, timing, thinking
 # ---------------------------------------------------------------------------
-
-
-def test_gold_set_has_turkish_subset_with_negatives() -> None:
-    cases = te.load_gold(te._GOLD_PATH)
-    tr = [c for c in cases if c.get("lang") == "tr"]
-    assert len(tr) >= 10
-    assert sum(1 for c in tr if c["expect"] is None) >= 5  # plain chat must NOT call a tool
 
 
 def test_aggregate_reports_pass_rate_per_language() -> None:
     rows = [
-        {**te.score_case(_case(expect=None, lang="tr"), [], "", _OFFERED), "seconds": 1.0},
-        {**te.score_case(_case(expect=None, lang="tr"), [_call("todo_list")], "", _OFFERED), "seconds": 1.0},
+        {**te.score_case(_case(expect=None, lang="xx"), [], "", _OFFERED), "seconds": 1.0},
+        {**te.score_case(_case(expect=None, lang="xx"), [_call("todo_list")], "", _OFFERED), "seconds": 1.0},
         {**te.score_case(_case(expect=None), [], "", _OFFERED), "seconds": 1.0},
     ]
-    assert te.aggregate(rows)["pass_by_lang"] == {"en": 1.0, "tr": 0.5}
+    assert te.aggregate(rows)["pass_by_lang"] == {"en": 1.0, "xx": 0.5}
 
 
 def test_repeat_spread_finds_unstable_cases() -> None:

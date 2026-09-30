@@ -19,6 +19,7 @@ from typing import Any
 import ollama
 
 from celestia_core.config import get
+from skills.memory.llm import background_chat
 from skills.memory import graph_store as gs
 from skills.memory.activity_feed import append_event
 
@@ -156,7 +157,7 @@ def extract_and_store(
 
 def _extract_with_model(excerpt: str, use_model: str, source: str) -> list[str]:
     try:
-        resp = ollama.chat(
+        resp = background_chat(
             model=use_model,
             messages=[{"role": "user", "content": _PROMPT + excerpt}],
             options={"num_predict": 512, "temperature": 0.0},

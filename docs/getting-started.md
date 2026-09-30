@@ -18,14 +18,14 @@ Or: `.\scripts\setup.ps1`
 Pull some models:
 
 ```powershell
-ollama pull llama3.2:3b          # chat — the llm.chat_model default in config.example.yaml
+ollama pull qwen2.5:3b           # chat — llm.chat_model
+ollama pull qwen3.5:4b           # background memory — memory.session_consolidate_model
 ollama pull qwen2.5vl:7b         # screen reading
 ollama pull nomic-embed-text     # memory embeddings
 ```
 
-The chat model is being re-baselined with the Gate A evals (see [evals/README.md](../evals/README.md)); first results favor `qwen2.5:3b` over `llama3.2:3b`. To try another model, pull it and set `llm.chat_model` in `config.yaml`, then `--trust-config`.
+Models were chosen with the Gate A evals (see [evals/README.md](../evals/README.md)): a small, fast chat model and a separate background model for memory extraction. To try another model, pull it and set `llm.chat_model` (or `memory.session_consolidate_model`) in `config.yaml`, then `--trust-config`.
 
-**Turkish voice:** the default STT model `base.en` is English-only. For Turkish speech, set `voice.stt.model: large-v3` with `device: cuda` / `compute_type: float16` (needs VRAM next to the chat model).
 
 Orpheus GGUF goes here: `models/Orpheus-3b-FT-Q8_0.gguf`
 

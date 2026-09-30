@@ -284,7 +284,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cases", type=Path, default=_GOLD_PATH, help="gold JSONL path")
     parser.add_argument("--only", help="comma-separated case ids to run")
     parser.add_argument("--json", type=Path, help="write full results JSON here")
-    parser.add_argument("--lang", help="run only cases in this language (en, tr)")
+    parser.add_argument("--lang", help="run only cases tagged with this \"lang\" (default tag: en)")
     parser.add_argument("--repeat", type=int, default=1, help="run every case N times; report F1 spread")
     parser.add_argument("--no-think", dest="think", action="store_false", default=None,
                         help="turn thinking off (Qwen3-style reasoning models)")

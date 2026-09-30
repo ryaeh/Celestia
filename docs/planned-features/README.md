@@ -82,7 +82,7 @@ decisions below, **it wins**:
   inference (D9)**. 06's Aura-mood surface stays cosmetic.
 - **MCP** is an extra, gated client next to `skills/registry.py` (D6); a first version is in
   review (PR #117, off by default). Manifest hash pinning is still required (T11).
-- **Voice** must be fully local in Turkish + English (T05, D5).
+- **Voice** must be fully local — no silent cloud fallback (T05, D5).
 
 Revised spine: `T01 → T02/T03/T04/T05 → 10 (T07) → 02 (T09) + 03 → 11 (reduced) →
 04 (T08, T10, T11, T12) → 05 → 01 → 12`. The order further down this page is the Jun 2026

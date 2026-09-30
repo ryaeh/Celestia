@@ -177,13 +177,11 @@ jobs:
           rows = [json.loads(p.read_text()) for p in sorted(pathlib.Path("results").rglob("extraction-*.json"))]
           if rows:
               print("\n## Extraction eval\n")
-              print("| model | precision | recall | f1 | f1 en | f1 tr | negatives clean | forbidden hits |")
-              print("|---|---:|---:|---:|---:|---:|---:|---:|")
+              print("| model | precision | recall | f1 | negatives clean | forbidden hits |")
+              print("|---|---:|---:|---:|---:|---:|")
               for r in sorted(rows, key=lambda r: -r["aggregate"]["f1"]):
                   a = r["aggregate"]
-                  by = a.get("f1_by_lang", {})
                   print(f"| `{r['model']}` | {a['precision']} | {a['recall']} | {a['f1']} | "
-                        f"{by.get('en', '—')} | {by.get('tr', '—')} | "
                         f"{a['negatives_clean']}/{a['negatives_total']} | {a['forbidden_hits']} |")
           EOF
           cat summary.md >> "$GITHUB_STEP_SUMMARY"

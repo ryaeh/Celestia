@@ -221,9 +221,9 @@ def test_repeat_run_records_version_timing_vram_and_spread(fake_ollama, tmp_path
 
 def test_lang_filter(fake_ollama, tmp_path) -> None:
     cases = tmp_path / "c.jsonl"
-    rows = [dict(_CASES[0], id="en-1"), dict(_CASES[-1], id="tr-1", lang="tr")]
+    rows = [dict(_CASES[0], id="en-1"), dict(_CASES[-1], id="xx-1", lang="xx")]
     cases.write_text("\n".join(json.dumps(c) for c in rows), encoding="utf-8")
     out = tmp_path / "o"
-    assert te.main(["--model", "fake:3b", "--cases", str(cases), "--lang", "tr", "--out-dir", str(out)]) == 0
+    assert te.main(["--model", "fake:3b", "--cases", str(cases), "--lang", "xx", "--out-dir", str(out)]) == 0
     run = json.loads((out / "toolcall-fake-3b.json").read_text(encoding="utf-8"))
-    assert [c["id"] for c in run["cases"]] == ["tr-1"] and run["aggregate"]["pass_by_lang"] == {"tr": 1.0}
+    assert [c["id"] for c in run["cases"]] == ["xx-1"] and run["aggregate"]["pass_by_lang"] == {"xx": 1.0}

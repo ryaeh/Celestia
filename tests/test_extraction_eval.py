@@ -173,15 +173,8 @@ def test_gold_file_parses_and_ids_unique() -> None:
 
 
 # ---------------------------------------------------------------------------
-# T02 additions: Turkish subset, per-language F1, repeats, thinking switch
+# T02 additions: per-language-tag F1, repeats, thinking switch
 # ---------------------------------------------------------------------------
-
-
-def test_gold_set_has_turkish_subset_with_negatives() -> None:
-    cases = load_gold(_GOLD_PATH)
-    tr = [c for c in cases if c.get("lang") == "tr"]
-    assert len(tr) >= 10
-    assert sum(1 for c in tr if not c["expected"]) >= 3
 
 
 def test_aggregate_reports_f1_per_language() -> None:
@@ -189,9 +182,9 @@ def test_aggregate_reports_f1_per_language() -> None:
 
     en = score_case({"id": "e", "expected": [{"subject": "user", "object": "neovim"}]},
                     [_triple("user", "uses", "neovim")])
-    tr = dict(score_case({"id": "t", "lang": "tr", "expected": [{"subject": "user", "object": "ankara"}]}, []))
+    tr = dict(score_case({"id": "t", "lang": "xx", "expected": [{"subject": "user", "object": "ankara"}]}, []))
     agg = agg_fn([en, tr])
-    assert agg["f1_by_lang"]["en"] == 1.0 and agg["f1_by_lang"]["tr"] == 0.0
+    assert agg["f1_by_lang"]["en"] == 1.0 and agg["f1_by_lang"]["xx"] == 0.0
 
 
 def test_repeat_spread_f1() -> None:

@@ -91,7 +91,8 @@ copy .env.example .env
 copy config.example.yaml config.yaml
 
 # Pull LLM models
-ollama pull llama3.2:3b          # chat — the llm.chat_model default in config.example.yaml
+ollama pull qwen2.5:3b           # chat — llm.chat_model
+ollama pull qwen3.5:4b           # background memory — memory.session_consolidate_model
 ollama pull qwen2.5vl:7b         # screen reading
 ollama pull nomic-embed-text     # memory embeddings
 
