@@ -192,6 +192,14 @@ No single small model wins both jobs, so the defaults split them: **chat `qwen2.
 `memory.background_think: false`). `qwen2.5:3b` still sometimes *claims* an action it
 didn't take ("I've updated the priority…") — watch the `claim` column.
 
+**`qwen3:4b` is out.** With thinking turned off (`think: false`) it still writes its
+reasoning into the reply ("Okay, the user wants… Let me think…"), so replies run to the
+1024-token cap: 60–400 s per case on CPU, and several tool calls never happen because
+the budget is spent thinking out loud. As a chat model it would show that monologue to
+the user. [Run 36729215905](https://github.com/ryaeh/Celestia/actions/runs/36729215905)
+hit the 5-hour job limit in its second repeat; it's no longer in the default matrix.
+`qwen3.5:4b` doesn't have this problem.
+
 ### What to benchmark
 
 The goal is a model that beats the current default on **pass + red flags** at a

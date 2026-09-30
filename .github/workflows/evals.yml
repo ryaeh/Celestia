@@ -17,7 +17,7 @@ on:
     inputs:
       models:
         description: "Ollama models, comma-separated (must support tools)"
-        default: "llama3.2:3b,qwen2.5:3b,qwen3:4b,qwen3.5:4b"
+        default: "llama3.2:3b,qwen2.5:3b,qwen3.5:4b"
         required: true
       repeat:
         description: "Tool-call repeats per case (spread needs ≥ 2)"
@@ -59,7 +59,7 @@ jobs:
     steps:
       - id: m
         env:
-          MODELS: ${{ inputs.models || 'llama3.2:3b,qwen2.5:3b,qwen3:4b,qwen3.5:4b' }}
+          MODELS: ${{ inputs.models || 'llama3.2:3b,qwen2.5:3b,qwen3.5:4b' }}
         run: |
           python3 -c "import json,os; print('models=' + json.dumps([m.strip() for m in os.environ['MODELS'].split(',') if m.strip()]))" >> "$GITHUB_OUTPUT"
 
