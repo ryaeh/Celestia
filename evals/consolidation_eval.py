@@ -230,7 +230,7 @@ class ThinkUnsupported(RuntimeError):
     pass
 
 
-def _chat(model: str, prompt: str, *, think: bool | None, num_predict: int) -> str:
+def _chat(model: str, prompt: str, *, think: bool | None, num_predict: int, json_mode: bool = False) -> str:
     import ollama
 
     kwargs: dict[str, Any] = {
@@ -238,6 +238,8 @@ def _chat(model: str, prompt: str, *, think: bool | None, num_predict: int) -> s
         "messages": [{"role": "user", "content": prompt}],
         "options": {"num_predict": num_predict, "temperature": 0.0},
     }
+    if json_mode:
+        kwargs["format"] = "json"  # constrained decoding: always valid JSON
     if think is not None:
         kwargs["think"] = think
     try:
@@ -267,8 +269,10 @@ def run_writer(case: dict[str, Any], model: str, think: bool | None) -> dict[str
 
     existing = case.get("existing", [])
     prompt = build_prompt(_scrub(case["transcript"]), existing, case.get("summary", ""))
-    raw = _chat(model, prompt, think=think, num_predict=4096 if think else 1024)
-    result = parse_ops(raw, {e["id"] for e in existing})
+    # The writer runs with JSON-constrained output; the legacy prompts run as
+    # production runs them today (free text).
+    raw = _chat(model, prompt, think=think, num_predict=4096 if think else 1024, json_mode=True)
+    result = parse_ops(raw, {e["id"]: e.get("text", "") for e in existing})
     return {
         "ops": [o.as_dict() for o in result.ops],
         "summary": result.summary,

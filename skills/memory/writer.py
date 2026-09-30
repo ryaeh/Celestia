@@ -44,27 +44,33 @@ PROMPT = (
     "Operations:\n"
     '- "add": a new durable fact, standing instruction, or open task the USER stated '
     "that no existing memory covers.\n"
-    '- "update": an existing memory is still true but the user added detail. Give '
-    "the full new text.\n"
+    '- "update": an existing memory is still true but the user added detail.\n'
     '- "supersede": an existing memory is no longer true (the user moved, changed '
-    "jobs, changed a preference or rule). Give the new text; the old one becomes history.\n"
-    '- "forget": the user said an existing memory was wrong or asked you to forget it.\n'
+    "jobs, changed a preference or rule).\n"
+    '- "forget": ONLY when the user explicitly says an existing memory is wrong or '
+    "asks you to forget it.\n"
     "Rules:\n"
-    "- If the chat only repeats what an existing memory already says, output NOTHING for it.\n"
-    '- update/supersede/forget must use the existing memory\'s id as "target".\n'
+    "- Most memories do not change. A memory that is repeated, mentioned, or not "
+    "mentioned at all stays as it is: output NOTHING for it. Never use forget or "
+    "update just to confirm a memory.\n"
+    "- update/supersede/forget must copy an id from EXISTING MEMORIES into \"target\". "
+    "If EXISTING MEMORIES is (none), the only possible op is add. add has no target.\n"
+    "- text is the memory AFTER the change: the new fact, not the old one. One short "
+    "third-person sentence, e.g. \"User lives in Izmir.\"\n"
     "- Only what the USER stated as true. Skip jokes, hypotheticals (\"if I moved...\"), "
     "questions, greetings, and anything the assistant guessed or suggested.\n"
     "- Never store passwords, PINs, keys or other secrets.\n"
     "- kind: fact, instruction (a rule for how the assistant should behave), or task "
     "(something the user plans to do).\n"
-    "- text: one short third-person sentence, e.g. \"User lives in Izmir.\"\n"
     "- triples: the same information as [subject, predicate, object] with short terms; "
     'use "user" for the user. forget needs no text or triples.\n'
     "- summary: 1-2 sentences on what this chat was about (may be empty).\n"
-    "- An empty ops list is valid and common.\n"
-    'Format: {"ops":[{"op":"supersede","target":"m1","kind":"fact",'
-    '"text":"User lives in Izmir.","triples":[["user","lives in","Izmir"]]}],'
-    '"summary":"..."}\n'
+    "Format (the ids here are placeholders; use real ones):\n"
+    '{"ops":[{"op":"add","kind":"fact","text":"User has a cat named Mochi.",'
+    '"triples":[["user","has cat","Mochi"]]},'
+    '{"op":"supersede","target":"<id>","kind":"fact","text":"User lives in Izmir.",'
+    '"triples":[["user","lives in","Izmir"]]}],"summary":"..."}\n'
+    'Nothing changed: {"ops":[],"summary":"Small talk about the weekend."}\n'
 )
 
 
@@ -137,19 +143,49 @@ def _parse_triples(raw: Any) -> list[dict[str, str]]:
     return out
 
 
-def parse_ops(raw: str, existing_ids: set[str] | None = None) -> WriterResult:
+def _first_object(raw: str) -> tuple[Any, str | None]:
+    """The first JSON object in ``raw``. Tries the outermost {...} span, then
+    decodes from each '{' so trailing prose or a second object can't break it."""
+    match = _JSON_BLOCK.search(raw)
+    if not match:
+        return None, "no JSON object"
+    try:
+        return json.loads(match.group()), None
+    except json.JSONDecodeError:
+        pass
+    decoder = json.JSONDecoder()
+    for i, ch in enumerate(raw):
+        if ch == "{":
+            try:
+                obj, _ = decoder.raw_decode(raw, i)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(obj, dict) and "ops" in obj:
+                return obj, None
+    return None, "invalid JSON"
+
+
+def _same_text(a: str, b: str) -> bool:
+    return re.sub(r"[^a-z0-9]+", " ", a.lower()).strip() == re.sub(r"[^a-z0-9]+", " ", b.lower()).strip()
+
+
+def parse_ops(raw: str, existing: set[str] | dict[str, str] | None = None) -> WriterResult:
     """Parse the model's JSON into validated ops. Tolerant of junk: malformed ops
     are dropped with a reason rather than failing the whole pass. A targeted op
-    naming an unknown id is dropped (it would edit nothing, or the wrong thing)."""
-    match = _JSON_BLOCK.search(raw or "")
-    if not match:
-        return WriterResult(ops=[], dropped=["no JSON object"] if (raw or "").strip() else [])
-    try:
-        data = json.loads(match.group())
-    except json.JSONDecodeError:
-        return WriterResult(ops=[], dropped=["invalid JSON"])
+    naming an unknown id is dropped (it would edit nothing, or the wrong thing).
+
+    ``existing`` is the set of valid prompt ids, or a mapping id → current text;
+    with texts, an update/supersede that restates its target unchanged is a no-op
+    and is dropped."""
+    if not (raw or "").strip():
+        return WriterResult(ops=[])
+    data, err = _first_object(raw)
+    if err:
+        return WriterResult(ops=[], dropped=[err])
     if not isinstance(data, dict):
         return WriterResult(ops=[], dropped=["JSON is not an object"])
+    existing_ids = set(existing) if existing is not None else None
+    texts = existing if isinstance(existing, dict) else {}
 
     ops: list[MemoryOp] = []
     dropped: list[str] = []
@@ -183,6 +219,9 @@ def parse_ops(raw: str, existing_ids: set[str] | None = None) -> WriterResult:
         text = _clean(item.get("text"), _MAX_TEXT)
         if op != "forget" and not text:
             dropped.append(f"{op} without text")
+            continue
+        if op in ("update", "supersede") and target in texts and _same_text(text, texts[target]):
+            dropped.append(f"{op} {target} repeats the current text (no change)")
             continue
         triples = [] if op == "forget" else _parse_triples(item.get("triples"))
         ops.append(MemoryOp(op=op, kind=kind, text=text, target=target, triples=triples))

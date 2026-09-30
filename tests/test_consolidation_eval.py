@@ -172,7 +172,7 @@ def test_main_end_to_end_with_stub(monkeypatch, tmp_path) -> None:
     """Writer answers perfectly; legacy re-adds the old city. The writer must win."""
     by_transcript = {c["transcript"]: c for c in GOLD}
 
-    def fake_chat(model, prompt, *, think, num_predict):
+    def fake_chat(model, prompt, *, think, num_predict, json_mode=False):
         case = next(c for t, c in by_transcript.items() if t in prompt)
         if "--- NEW CHAT ---" in prompt:  # writer prompt
             return json.dumps({"ops": _perfect_ops(case), "summary": ""})
@@ -195,7 +195,7 @@ def test_main_end_to_end_with_stub(monkeypatch, tmp_path) -> None:
 
 
 def test_think_unsupported_skips_variant(monkeypatch) -> None:
-    def fake_chat(model, prompt, *, think, num_predict):
+    def fake_chat(model, prompt, *, think, num_predict, json_mode=False):
         raise ce.ThinkUnsupported("model does not support thinking")
 
     monkeypatch.setattr(ce, "_chat", fake_chat)
@@ -218,3 +218,28 @@ def test_op_on_wrong_target_does_not_match() -> None:
             "expected": [{"op_any": ["supersede"], "target": "m1", "mentions": [["izmir"]]}]}
     r = ce.score_case(case, [{"op": "supersede", "target": "m2", "kind": "fact", "text": "User lives in Izmir.", "triples": []}])
     assert r["tp_recall"] == 0 and not r["passed"]
+
+
+def test_parse_ops_drops_unchanged_restatement() -> None:
+    # Seen on qwen2.5:3b: "update m1" with the memory's own text, or a supersede
+    # that copies the old value. Neither changes anything.
+    raw = json.dumps({"ops": [
+        {"op": "update", "target": "m1", "text": "User's main project is Celestia, a local AI companion"},
+        {"op": "supersede", "target": "m2", "text": "User lives in Izmir."},
+    ]})
+    res = parse_ops(raw, {"m1": "User's main project is Celestia, a local AI companion.", "m2": "User lives in Ankara."})
+    assert [o.target for o in res.ops] == ["m2"]
+    assert "no change" in res.dropped[0]
+
+
+def test_parse_ops_recovers_object_after_junk() -> None:
+    raw = 'Here you go {not json} and then {"ops": [{"op": "add", "text": "User likes tea."}], "summary": ""} done'
+    res = parse_ops(raw, set())
+    assert [o.text for o in res.ops] == ["User likes tea."]
+
+
+def test_prompt_placeholder_target_is_not_a_real_id() -> None:
+    # The format example must not name an id a model can copy into an empty memory.
+    from skills.memory.writer import PROMPT
+
+    assert '"target":"m1"' not in PROMPT and "(none), the only possible op is add" in PROMPT
