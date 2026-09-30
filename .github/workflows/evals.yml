@@ -19,9 +19,12 @@ on:
         type: boolean
         default: true
       consolidation:
-        description: "Also run the T15 consolidation eval (writer think on/off + legacy)"
+        description: "Also run the T15 consolidation eval (writer + legacy)"
         type: boolean
         default: true
+      consolidation_think:
+        description: "Writer thinking: off | on | on,off (on is ~10x slower on CPU)"
+        default: "off"
   pull_request:
     branches: [main]
     paths:
@@ -64,6 +67,7 @@ jobs:
       MODEL: ${{ matrix.model }}
       RUN_EXTRACTION: ${{ github.event_name == 'pull_request' || inputs.extraction }}
       RUN_CONSOLIDATION: ${{ github.event_name == 'pull_request' || inputs.consolidation }}
+      CONSOLIDATION_THINK: ${{ inputs.consolidation_think || 'off' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -112,9 +116,9 @@ jobs:
       - name: Consolidation eval
         if: env.RUN_CONSOLIDATION == 'true'
         run: |
-          # Writer with thinking on and off (on is skipped for non-thinking
-          # models) plus today's legacy pipeline, on the same cases.
-          python -m evals.consolidation_eval --model "$MODEL" -v --think on,off \
+          # Writer (thinking off by default — on was 10x slower and no better
+          # for qwen3.5:4b) plus today's legacy pipeline, on the same cases.
+          python -m evals.consolidation_eval --model "$MODEL" -v --think "$CONSOLIDATION_THINK" \
             --json "out/consolidation-${{ steps.slug.outputs.slug }}.json" \
             --markdown "out/consolidation-${{ steps.slug.outputs.slug }}.md"
 
