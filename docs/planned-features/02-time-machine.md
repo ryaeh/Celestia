@@ -4,6 +4,8 @@
 Tuesday afternoon?" / "Summarize everything about the Celestia refactor this week." A
 second brain you never had to maintain — and it's entirely local.
 
+> **Revision (Sep 2026)** — [landscape plan](../project/landscape-2026-09.md): Capture is **event-driven** (foreground-window / title change, hotkey) — **never timer-based screenshots** (D7). UI Automation text first, screenshot only when needed; encrypted at rest (DPAPI key); per-app/URL/title exclusions, incognito, retention slider, "forget last hour/day", visible recording indicator. Depends on T04 (memory origin/quarantine) and T07 (graph transaction time). → **T09**
+
 > **Build decision (Jun 2026).** The direct UX ("what did I do Tuesday?") is demo-ware —
 > you'll use it a handful of times. The *real* value flows through consumers: the morning
 > briefing, 06/affect, and 12. So:

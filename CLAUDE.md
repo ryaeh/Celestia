@@ -27,6 +27,9 @@ python -m py_compile celestia_core/shell_chat.py
 # Gate A eval — score graph extraction against the hand-labeled gold set (needs Ollama)
 .\venv\Scripts\python.exe -m evals.extraction_eval --model qwen2.5:7b
 
+# Gate A eval — score tool-calling (right tool / no tool / red flags); comma-separate models to compare
+.\venv\Scripts\python.exe -m evals.toolcall_eval --model llama3.2:3b,qwen2.5:7b --out-dir evals/results
+
 # Start interactive chat
 .\venv\Scripts\python.exe run_celestia.py -i
 
@@ -55,6 +58,7 @@ celestia_core/
   shell_chat.py           # Session store: per-session files in data/shell_chat/sessions/<uuid>.json
   shell_launch.py         # Starts shell_server + Tauri process
   shell_ptt.py            # Shell push-to-talk state machine + global hotkey
+  shell_overlay.py        # Companion bubble server side: overlay_seq toggle counter (hotkey ui.overlay_hotkey / POST /overlay/toggle)
   security.py             # Mode state (safe/scoped/armed), gate_pc_tool(), audit log
   scope.py                # Workspace path allowlist, protected path checks
   config.py               # Reads config.yaml; get(key, default) accessor — always use this, never read config directly
@@ -74,14 +78,18 @@ skills/
   vision/                 # Capture → preprocess → Ollama vision model → optional confirm flow
   pc_control/tools.py     # open_path, open_url, run_powershell — all gated through security.gate_pc_tool()
   todos/                  # To-do list: store.py (locked JSON in data/todos.json) + tools.py (todo_add/list/complete/update/remove)
+  mcp/manager.py          # MCP client: stdio servers from mcp.servers on a background asyncio loop; mcp__<server>__<tool> naming
+  mcp/tools.py            # MCP tools → schemas filtered by min_mode (default armed) + gated executor (security.gate_mcp_tool)
   conversations/tools.py  # Conversation search (Feature 03 / #86): search_conversations tool over past sessions (shell_chat.search_sessions)
 shell/                    # Tauri v2 + React 19 + Vite + Tailwind + shadcn/ui desktop app
   src/pages/Home.tsx      # Main chat page with SSE streaming
   src/pages/Todos.tsx     # To-do page — add/complete/edit/delete; talks to /todos API
+  src/pages/Overlay.tsx   # Companion bubble (Tauri window "overlay", ?view=overlay): Aura orb → mini chat + PTT
+  src/lib/overlayWindow.ts # All Tauri window calls for the bubble (show/hide/position/expand); no-op outside Tauri
   src/api.ts              # All fetch calls to shell_server.py; reads token from /token endpoint
 personalities/*.yaml      # Personality packs — name, traits, extra prompt lines
 tests/                    # pytest; all heavy deps (Ollama, Chroma, mem0, Whisper) are mocked
-evals/                    # Gate A eval harness — extraction gold-set + scoring runner (hits live Ollama; see evals/README.md)
+evals/                    # Gate A eval harness — extraction + tool-call gold-sets + scoring runners (hits live Ollama; see evals/README.md)
 ```
 
 ## Key design patterns
@@ -96,7 +104,9 @@ evals/                    # Gate A eval harness — extraction gold-set + scorin
 
 **Skills / tools**: To add a new LLM-callable tool: (1) define schema + function in `skills/<name>/tools.py`, (2) import and add to `registry.py` in both `tool_schemas()` and `execute_tool()`. The security gate in `execute_tool()` calls `security.gate_pc_tool()` before running any PC-touching tool.
 
-**Heavy deps are lazy**: `mem0`, `chromadb`, `faster-whisper`, `llama-cpp`, `torch`, `pystray`, `pynput` are all imported inside functions — never at module top-level. This keeps startup fast and lets tests run without installing them.
+**MCP tools** (`skills/mcp/`): third-party servers from `mcp.servers` become `mcp__<server>__<tool>` tools. Each tool has a `min_mode` (server `min_mode` / per-tool `tool_modes`, default `armed`): filtered out of `tool_schemas()` below it *and* re-checked by `security.gate_mcp_tool()` at call time; every result is wrapped untrusted. Off by default (`mcp.enabled`). Guide: `docs/guide/mcp.md`.
+
+**Heavy deps are lazy**: `mcp`, `mem0`, `chromadb`, `faster-whisper`, `llama-cpp`, `torch`, `pystray`, `pynput` are all imported inside functions — never at module top-level. This keeps startup fast and lets tests run without installing them.
 
 **Memory lifecycle** (`skills/memory/ranking.py` + `decay.py`): memories are *saved* freely (auto-consolidation), then **ranked and decayed** so one-offs don't crowd recall. Each entry gets a write-time `importance` (by kind: instruction 1.0 > fact 0.7 > task 0.4 > summary 0.3); `recall_count`/`last_recalled`/`keep` live in a JSON **sidecar** (`data/memory/recall_stats.json`) keyed by memory id, so a recall never rewrites a vector. `build_context` blends similarity with importance+recall+recency (`rank_order`) and bumps recall on injected entries. `decay.sweep_decay()` deletes only unprotected, low-importance, **never-recalled**, old entries (ever-recalled or pinned = exempt) — off by default (`memory.decay.enabled`), throttled, run on session-finalize + `POST /memory/decay`. The two GPU model tiers split here: cheap 3B heuristics on the hot path, a bigger model on a future GPU-idle pass for smarter re-scoring + graph entity-resolution.
 
@@ -111,6 +121,10 @@ evals/                    # Gate A eval harness — extraction gold-set + scorin
 | `config.yaml` | Personal config (gitignored — copy from `config.example.yaml`) |
 | `security.policy.yaml` | URL/app allowlists (gitignored — copy from `security.policy.example.yaml`) |
 | `.env` | Secrets: `HF_TOKEN` etc. |
+
+## Work plan
+
+The current plan is `docs/project/landscape-2026-09.md` (tasks T01–T14, decisions D1–D9); `docs/project/roadmap.md` follows its build order. Work one task ID per branch/PR, and don't change a locked stance (model choice, no cloud by default, mem0 + SQLite graph) without an eval result.
 
 ## Commit convention
 

@@ -2,6 +2,7 @@
 
 One page: where Celestia is, what's being built next (in order), and what already shipped.
 
+- **Current plan (Sep 2026)** → [landscape-2026-09.md](landscape-2026-09.md) — tasks T01–T14, decisions D1–D9
 - **Feature designs** → [`planned-features/`](../planned-features/) (briefs 01–12; the [README](../planned-features/README.md) has dependencies, UI surfaces, and the cross-feature analysis)
 - **Idea pool** → [ideas-backlog.md](ideas-backlog.md)
 - **Perf/GPU backlog** → [perf-and-qol-backlog.md](perf-and-qol-backlog.md)
@@ -10,82 +11,116 @@ One page: where Celestia is, what's being built next (in order), and what alread
 
 ---
 
-## Where we are (Jun 2026)
+## Where we are (Sep 2026)
 
 The core companion works end-to-end, locally: chat (SSE streaming) + voice (PTT, Orpheus
 TTS, Whisper STT) + screen (capture modes, read-screen hotkey) + gated PC control
-(safe/scoped/armed) + memory (typed entries, consolidation, **knowledge-graph substrate**,
-**lifecycle v1**: importance, recall ranking, decay, keeper pins) + a Tauri shell on its own
-design system (Aura, themes) + GPU residency management so models don't fight over VRAM.
+(safe/scoped/armed) + memory (typed entries, consolidation, temporal knowledge graph,
+lifecycle v1, GPU-idle tidy with entity resolution) + privacy basics (incognito, secrets
+scrubbing, untrusted-content wrapping, provenance) + a Tauri shell (Aura, themes, UI V2
+foundations) + GPU residency management.
 
-Current focus: **living with the graph memory** (tuning extraction quality in real use)
-while the next features land in the order below.
+**Gate A exists.** The extraction eval is on `main`; the tool-calling eval, the real-model
+CI workflow, an MCP client and the companion overlay bubble are in review in
+[PR #117](https://github.com/ryaeh/Celestia/pull/117).
+
+**The plan changed (Sep 2026).** A landscape review turned into a scoped task list:
+[`landscape-2026-09.md`](landscape-2026-09.md) (task IDs **T01–T14**, decisions **D1–D9**).
+Headline: **security, privacy and model choice come before new agentic features**, and
+voice must work fully locally in **Turkish and English**. The build order below follows it.
+
+### Known gaps the plan fixes first
+
+- **Model default is undecided.** `config.example.yaml` ships `llama3.2:3b`; older docs said
+  `qwen2.5:7b`. First CI evals (40 cases, 2 runs): `qwen2.5:3b` pass 0.85–0.90 with 10–12/12
+  clean negatives vs `llama3.2:3b` 0.70 with 3/12 — the current default calls tools on plain
+  chat. T02 decides with a Turkish subset and the Qwen3/3.5 candidates.
+- **Turkish speech input doesn't work on the default config** (`voice.stt.model: base.en`
+  is English-only). T05.
+- **Voice can silently go to the cloud:** an Orpheus failure falls back to Edge TTS without
+  asking. T05 makes cloud voice an explicit opt-in (D5).
+- **Armed mode never expires.** T08.
 
 ---
 
 ## Next — the build order
 
-One sequence, one numbering (the brief numbers). Each step ships something you can *feel*,
-and lays substrate the next step reuses.
+Revised Sep 2026 per [`landscape-2026-09.md` §5](landscape-2026-09.md#5-revised-build-order).
+Feature briefs keep their numbers (`01`–`12`); tasks are `T01`–`T14`.
 
-| Order | What | Status |
-|-------|------|--------|
-| 1 | **07 — Read-screen hotkey** ([#94](https://github.com/ryaeh/Celestia/issues/94)) | ✅ Shipped |
-| 2 | **10 — Temporal knowledge-graph memory** ([#95](https://github.com/ryaeh/Celestia/issues/95)) | ✅ Substrate built (store · extract · hybrid recall · `--graph` CLI). Graph viewer/editor lands with UI V2. |
-| 3 | **02 — Time machine** ([#96](https://github.com/ryaeh/Celestia/issues/96)) · **03 — Local RAG** ([#97](https://github.com/ryaeh/Celestia/issues/97)) | In progress. **03 v1 shipped** (Jun 2026): keyword conversation search ([#86](https://github.com/ryaeh/Celestia/issues/86)) — `shell_chat.search_sessions` + `search_conversations` LLM tool + `GET /chat/search` + sidebar search box. **Next:** semantic/embedding retrieval + the 02 timeline, both as consumers of the graph. |
-| 4 | **11 — Operating modes** ([#98](https://github.com/ryaeh/Celestia/issues/98)) | Residency substrate (`gpu.py`) ✅; the mode control plane on top is open. Keep it to 3–4 modes at first. |
-| 5 | **04 — Scoped autonomy** ([#99](https://github.com/ryaeh/Celestia/issues/99)) · **05 — Macros** ([#100](https://github.com/ryaeh/Celestia/issues/100)) | 04 builds the plan→approve→execute loop; a macro is a *saved* 04 plan. |
-| 6 | **01 — Ambient proactivity** ([#101](https://github.com/ryaeh/Celestia/issues/101)) | Last big substrate consumer — comes up already governed by 11's budgets and informed by 12's signal. |
-| 7 | **12 — Adaptive user model** ([#105](https://github.com/ryaeh/Celestia/issues/105)) | The personalization layer; **06 Affect is folded into it** ([#102](https://github.com/ryaeh/Celestia/issues/102), only the Aura-mood surface kept). **Signal collection starts much earlier** — it needs weeks of data, so begin as soon as graph ingestion is trusted. |
-| — | **08 — Privacy guardian** ([#103](https://github.com/ryaeh/Celestia/issues/103)) | **Descoped.** Cheap 80% (secrets scrubbing + clipboard warnings) ships early as standalone utilities; the full anomaly monitor is a late, optional specialization on 01's daemon. |
-| — | **09 — Adaptive test-time compute** ([#104](https://github.com/ryaeh/Celestia/issues/104)) | Horizontal — router-first, and *measure before* building `consensus`. Layer in only when the turn loop is stable. |
+| Order | What | Tasks | Status |
+|-------|------|-------|--------|
+| 1 | **Security & model sprint** — evals on `main`, model re-baseline, prompt-injection eval, memory-poisoning defense, local TR+EN voice | T01 → T02, T03, T04, T05 | T01 in review (PR #117); rest open |
+| 2 | **Finish 10 — graph** — transaction-time (`invalidated_at`, as-of queries) | T07 | Open. Store/extract/hybrid recall/tidy already shipped. |
+| 3 | **02 — Time machine** on the privacy design (event-driven, encrypted, exclusion-aware; **no timer screenshots**, D7) + **03** semantic RAG on the same index | T09 | Open. 03 v1 (keyword conversation search, #86) shipped. |
+| 4 | **11 — Operating modes, reduced** — smaller if T02 yields one chat+vision model | — | Residency substrate (`gpu.py`) shipped |
+| 5 | **04 — Scoped autonomy** — armed TTL + per-command confirm, UI Automation first, gated MCP, plan preview + undo journal; then **05 macros** | T08, T10, T11, T12 | T11 partly built (PR #117, off by default) |
+| 6 | **01 — Ambient proactivity** — nudges from 02's event stream only | — | Open |
+| 7 | **12 — Adaptive user model** — tastes + rhythms, **no affect inference** (D9) | — | Open |
 
-**UI V2** is the cohesive polish pass (markdown rendering, cancel/stop, toasts, GPU pill,
-model pickers, Settings expansion, the **graph viewer**) and runs **after** the cluster
-above starts landing surfaces — features first, polish once. Framed as foundations + phased
-surfaces in [ui-v2-plan.md](ui-v2-plan.md); all three foundations shipped Jun 2026
-(**markdown rendering**, **toast primitive**, and **F3** — cancel/stop + the `/ws/state`
-state-push channel + GPU HUD), the rest interleaves with the feature work above.
+**Parallel "feels alive" track** (when there's slack): T06 voice barge-in; the companion
+bubble follow-ups (click-through, speaking state).
+
+**UI V2** stays the cohesive polish pass ([ui-v2-plan.md](ui-v2-plan.md)); its foundations
+shipped Jun 2026 and the rest interleaves with the work above.
+
+---
+
+## Decisions (Sep 2026)
+
+From [`landscape-2026-09.md` §2](landscape-2026-09.md#2-decisions):
+
+| # | Decision |
+|---|----------|
+| D1 | Security and privacy work comes **before** new agentic features (01, 04, MCP). |
+| D2 | Model swap only via Gate A evals (T02). |
+| D3 | No always-resident 14B+. Big/MoE/GUI models only as transient GPU-idle workers. |
+| D4 | Keep mem0 + SQLite graph. No Graphiti/Zep migration. |
+| D5 | No cloud calls by default. Edge TTS becomes an explicit opt-in. |
+| D6 | MCP sits **alongside** `skills/registry.py` as a gated client; it doesn't replace it. |
+| D7 | Time machine capture is event-driven, encrypted and exclusion-aware — never timer-based screenshots. |
+| D8 | Screen understanding: Windows UI Automation first, VLM fallback; VLM-grounded clicks always need confirmation. |
+| D9 | Descoped: pixel-level "click anywhere" agent, emotion inference in 12, Linux port. |
+
+**Positioning:** a free, offline Windows companion on an 8–12 GB NVIDIA GPU that sees the
+screen, keeps an inspectable time-aware memory, acts only through audited, gated, undoable
+permissions, and works end-to-end in Turkish + English. If a cloud assistant or a local chat
+frontend does something equally well, it's out of scope.
 
 ---
 
 ## Watch-outs
 
-Honest risks to keep in view while building the list above. Each is now baked into the
-relevant brief as a **Build decision** (see
-[`planned-features/README.md`](../planned-features/README.md#build-decisions-jun-2026)).
-Two hard gates fall out of them:
+The two hard gates still hold:
 
-- **Gate A — eval set before LLM-stacking.** The extraction gold-set + voice-consistency
-  baseline must exist before 02/03/12 ride on the graph, and before 04/09 trust the model.
-- **Gate B — privacy off-switch before the first watcher.** Incognito/pause toggle +
-  retention policy ship before 01 (or any ambient ingestion in 10) records anything.
+- **Gate A — eval set before LLM-stacking.** Extraction + tool-calling evals exist (T01
+  lands the second on `main`); a prompt-injection track (T03) and a Turkish subset (T02) are
+  next. Single CPU runs vary by ~±5 points — compare models on repeated runs.
+- **Gate B — privacy off-switch before the first watcher.** Incognito shipped; the time
+  machine (T09) adds exclusions, encryption, retention and "forget last hour/day" before it
+  records anything.
 
-
-- **One builder, twelve briefs.** The real risk is substrate-itis — months of platform work
-  with nothing *felt*. Rule: every step must end in a moment Celestia visibly does something
-  new for you, not just a new store/daemon/executor.
-- **The 7B ceiling.** Extraction, canonicalization, planning, and classification all assume
-  the LLM is reliable; qwen2.5:7b is the bottleneck everywhere. Build the eval set
-  (voice-consistency tests, extraction gold-set) *before* stacking more LLM-dependent
-  features.
-- **Privacy debt accrues before the guardian ships.** 01/02/08/12 each record more. The
-  incognito toggle + retention policy should ship **before** the first watcher (01), not
-  after (Gate B). 08 is descoped to ship the cheap protective utilities early instead.
-- **Graph junk compounds.** 7B extraction noise multiplies once 02/03 consume the graph.
-  The contradiction inbox + memory health panel (ideas backlog) are prerequisites for
-  scaling ingestion, and hybrid recall should be A/B-checked against plain vector recall.
-- **Undo is a promise we can't always keep.** 04's undo log works for file ops; it cannot
-  un-send a message or un-close an app. v1 autonomy should be file-ops-first with short
-  plans.
+- **One builder, many briefs.** Every step must end in something Celestia visibly does, not
+  just a new store/daemon/executor.
+- **The small-model ceiling.** Extraction, planning and classification all lean on a 3–9B
+  model. Measure (T02) before stacking features on it.
+- **Memory is an attack surface.** Injected text can become a stored "instruction"
+  (OWASP ASI06). T04 adds origin tracking + quarantine before ingestion grows.
+- **MCP is a supply-chain risk.** Tool-description poisoning and "rug-pull" manifest changes
+  are real; the client stays off by default until T03/T04 and manifest pinning (T11) land.
+- **Undo is a promise we can't always keep.** 04 v1 is file-ops-first with short plans and a
+  reversible journal (T12); irreversible actions always confirm.
 
 ---
 
 ## Later / unscheduled
 
-- Linux port (`platform/linux.py`), tray on target distro
 - Installer + first-run wizard (pairs with the **Cookbook** model-recommender idea)
+- Optional local wake word (openWakeWord), off by default
+- Celestia memory as a local read-only MCP server
+- Transient GPU-idle grounding worker for 04 click targets (confirm-only)
 - Morning briefing as a daily ritual, autostart
+- Linux port — **someday** (D9)
 - Everything in [ideas-backlog.md](ideas-backlog.md) not yet promoted
 
 ---
@@ -103,6 +138,10 @@ Kept as the growth record, condensed. Details: [`CHANGELOG.md`](../../CHANGELOG.
 | Jun 2026 | **Perception + GPU** — read-screen hotkey, Activity feed, per-monitor/region/active-window capture, fast-by-default vision, model-residency manager (`gpu.py`) |
 | Jun 2026 | **Shell design system** — Aura presence, 6-theme engine, companion-voice layout, auto-growing input |
 | Jun 2026 | **Design corpus** — 12 planned-feature briefs + this roadmap; docs reorganized |
+| Jun 2026 (mid) | **Privacy + trust basics (Gate B)** — incognito / pause-learning, secrets scrubbing before storage, untrusted-content wrapping for tool results, "why did you say that?" provenance, policy-file integrity, conversation search (03 v1) |
+| Jun 2026 (mid) | **UI V2 foundations** — markdown rendering, toasts, cancel/stop, `/ws/state` live-state channel, GPU HUD |
+| Jul 2026 | **Gate A (extraction) + GPU-idle tidy** — extraction gold set + scoring runner; idle daemon with graph entity resolution (Phase 2) |
+| Sep 2026 *(in review, PR #117)* | **Tool-calling eval + real-model CI**, **MCP client** (gated, off by default), **companion overlay bubble**; landscape plan T01–T14 adopted |
 
 Earlier planning eras (phase numbers 0–5, Linear CC-epics, the M0–M4 companion track) are
 preserved in [`../archive/`](../archive/) — their unfinished items were absorbed into the
@@ -114,8 +153,11 @@ briefs and backlogs linked at the top.
 
 | Choice | Decision |
 |--------|----------|
-| Chat model | **qwen2.5:7b** — stays. No always-resident 14B (transient idle-time workers may use bigger models). |
+| Chat model | **Undecided until T02** (D2). `config.example.yaml` ships `llama3.2:3b`; candidates: `qwen2.5:3b` (leads the first CI evals), `qwen3:8b`, `qwen3.5:9b` (thinking off), small tier `qwen3:4b`/`qwen3.5:4b`. No always-resident 14B+ (D3). |
+| Voice | Local by default: Whisper STT + Orpheus TTS; Turkish needs a multilingual STT model and a TR TTS backend (T05). Cloud voice (Edge) only as an explicit opt-in (D5). |
 | Embeddings | nomic-embed-text via Ollama |
 | Identity | Personality/tone **never** changes with modes or adaptation — she adapts *within* herself |
 | Memory | Never silently delete — rank down, supersede with history, or ask |
+| Memory store | mem0 + Chroma + SQLite graph — no Graphiti/Zep (D4) |
+| Tools | `skills/registry.py` stays the dispatch layer; MCP is an extra, gated client (D6) |
 | Stack | FastAPI + Tauri + Ollama + Chroma — no replatforming |

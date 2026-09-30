@@ -1,0 +1,152 @@
+name: Evals (real models)
+
+# Runs the Gate A evals (tool-calling + graph extraction) against real Ollama
+# models on GitHub's CPU runners, so results don't need a local GPU.
+# Small models only by default — a 3B model takes roughly 15–30 min on CPU.
+#
+# Results: the run's Summary page (comparison table + misses) and the
+# "eval-results-*" artifacts (full per-case JSON).
+
+on:
+  workflow_dispatch:
+    inputs:
+      models:
+        description: "Ollama models, comma-separated (must support tools)"
+        default: "llama3.2:3b,qwen2.5:3b"
+        required: true
+      extraction:
+        description: "Also run the graph-extraction eval"
+        type: boolean
+        default: true
+  pull_request:
+    branches: [main]
+    paths:
+      - "evals/**"
+      - "skills/registry.py"
+      - "skills/*/tools.py"
+      - "celestia_core/agent.py"
+      - "celestia_core/personality.py"
+      - "personalities/**"
+      - "skills/memory/graph_extract.py"
+      - ".github/workflows/evals.yml"
+
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      models: ${{ steps.m.outputs.models }}
+    steps:
+      - id: m
+        env:
+          MODELS: ${{ inputs.models || 'llama3.2:3b,qwen2.5:3b' }}
+        run: |
+          python3 -c "import json,os; print('models=' + json.dumps([m.strip() for m in os.environ['MODELS'].split(',') if m.strip()]))" >> "$GITHUB_OUTPUT"
+
+  eval:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        model: ${{ fromJSON(needs.plan.outputs.models) }}
+    env:
+      MODEL: ${{ matrix.model }}
+      RUN_EXTRACTION: ${{ github.event_name == 'pull_request' || inputs.extraction }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Python deps
+        run: pip install -r requirements-dev.txt
+
+      - name: Slug
+        id: slug
+        run: echo "slug=$(echo "$MODEL" | tr -c 'A-Za-z0-9.\n' '-')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Ollama models
+        uses: actions/cache@v4
+        with:
+          path: ~/.ollama/models
+          key: ollama-${{ steps.slug.outputs.slug }}-v1
+
+      - name: Install + start Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          # The installer may start a systemd service (as user 'ollama', with its own
+          # model dir). Run our own server as the runner user so the cache above works.
+          sudo systemctl stop ollama 2>/dev/null || true
+          nohup ollama serve > /tmp/ollama.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:11434/api/version && break; sleep 1; done
+          curl -sf http://127.0.0.1:11434/api/version
+
+      - name: Pull model
+        run: ollama pull "$MODEL"
+
+      - name: Tool-call eval
+        run: |
+          python -m evals.toolcall_eval --model "$MODEL" -v --timeout 900 \
+            --out-dir out --markdown "out/toolcall-${{ steps.slug.outputs.slug }}.md"
+
+      - name: Extraction eval
+        if: env.RUN_EXTRACTION == 'true'
+        run: |
+          python -m evals.extraction_eval --model "$MODEL" -v \
+            --json "out/extraction-${{ steps.slug.outputs.slug }}.json"
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results-${{ steps.slug.outputs.slug }}
+          path: out/
+          if-no-files-found: warn
+
+      - name: Ollama log (on failure)
+        if: failure()
+        run: tail -50 /tmp/ollama.log || true
+
+  report:
+    needs: eval
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - run: pip install -r requirements-dev.txt
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: eval-results-*
+          path: results
+
+      - name: Build summary
+        run: |
+          python -m evals.toolcall_eval --report results --markdown summary.md || true
+          python - >> summary.md <<'EOF'
+          import json, pathlib
+          rows = [json.loads(p.read_text()) for p in sorted(pathlib.Path("results").rglob("extraction-*.json"))]
+          if rows:
+              print("\n## Extraction eval\n")
+              print("| model | precision | recall | f1 | negatives clean | forbidden hits |")
+              print("|---|---:|---:|---:|---:|---:|")
+              for r in sorted(rows, key=lambda r: -r["aggregate"]["f1"]):
+                  a = r["aggregate"]
+                  print(f"| `{r['model']}` | {a['precision']} | {a['recall']} | {a['f1']} | "
+                        f"{a['negatives_clean']}/{a['negatives_total']} | {a['forbidden_hits']} |")
+          EOF
+          cat summary.md >> "$GITHUB_STEP_SUMMARY"
+          cat summary.md

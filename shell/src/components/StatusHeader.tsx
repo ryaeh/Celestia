@@ -4,7 +4,8 @@ import { fetchGpuInfo, type GpuInfo, type LiveState, type Status } from "../api"
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, PictureInPicture2 } from "lucide-react";
+import { inTauri, toggleOverlay } from "@/lib/overlayWindow";
 
 /** How often the HUD refreshes the resident-model list. Deliberately slow — the
  *  backend call hits Ollama (ollama ps) + nvidia-smi, so it stays off the 1s
@@ -120,6 +121,21 @@ export default function StatusHeader({ status, live }: StatusHeaderProps) {
             <span className="gpu-pill-dot" aria-hidden />
             {gpuTask ?? "GPU"}
           </span>
+        )}
+
+        {/* Companion bubble — pop Celestia out onto the desktop (Tauri only). */}
+        {inTauri() && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-[var(--text-muted)] hover:text-[var(--text)]"
+            title="Show / hide the companion bubble"
+            aria-label="Toggle companion bubble"
+            onClick={() => void toggleOverlay()}
+          >
+            <PictureInPicture2 size={15} />
+          </Button>
         )}
 
         {/* Preflight dots */}

@@ -63,3 +63,10 @@ def is_cancelled(session_id: str) -> bool:
         return False
     with _lock:
         return session_id in _cancelled
+
+
+def any_active() -> bool:
+    """True while any chat stream or vision op is running (the shell's
+    "thinking" indicator — e.g. the overlay bubble's Aura)."""
+    with _lock:
+        return bool(_active)

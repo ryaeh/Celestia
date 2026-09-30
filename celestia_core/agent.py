@@ -334,6 +334,9 @@ def _tool_activity_label(name: str, args: dict[str, Any]) -> str:
         return "Updating your to-dos"
     if name == "morning_briefing":
         return "Preparing your briefing"
+    if name.startswith("mcp__"):
+        server, _, tool = name[len("mcp__"):].partition("__")
+        return f"Using {server}: {tool}" if tool else f"Using {server}"
     return f"Running {name}"
 
 

@@ -3,11 +3,15 @@ from __future__ import annotations
 import time
 from datetime import datetime
 from pathlib import Path
-
-import mss
-from PIL import Image
+from typing import TYPE_CHECKING
 
 from celestia_core.config import ROOT, get
+
+if TYPE_CHECKING:
+    from PIL import Image
+
+# mss / Pillow are imported inside the capture functions (heavy deps stay lazy,
+# so importing this module — e.g. from tests — doesn't require them).
 
 
 def _temp_dir() -> Path:
@@ -28,6 +32,8 @@ def _resize(img: Image.Image) -> Image.Image:
     if max(w, h) <= max_edge:
         return img
     scale = max_edge / max(w, h)
+    from PIL import Image
+
     return img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
 
 
@@ -63,6 +69,9 @@ def _monitor_under_cursor(sct) -> dict:
 
 
 def capture_fullscreen() -> Path:
+    import mss
+    from PIL import Image
+
     with mss.mss() as sct:
         mon = _monitor_under_cursor(sct)
         shot = sct.grab(mon)
@@ -73,6 +82,9 @@ def capture_fullscreen() -> Path:
 def capture_bbox(left: int, top: int, width: int, height: int) -> Path:
     if width < 8 or height < 8:
         raise ValueError("Selection too small")
+    import mss
+    from PIL import Image
+
     with mss.mss() as sct:
         region = {"left": left, "top": top, "width": width, "height": height}
         shot = sct.grab(region)

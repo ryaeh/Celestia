@@ -528,7 +528,7 @@ _WS_POLL_INTERVAL = 1.0
 def _collect_state() -> dict[str, Any]:
     """Snapshot the cross-process state the shell mirrors live. All reads are
     cheap (in-memory / mtime-cached), so polling them is fine."""
-    from celestia_core import security, incognito, gpu
+    from celestia_core import security, incognito, gpu, shell_overlay, stream_cancel
 
     return {
         "mode": security.get_mode(),
@@ -536,6 +536,8 @@ def _collect_state() -> dict[str, Any]:
         "incognito": incognito.is_on(),
         "gpu_busy": gpu.gpu_busy(),
         "gpu_task": gpu.current_task(),
+        "busy": stream_cancel.any_active(),
+        "overlay_seq": shell_overlay.toggle_seq(),
     }
 
 
@@ -573,6 +575,32 @@ async def ws_state(websocket: WebSocket):
         return
     except Exception:
         return
+
+
+@app.post("/overlay/toggle")
+def post_overlay_toggle():
+    """Show/hide the companion bubble (the overlay window reacts via /ws/state)."""
+    from celestia_core import shell_overlay
+
+    return {"ok": True, "seq": shell_overlay.request_toggle()}
+
+
+@app.get("/mcp")
+def get_mcp():
+    """MCP servers: connection status + tools (with the mode each needs)."""
+    from skills.mcp import manager
+
+    return {"enabled": manager.enabled(), "servers": manager.status()}
+
+
+@app.post("/mcp/reload")
+def post_mcp_reload():
+    """Reconnect every MCP server from current config (after editing config.yaml)."""
+    from celestia_core.config import load_config
+    from skills.mcp import manager
+
+    load_config(reload=True)
+    return {"enabled": manager.enabled(), "servers": manager.reload()}
 
 
 @app.get("/gpu/models")
@@ -1006,4 +1034,16 @@ def run_server_forever(port: int | None = None) -> None:
         start_tidy_daemon()
     except Exception as e:
         print(f"[tidy] idle daemon skipped: {e}")
+    try:
+        from celestia_core.shell_overlay import start_overlay_hotkey_listener
+        start_overlay_hotkey_listener()
+    except Exception as e:
+        print(f"[overlay] hotkey listener skipped: {e}")
+    try:
+        # Connect MCP servers in the background so the first chat turn
+        # doesn't pay their startup cost (no-op unless mcp.enabled).
+        from skills.mcp.manager import ensure_started
+        ensure_started()
+    except Exception as e:
+        print(f"[mcp] startup skipped: {e}")
     uvicorn.run(app, host="127.0.0.1", port=p, log_level="error", access_log=False)

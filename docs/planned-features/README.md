@@ -60,6 +60,34 @@ learning (how the user responds to Celestia tunes her behavior). It stores its p
 graph entries, so `10`'s supersede/history/inspect-UI mechanics come for free; it absorbs
 `06`'s substrate and supplies `01` with "is this a good moment" judgment.
 
+## Revisions (Sep 2026)
+
+A landscape review ([`../project/landscape-2026-09.md`](../project/landscape-2026-09.md))
+re-ordered the build and tightened several briefs. Where it disagrees with the Jun 2026
+decisions below, **it wins**:
+
+- **Security & privacy before agentic features (D1).** Prompt-injection evals (T03),
+  memory-poisoning defense with origin tracking + quarantine (T04), and armed-mode expiry
+  (T08) come before 01/04 and before MCP is enabled.
+- **02 Time machine:** event-driven capture only (window/title change, hotkey), encrypted at
+  rest, per-app/URL exclusions, retention + "forget last hour/day" — **never timer-based
+  screenshots (D7)**. Needs T04 + the graph transaction-time gap (T07). → T09
+- **04 Autonomy:** Windows UI Automation tree first, VLM as fallback; VLM-grounded clicks
+  always confirm (D8). v1 = file-ops plan preview + reversible undo journal (T12).
+  Pixel-level "click anywhere" is descoped (D9).
+- **10 Graph:** already bi-temporal in practice (`valid_from`/`valid_until` + `created_at`,
+  versioned supersede); only `invalidated_at` + as-of queries remain (T07).
+- **11 Modes:** reduced — may shrink further if one model covers chat + vision (T02).
+- **12 User model:** tastes + rhythms from explicit reactions only; **no emotion/affect
+  inference (D9)**. 06's Aura-mood surface stays cosmetic.
+- **MCP** is an extra, gated client next to `skills/registry.py` (D6); a first version is in
+  review (PR #117, off by default). Manifest hash pinning is still required (T11).
+- **Voice** must be fully local in Turkish + English (T05, D5).
+
+Revised spine: `T01 → T02/T03/T04/T05 → 10 (T07) → 02 (T09) + 03 → 11 (reduced) →
+04 (T08, T10, T11, T12) → 05 → 01 → 12`. The order further down this page is the Jun 2026
+view, kept for its dependency analysis.
+
 ## Build decisions (Jun 2026)
 
 A review pass scoped several briefs down. Each affected brief carries a **Build decision**

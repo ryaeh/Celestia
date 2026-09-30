@@ -316,6 +316,31 @@ def gate_pc_tool(name: str, arguments: dict[str, Any] | None = None) -> str | No
     return None
 
 
+_MODE_RANK = {"safe": 0, "scoped": 1, "armed": 2}
+
+
+def mode_allows(mode: str, required: str) -> bool:
+    """True when *mode* is at least as permissive as *required*."""
+    return _MODE_RANK.get(str(mode), 0) >= _MODE_RANK.get(str(required), 2)
+
+
+def gate_mcp_tool(name: str, required: str) -> str | None:
+    """Run-time gate for an MCP tool (``mcp__server__tool``).
+
+    MCP servers are third-party code, so each tool carries a minimum mode
+    (``mcp.servers.<name>.min_mode`` / ``tool_modes``, default ``armed``). This
+    re-checks it at call time — the mode may have dropped since the schemas were
+    offered. Returns a block message, or None when allowed.
+    """
+    mode = get_mode()
+    if mode_allows(mode, required):
+        return None
+    return (
+        f"Blocked: {name} needs {required} mode (current: {mode}). "
+        + ("Type arm for full access." if required == "armed" else "Use: scope scoped.")
+    )
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 

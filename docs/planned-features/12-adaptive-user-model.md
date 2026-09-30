@@ -7,6 +7,8 @@ less, styles you respond to happen more. Being yourself is the feedback. No clou
 can do this honestly — it requires watching behavior over months and keeping every
 conclusion on your machine, inspectable.
 
+> **Revision (Sep 2026)** — [landscape plan](../project/landscape-2026-09.md): Tastes + rhythms from **explicit reactions only** (thumbs, "don't do that again") — **no emotion/affect inference** (D9). Last in the revised order.
+
 ## Why this is a Celestia feature
 
 It is the **Remembers** pillar pointed inward, and it only works because she is **Local**

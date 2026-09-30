@@ -10,7 +10,35 @@ Roadmap for upcoming work: [`docs/project/roadmap.md`](docs/project/roadmap.md).
 
 ## Unreleased
 
+### Changed
+- **Docs re-planned from the Sep 2026 landscape review.** New
+  `docs/project/landscape-2026-09.md` (tasks T01–T14, decisions D1–D9, repo facts corrected
+  to the current branch). `roadmap.md` follows its build order (security & model sprint
+  first), records decisions + new shipped rows, and no longer claims `qwen2.5:7b` is locked
+  in. README/getting-started/deployment now pull the model `config.example.yaml` actually
+  uses (`llama3.2:3b`), flag English-only default STT, the silent Edge TTS fallback and
+  non-expiring armed mode as known gaps, and mark MCP + the bubble as preview. Feature
+  briefs 01/02/04/10/11/12 carry Sep 2026 revision callouts.
+
 ### Added
+- **Companion overlay bubble.** A second Tauri window (`overlay`): frameless,
+  transparent, always-on-top Aura orb that mirrors listening/thinking state.
+  Drag to move (position remembered), click to expand into a mini chat on the
+  active session with push-to-talk, right-click to hide. Toggle from the header
+  button, the global `ui.overlay_hotkey` (default `ctrl+alt+o`) or
+  `POST /overlay/toggle`; closing the main window while the bubble is up keeps
+  Celestia running in the bubble. Live state gains `busy` + `overlay_seq`.
+- **MCP client.** Any Model Context Protocol server configured under `mcp.servers`
+  becomes `mcp__<server>__<tool>` tools (`skills/mcp/`). Per-server/tool `min_mode`
+  (default `armed`) filters what's offered and is re-checked at call time
+  (`security.gate_mcp_tool`); calls are audited and results wrapped as untrusted.
+  `--mcp` CLI, `GET /mcp` + `POST /mcp/reload`, `--check` line. Off by default.
+  Guide: `docs/guide/mcp.md`.
+- **Tool-calling eval (Gate A).** `evals/toolcall_eval.py` + a 40-case
+  `toolcall_gold.jsonl` score right-tool / right-args / correctly-no-tool across
+  safe/scoped/armed using the production prompt + schemas (no tool is executed),
+  flag forbidden calls, hallucinated tool names and fabricated "I've opened it"
+  claims, and compare several models side by side (`--model a,b,c`).
 - **Temporal knowledge-graph memory (Feature 10 substrate).** Graph store
   (`skills/memory/graph_store.py`), relation extraction (`graph_extract.py`),
   hybrid graph-walk recall in `build_context`, and a `--graph` CLI to inspect it.

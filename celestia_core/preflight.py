@@ -104,6 +104,24 @@ def check_vision() -> tuple[bool, str]:
         return False, f"Ollama not reachable for vision: {e}"
 
 
+def check_mcp() -> tuple[bool, str]:
+    try:
+        import mcp  # noqa: F401
+    except ImportError:
+        return False, "MCP enabled but the SDK is missing — pip install mcp"
+    from skills.mcp import manager
+
+    manager.list_tools()  # connects + waits up to mcp.startup_wait_seconds
+    rows = manager.status()
+    if not rows:
+        return True, "MCP: enabled, no servers configured"
+    bad = [f"{r['name']} ({r['error'] or r['status']})" for r in rows if r["status"] != "ready"]
+    summary = ", ".join(f"{r['name']}={len(r['tools'])} tools" for r in rows if r["status"] == "ready")
+    if bad:
+        return False, "MCP: not connected — " + "; ".join(bad) + (f" | ok: {summary}" if summary else "")
+    return True, f"MCP: {summary}"
+
+
 def check_security() -> tuple[bool, str]:
     from celestia_core import security
 
@@ -117,6 +135,8 @@ def run_checks() -> bool:
     checks = [check_ollama, check_memory, check_security, check_voice]
     if get("vision.enabled", False):
         checks.append(check_vision)
+    if get("mcp.enabled", False):
+        checks.append(check_mcp)
     for fn in checks:
         passed, msg = fn()
         tag = "ok" if passed else "FAIL"

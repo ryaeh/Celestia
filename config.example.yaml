@@ -116,7 +116,8 @@ voice:
   reply_cap_voice: true          # cap voice replies to ~2 sentences (CC-98)
   stt:
     enabled: true
-    model: base.en                # base.en = fast CPU; large-v3 = quality GPU
+    model: base.en                # base.en = fast CPU, ENGLISH ONLY (*.en models can't do Turkish);
+                                  # large-v3 = multilingual (Turkish + English), quality GPU (device: cuda)
     device: cpu                   # cpu or cuda
     compute_type: int8            # int8 for cpu, float16 for cuda
     idle_unload_minutes: 10
@@ -189,6 +190,8 @@ ui:
   shell_ptt_enabled: true
   shell_ptt_hotkey: ctrl+alt+shift+v   # hold = talk; empty = mic button only (tray uses ctrl+alt+v)
   shell_ptt_max_seconds: 45
+  overlay_enabled: true        # companion bubble: small always-on-top Aura orb + mini chat
+  overlay_hotkey: ctrl+alt+o   # show/hide the bubble from anywhere; empty = shell button only
 
 read_hotkey:
   enabled: true
@@ -196,6 +199,36 @@ read_hotkey:
   scope: active_window       # active_window | fullscreen
   speak_answer: false
   question: "What is on screen? Describe what you see concisely."
+
+# MCP (Model Context Protocol) client — plug in third-party tool servers
+# (filesystem, calendar, Home Assistant, Spotify, …). Each server's tools appear to
+# the model as mcp__<server>__<tool>, gated by security mode, audited, and their
+# output is wrapped as untrusted data. Requires `pip install mcp`.
+mcp:
+  enabled: false
+  startup_wait_seconds: 10     # first turn waits this long for servers to connect
+  call_timeout_seconds: 30
+  max_result_chars: 4000       # truncate long tool output before it hits the context
+  servers: {}
+  # Example — uncomment to try (each is launched as a stdio subprocess):
+  # servers:
+  #   time:
+  #     command: uvx
+  #     args: [mcp-server-time]
+  #     min_mode: safe           # safe | scoped | armed — lowest mode its tools are offered in.
+  #                              # Default armed: MCP servers are third-party code, opt DOWN deliberately.
+  #   fetch:
+  #     command: uvx
+  #     args: [mcp-server-fetch]
+  #     min_mode: scoped
+  #   github:
+  #     command: npx
+  #     args: ["-y", "@modelcontextprotocol/server-github"]
+  #     env: {GITHUB_PERSONAL_ACCESS_TOKEN: "${GITHUB_TOKEN}"}   # ${VAR} comes from .env — never put secrets here
+  #     tools: [search_repositories, get_file_contents]         # optional allowlist
+  #     deny_tools: []                                           # optional denylist
+  #     tool_modes: {get_file_contents: scoped}                  # optional per-tool override
+  #     enabled: true
 
 automation:
   n8n_enabled: false

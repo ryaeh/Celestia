@@ -14,6 +14,7 @@ Everything for Celestia is under `docs/`. Start with **getting-started** if this
 - [guide/memory.md](guide/memory.md) — what she remembers and how to clean it up
 - [guide/personality.md](guide/personality.md) — YAML packs in `personalities/`
 - [guide/skills.md](guide/skills.md) — how to add a new tool skill
+- [guide/mcp.md](guide/mcp.md) — MCP servers as plug-in tools (gated, audited, untrusted output)
 
 ## Troubleshooting
 
@@ -29,6 +30,8 @@ Everything for Celestia is under `docs/`. Start with **getting-started** if this
 ## Roadmap & planning
 
 - [project/roadmap.md](project/roadmap.md) — **the** roadmap: where we are, build order, watch-outs, what shipped
+- [project/landscape-2026-09.md](project/landscape-2026-09.md) — Sep 2026 landscape review → tasks T01–T14 + decisions D1–D9 (the current work plan)
+- [../evals/README.md](../evals/README.md) — Gate A evals: how to score models, latest results
 - [planned-features/](planned-features/) — 12 designed feature briefs + cross-feature analysis ([README](planned-features/README.md))
 - [project/perf-and-qol-backlog.md](project/perf-and-qol-backlog.md) — perf/GPU findings + the UI V2 plan
 - [project/ideas-backlog.md](project/ideas-backlog.md) — unsorted idea pool (security, personality, memory, app, frontend)

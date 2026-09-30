@@ -20,6 +20,8 @@ Examples:
 > - **Privacy off-switch is a hard prerequisite** — the incognito/pause toggle + retention
 >   policy must ship *before* this daemon records anything (see roadmap watch-outs).
 
+> **Revision (Sep 2026)** — [landscape plan](../project/landscape-2026-09.md): Nudges come **only from 02's event stream** (no separate screen watcher), after the security & privacy sprint (D1). → [roadmap](../project/roadmap.md) step 6.
+
 ## Why this is a Celestia feature
 
 A cloud assistant can't watch your screen continuously and privately. This needs all of:
