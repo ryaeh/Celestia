@@ -93,13 +93,11 @@ def turn_tainted(messages: list[dict]) -> bool:
     return False
 
 
-# Common words that carry no content, EN + TR; they never count as support.
+# Common words that carry no content; they never count as support.
 _STOPWORDS = frozenset(
     "the and for you your that this with from have has are was were will would should "
     "can could about into over them they their there then than what when where which who "
-    "always never every please just also only very user assistant kullanıcı asistan "
-    "bir ve ile için bu şu o da de ki mi mı mu mü ben sen biz siz onlar gibi daha çok "
-    "her hep asla lütfen sadece ama fakat veya ya".split()
+    "always never every please just also only very user assistant".split()
 )
 _WORD = re.compile(r"[^\W\d_]{3,}", re.UNICODE)
 
@@ -112,8 +110,8 @@ def supported_by(text: str, reference: str, *, threshold: float = 0.6) -> bool:
     """Is *text* grounded in *reference* (e.g. the user's own messages)?
 
     True when at least ``threshold`` of text's content words appear in the
-    reference. Words match on a shared 4-letter prefix, so Turkish suffixes
-    ("dosyaları" ~ "dosya") and English inflection still count. Used to decide
+    reference. Words match on a shared 4-letter prefix, so inflections
+    ("files" ~ "file", "summarized" ~ "summary") still count. Used to decide
     whether a memory distilled from a turn that read untrusted content is backed
     by what the *user* said, or only by the injected text.
     """

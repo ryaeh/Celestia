@@ -164,7 +164,7 @@ def ground_relations(relations: list[dict[str, Any]], reference: str) -> list[di
     be supported, and so must the subject unless it's the user themself."""
     from celestia_core.untrusted import supported_by
 
-    first_person = {"user", "i", "me", "ben", "kullanıcı"}
+    first_person = {"user", "i", "me"}
     kept = []
     for r in relations:
         subject = str(r.get("subject", "")).strip().lower()
