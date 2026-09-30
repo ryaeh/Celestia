@@ -56,7 +56,7 @@ PROMPT = (
     "- update/supersede/forget must copy an id from EXISTING MEMORIES into \"target\". "
     "If EXISTING MEMORIES is (none), the only possible op is add. add has no target.\n"
     "- text is the memory AFTER the change: the new fact, not the old one. One short "
-    "third-person sentence, e.g. \"User lives in Izmir.\"\n"
+    "third-person sentence that starts with \"User\" when it is about the user.\n"
     "- Only what the USER stated as true. Skip jokes, hypotheticals (\"if I moved...\"), "
     "questions, greetings, and anything the assistant guessed or suggested.\n"
     "- Never store passwords, PINs, keys or other secrets.\n"
@@ -65,13 +65,38 @@ PROMPT = (
     "- triples: the same information as [subject, predicate, object] with short terms; "
     'use "user" for the user. forget needs no text or triples.\n'
     "- summary: 1-2 sentences on what this chat was about (may be empty).\n"
-    "Format (the ids here are placeholders; use real ones):\n"
-    '{"ops":[{"op":"add","kind":"fact","text":"User has a cat named Mochi.",'
-    '"triples":[["user","has cat","Mochi"]]},'
-    '{"op":"supersede","target":"<id>","kind":"fact","text":"User lives in Izmir.",'
-    '"triples":[["user","lives in","Izmir"]]}],"summary":"..."}\n'
-    'Nothing changed: {"ops":[],"summary":"Small talk about the weekend."}\n'
-)
+    "Output: an object with \"ops\" (a list, often empty) and \"summary\". Each op has "
+    "op, target (add: null), kind, text and triples, exactly as described above. Use "
+    "only facts from this chat; never invent names or values.\n")
+
+
+# JSON schema for Ollama structured output (``format=``): the model can only emit
+# known ops and kinds. Deliberately no example values in the prompt — small
+# models copy example content into memory.
+OUTPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "ops": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "op": {"type": "string", "enum": list(OPS)},
+                    "target": {"type": ["string", "null"]},
+                    "kind": {"type": "string", "enum": list(WRITER_KINDS)},
+                    "text": {"type": "string"},
+                    "triples": {
+                        "type": "array",
+                        "items": {"type": "array", "items": {"type": "string"}, "minItems": 3, "maxItems": 3},
+                    },
+                },
+                "required": ["op", "target", "kind", "text", "triples"],
+            },
+        },
+        "summary": {"type": "string"},
+    },
+    "required": ["ops", "summary"],
+}
 
 
 @dataclass

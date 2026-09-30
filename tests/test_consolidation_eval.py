@@ -243,3 +243,14 @@ def test_prompt_placeholder_target_is_not_a_real_id() -> None:
     from skills.memory.writer import PROMPT
 
     assert '"target":"m1"' not in PROMPT and "(none), the only possible op is add" in PROMPT
+    # No example values a model could copy into memory (qwen2.5:3b stored the
+    # example's "cat named Mochi" in an unrelated chat).
+    gold_terms = {"mochi", "izmir", "ankara", "acme", "elif", "sencha"}
+    assert not any(term in PROMPT.lower() for term in gold_terms)
+
+
+def test_output_schema_matches_parser_vocabulary() -> None:
+    from skills.memory.writer import OPS, OUTPUT_SCHEMA, WRITER_KINDS
+
+    item = OUTPUT_SCHEMA["properties"]["ops"]["items"]["properties"]
+    assert item["op"]["enum"] == list(OPS) and item["kind"]["enum"] == list(WRITER_KINDS)

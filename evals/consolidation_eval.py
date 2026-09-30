@@ -239,7 +239,11 @@ def _chat(model: str, prompt: str, *, think: bool | None, num_predict: int, json
         "options": {"num_predict": num_predict, "temperature": 0.0},
     }
     if json_mode:
-        kwargs["format"] = "json"  # constrained decoding: always valid JSON
+        # Constrained decoding against the writer's schema: always valid JSON,
+        # only known ops/kinds.
+        from skills.memory.writer import OUTPUT_SCHEMA
+
+        kwargs["format"] = OUTPUT_SCHEMA
     if think is not None:
         kwargs["think"] = think
     try:
