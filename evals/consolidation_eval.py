@@ -318,12 +318,14 @@ def run_legacy(case: dict[str, Any], model: str) -> dict[str, Any]:
 
 
 def _variants(pipelines: list[str], thinks: list[str]) -> list[tuple[str, bool | None]]:
+    """Cheapest first (legacy, writer think off/default, writer think on), so a
+    timeout costs the slow thinking variant rather than the baselines."""
     out: list[tuple[str, bool | None]] = []
-    for p in pipelines:
-        if p == "legacy":
-            out.append(("legacy", False))
-            continue
-        for t in thinks:
+    if "legacy" in pipelines:
+        out.append(("legacy", False))
+    if "writer" in pipelines:
+        order = {"off": 0, "default": 1, "on": 2}
+        for t in sorted(thinks, key=lambda t: order[t]):
             out.append(("writer", {"on": True, "off": False}.get(t)))
     return out
 
@@ -425,24 +427,31 @@ def main(argv: list[str] | None = None) -> int:
     if bad := [t for t in thinks if t not in ("on", "off", "default")]:
         raise SystemExit(f"--think takes on/off/default, got {bad}")
 
+    def write_outputs(runs: list[dict[str, Any]]) -> str:
+        # Written after every variant so a job killed mid-run (CPU thinking
+        # runs are slow) still leaves the finished variants on disk.
+        table = markdown_table(runs)
+        if args.markdown:
+            args.markdown.parent.mkdir(parents=True, exist_ok=True)
+            args.markdown.write_text(table, encoding="utf-8")
+        if args.json:
+            args.json.parent.mkdir(parents=True, exist_ok=True)
+            args.json.write_text(
+                json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "runs": runs}, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        return table
+
     runs = []
     for model in [m.strip() for m in args.model.split(",") if m.strip()]:
         for pipeline, think in _variants(pipelines, thinks):
             run = run_variant(model, cases, pipeline, think, args.verbose)
             if run:
                 runs.append(run)
+                write_outputs(runs)
 
-    table = markdown_table(runs)
-    print("\n" + table)
-    if args.markdown:
-        args.markdown.parent.mkdir(parents=True, exist_ok=True)
-        args.markdown.write_text(table, encoding="utf-8")
+    print("\n" + write_outputs(runs))
     if args.json:
-        args.json.parent.mkdir(parents=True, exist_ok=True)
-        args.json.write_text(
-            json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "runs": runs}, indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
         print(f"results → {args.json}")
     return 1 if any(r["aggregate"]["errors"] for r in runs) else 0
 
