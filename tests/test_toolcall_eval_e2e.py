@@ -44,6 +44,15 @@ class _FakeOllama(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(raw)
 
+    def do_GET(self):  # noqa: N802 — http.server API
+        if self.path == "/api/version":
+            return self._send(200, {"version": "0.99.0-fake"})
+        if self.path == "/api/ps":
+            return self._send(200, {"models": [{"name": "fake:3b", "model": "fake:3b", "size": 3 * 1024**3,
+                                                "size_vram": 2 * 1024**3, "digest": "x",
+                                                "expires_at": "2026-01-01T00:00:00Z"}]})
+        return self._send(404, {"error": "not found"})
+
     def do_POST(self):  # noqa: N802 — http.server API
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         type(self).requests.append(body)
@@ -67,6 +76,7 @@ class _FakeOllama(BaseHTTPRequestHandler):
             "model": body["model"], "created_at": "2026-01-01T00:00:00Z", "message": msg,
             "done": True, "done_reason": "stop",
             "prompt_eval_count": 100 + len(json.dumps(body)) // 4, "eval_count": 7,
+            "prompt_eval_duration": 400_000_000, "load_duration": 100_000_000, "eval_duration": 350_000_000,
         })
 
 
@@ -188,3 +198,32 @@ def test_report_merges_saved_runs(fake_ollama, tmp_path) -> None:
     assert te.main(["--report", str(tmp_path), "--markdown", str(md)]) == 0
     report = md.read_text(encoding="utf-8")
     assert "| `fake:3b` |" in report and "| `fake:7b` |" in report
+
+
+def test_repeat_run_records_version_timing_vram_and_spread(fake_ollama, tmp_path) -> None:
+    out_dir, md = tmp_path / "out", tmp_path / "r.md"
+    code = te.main(["--model", "fake:3b", "--cases", str(_write_cases(tmp_path)), "--repeat", "2",
+                    "--temperature", "model", "--out-dir", str(out_dir), "--markdown", str(md)])
+    assert code == 0
+    run = json.loads((out_dir / "toolcall-fake-3b.json").read_text(encoding="utf-8"))
+    assert run["ollama_version"] == "0.99.0-fake"
+    assert run["temperature"] == "model"
+    assert run["resident"] == {"size_bytes": 3 * 1024**3, "size_vram_bytes": 2 * 1024**3}
+    assert run["spread"]["repeats"] == 2 and len(run["cases"]) == 2 * len(_CASES)
+    assert run["aggregate"]["ttft_p50_s"] == 0.5 and run["aggregate"]["tok_per_s_p50"] == 20.0
+    chat_calls = [r for r in fake_ollama if r["messages"][-1]["content"] != "hi"]
+    assert all("temperature" not in r["options"] for r in chat_calls)  # model default = production
+    assert {r["options"]["seed"] for r in chat_calls} == {1, 2}
+    report = md.read_text(encoding="utf-8")
+    assert "ollama 0.99.0-fake" in report and "VRAM 2.0 GB" in report
+    assert "failed" in report and "2/2" in report  # per-case failure counts across repeats
+
+
+def test_lang_filter(fake_ollama, tmp_path) -> None:
+    cases = tmp_path / "c.jsonl"
+    rows = [dict(_CASES[0], id="en-1"), dict(_CASES[-1], id="xx-1", lang="xx")]
+    cases.write_text("\n".join(json.dumps(c) for c in rows), encoding="utf-8")
+    out = tmp_path / "o"
+    assert te.main(["--model", "fake:3b", "--cases", str(cases), "--lang", "xx", "--out-dir", str(out)]) == 0
+    run = json.loads((out / "toolcall-fake-3b.json").read_text(encoding="utf-8"))
+    assert [c["id"] for c in run["cases"]] == ["xx-1"] and run["aggregate"]["pass_by_lang"] == {"xx": 1.0}

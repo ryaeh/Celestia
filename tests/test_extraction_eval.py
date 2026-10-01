@@ -170,3 +170,46 @@ def test_gold_file_parses_and_ids_unique() -> None:
     for c in cases:
         assert c["excerpt"].strip(), f"{c['id']}: empty excerpt"
         assert isinstance(c.get("expected"), list), f"{c['id']}: expected must be a list"
+
+
+# ---------------------------------------------------------------------------
+# T02 additions: per-language-tag F1, repeats, thinking switch
+# ---------------------------------------------------------------------------
+
+
+def test_aggregate_reports_f1_per_language() -> None:
+    from evals.extraction_eval import aggregate as agg_fn
+
+    en = score_case({"id": "e", "expected": [{"subject": "user", "object": "neovim"}]},
+                    [_triple("user", "uses", "neovim")])
+    tr = dict(score_case({"id": "t", "lang": "xx", "expected": [{"subject": "user", "object": "ankara"}]}, []))
+    agg = agg_fn([en, tr])
+    assert agg["f1_by_lang"]["en"] == 1.0 and agg["f1_by_lang"]["xx"] == 0.0
+
+
+def test_repeat_spread_f1() -> None:
+    from evals.extraction_eval import repeat_spread
+
+    hit = score_case({"id": "e", "expected": [{"subject": "user", "object": "x"}]}, [_triple("user", "is", "x")])
+    miss = score_case({"id": "e", "expected": [{"subject": "user", "object": "x"}]}, [])
+    spread = repeat_spread([{**hit, "repeat": 0}, {**miss, "repeat": 1}])
+    assert spread["repeats"] == 2 and spread["f1_by_repeat"] == [1.0, 0.0] and spread["f1_sd"] == 0.5
+
+
+def test_run_extraction_retries_without_think_when_unsupported(monkeypatch) -> None:
+    import ollama
+
+    from evals.extraction_eval import run_extraction
+
+    seen: list[dict] = []
+
+    def fake_chat(**kw):
+        seen.append(kw)
+        if "think" in kw:
+            raise RuntimeError("model does not support thinking")
+        return {"message": {"content": '{"relations":[{"subject":"user","predicate":"uses","object":"neovim"}]}'}}
+
+    monkeypatch.setattr(ollama, "chat", fake_chat)
+    rels = run_extraction("User: I use neovim", "m", think=False)
+    assert rels and rels[0]["object"] == "neovim"
+    assert "think" in seen[0] and "think" not in seen[1]
