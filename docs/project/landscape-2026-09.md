@@ -89,7 +89,7 @@ well, it's out of scope (same rule as `docs/planned-features/README.md`).
 | T12 | [#129](https://github.com/ryaeh/Celestia/issues/129) | Plan preview + undo journal (04 v1) | P1 | Open |
 | T13 | [#130](https://github.com/ryaeh/Celestia/issues/130) | n8n stays optional | P2 | Standing rule |
 | T14 | [#131](https://github.com/ryaeh/Celestia/issues/131) | Companion safety basics | P2 | Open |
-| T15 | [#134](https://github.com/ryaeh/Celestia/issues/134) | Three-layer memory, one reasoning writer | P1 | In progress — consolidation eval + writer (qwen3.5:4b, think off: 16/20 vs 5/20 today) |
+| T15 | [#134](https://github.com/ryaeh/Celestia/issues/134) | Three-layer memory, one reasoning writer | P1 | In progress — writer (16/20 vs 5/20), checkpoints, structured notes (early 0.94 vs 0.33), idle save + graph on + backfill |
 
 Size: **S** ≤ 1 week · **M** 2–4 weeks · **L** 1–2+ months.
 Priority: **P0** now (blocks the rest) · **P1** next · **P2** later.

@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import Aura from "./Aura";
-import { fetchGpuInfo, type GpuInfo, type LiveState, type Status } from "../api";
+import {
+  fetchChatNotes,
+  fetchGpuInfo,
+  type ChatNotes,
+  type GpuInfo,
+  type LiveState,
+  type Status,
+} from "../api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -38,9 +45,19 @@ const MODE_STYLE: Record<string, string> = {
 
 const CHECK_LABELS = ["Context", "Memory", "Tools", "Models"];
 
+const NOTE_LISTS: [keyof ChatNotes["notes"], string][] = [
+  ["facts", "From you"],
+  ["decisions", "Decided"],
+  ["open", "Still open"],
+  ["details", "Exact details"],
+  ["topics", "Earlier in this chat"],
+];
+
 export default function StatusHeader({ status, live }: StatusHeaderProps) {
   const [expanded, setExpanded] = useState(false);
   const [gpuInfo, setGpuInfo] = useState<GpuInfo | null>(null);
+  const [notes, setNotes] = useState<ChatNotes | null>(null);
+  const memorySaving = live?.memory_saving ?? null;
 
   const gpuBusyLive = live?.gpu_busy ?? false;
 
@@ -60,6 +77,17 @@ export default function StatusHeader({ status, live }: StatusHeaderProps) {
     const t = setInterval(load, GPU_INFO_INTERVAL_MS);
     return () => { cancelled = true; clearInterval(t); };
   }, [gpuBusyLive]);
+
+  // Working-memory notes (T15): load when the panel opens and again once a
+  // memory pass finishes, since that's when the notes change.
+  useEffect(() => {
+    if (!expanded || memorySaving) return;
+    let cancelled = false;
+    fetchChatNotes()
+      .then((n) => { if (!cancelled) setNotes(n); })
+      .catch(() => { /* API down — keep the last snapshot */ });
+    return () => { cancelled = true; };
+  }, [expanded, memorySaving]);
 
   const name = status?.display_name ?? "Celestia";
   // Live mode (pushed) wins over the polled value so a tray/CLI mode change shows
@@ -123,6 +151,21 @@ export default function StatusHeader({ status, live }: StatusHeaderProps) {
           </span>
         )}
 
+        {/* Memory pass running (T15) — chat keeps working meanwhile. */}
+        {memorySaving && (
+          <span
+            className="gpu-pill"
+            title={
+              memorySaving === "end"
+                ? "Saving what I learned from the last chat"
+                : "Saving memories from this long chat — you can keep talking"
+            }
+          >
+            <span className="gpu-pill-dot" aria-hidden />
+            Saving memories…
+          </span>
+        )}
+
         {/* Companion bubble — pop Celestia out onto the desktop (Tauri only). */}
         {inTauri() && (
           <Button
@@ -183,6 +226,42 @@ export default function StatusHeader({ status, live }: StatusHeaderProps) {
               </Badge>
             </div>
           )}
+
+          {/* Working memory of this chat (T15) */}
+          <div className="top-bar-card">
+            <span className="top-bar-card-label">What I'm keeping in mind</span>
+            {!notes || notes.empty ? (
+              <p className="gpu-model-empty">
+                Nothing yet — notes start once this chat gets long.
+              </p>
+            ) : (
+              <div className="text-xs leading-relaxed space-y-1.5 max-h-64 overflow-y-auto">
+                {notes.notes.goal && (
+                  <p><span className="text-[var(--text-muted)]">About: </span>{notes.notes.goal}</p>
+                )}
+                {notes.notes.now && (
+                  <p><span className="text-[var(--text-muted)]">Right now: </span>{notes.notes.now}</p>
+                )}
+                {NOTE_LISTS.map(([key, label]) => {
+                  const items = notes.notes[key] as string[];
+                  return items.length ? (
+                    <div key={key}>
+                      <span className="text-[var(--text-muted)]">{label}</span>
+                      <ul className="list-disc pl-4">
+                        {items.map((it, i) => <li key={i}>{it}</li>)}
+                      </ul>
+                    </div>
+                  ) : null;
+                })}
+                {(notes.archived > 0 || notes.untrusted) && (
+                  <p className="text-[var(--text-dim)]">
+                    {notes.archived > 0 && `${notes.archived} older messages archived. `}
+                    {notes.untrusted && "Built partly from untrusted content."}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Resident models + VRAM (UI V2 / F3 follow-up) */}
           <div className="top-bar-card">

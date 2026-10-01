@@ -537,7 +537,7 @@ def build_context(query: str, user_id: str = "default") -> str:
     # Feature 10 — structural recall: walk the knowledge graph from entities
     # named in the query and inject connected facts (hybrid with similarity).
     # Off by default; entity resolution is alias lookups, no LLM on the hot path.
-    if get("memory.graph.enabled", False) and query.strip():
+    if get("memory.graph.enabled", True) and query.strip():
         try:
             from skills.memory import graph_store as _graph
 

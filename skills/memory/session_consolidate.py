@@ -294,7 +294,7 @@ def consolidate_session_messages(
     # knowledge graph. Gated and isolated so it never affects typed-memory flow,
     # and skipped on the synchronous finalize path (extract_graph=False) so
     # creating/switching a chat never blocks on the extra LLM call.
-    if extract_graph and get("memory.graph.enabled", False) and str(get("memory.graph.deep_pass", "background")) != "off":
+    if extract_graph and get("memory.graph.enabled", True) and str(get("memory.graph.deep_pass", "background")) != "off":
         try:
             from skills.memory.graph_extract import extract_and_store
 

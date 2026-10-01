@@ -115,6 +115,8 @@ export type LiveState = {
   /** Bumped by the global bubble hotkey / POST /overlay/toggle; the overlay
    *  window flips visibility on each change. */
   overlay_seq?: number;
+  /** T15: a memory pass is running ("checkpoint" mid-chat, "end" after a chat). */
+  memory_saving?: string | null;
 };
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
@@ -133,6 +135,33 @@ export type GpuInfo = {
 export async function fetchGpuInfo(): Promise<GpuInfo> {
   const r = await apiFetch("/gpu/models");
   if (!r.ok) throw new Error(`gpu/models ${r.status}`);
+  return r.json();
+}
+
+/** T15 working memory: the structured running notes of one chat. */
+export type ChatNotes = {
+  session_id: string | null;
+  notes: {
+    goal: string;
+    now: string;
+    facts: string[];
+    decisions: string[];
+    open: string[];
+    details: string[];
+    topics: string[];
+  };
+  empty: boolean;
+  /** Older messages were trimmed, so the notes ride along with each turn. */
+  in_use: boolean;
+  archived: number;
+  /** Built from a window that contained untrusted tool output. */
+  untrusted: boolean;
+};
+
+export async function fetchChatNotes(sessionId?: string): Promise<ChatNotes> {
+  const q = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : "";
+  const r = await apiFetch(`/chat/notes${q}`);
+  if (!r.ok) throw new Error(`chat/notes ${r.status}`);
   return r.json();
 }
 

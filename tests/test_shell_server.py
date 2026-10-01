@@ -335,3 +335,36 @@ def test_vision_cancel_flags_running_op(client, token):
         assert stream_cancel.is_cancelled(stream_cancel.VISION_OP) is True
     finally:
         stream_cancel.end(stream_cancel.VISION_OP)
+
+
+# ---------------------------------------------------------------------------
+# T15 step 4 — working-memory notes, graph backfill, the "saving" state
+# ---------------------------------------------------------------------------
+
+
+def test_chat_notes_endpoint(client, token):
+    sid = shell_chat.create_session(finalize_active=False)
+    r = client.get("/chat/notes", params={"session_id": sid}, headers=auth(token))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["session_id"] == sid and body["empty"] is True
+    assert set(body["notes"]) >= {"goal", "now", "facts", "decisions", "open", "details", "topics"}
+
+
+def test_graph_backfill_endpoint_clamps_the_batch(client, token, monkeypatch):
+    got: list = []
+    monkeypatch.setattr("skills.memory.graph_backfill.backfill_step",
+                        lambda uid, batch=None: got.append(batch) or ["[graph] x"])
+    monkeypatch.setattr("skills.memory.graph_backfill.pending", lambda uid: [{"id": "a"}])
+    r = client.post("/memory/graph/backfill", params={"batch": 500}, headers=auth(token))
+    assert r.status_code == 200
+    assert r.json() == {"lines": ["[graph] x"], "pending": 1} and got == [50]
+
+
+def test_state_reports_a_running_memory_pass(isolated):
+    assert shell_server._collect_state()["memory_saving"] is None
+    assert shell_chat._claim_pass("s-x", "end")
+    try:
+        assert shell_server._collect_state()["memory_saving"] == "end"
+    finally:
+        shell_chat._release_pass("s-x")

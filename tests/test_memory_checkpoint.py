@@ -390,3 +390,90 @@ def test_recall_reaches_the_turn(chat, monkeypatch) -> None:
         sc._write_session(sid, state)
     sc.send_message("what was the netstat command you gave me earlier?", session_id=sid)
     assert got and "netstat -ano" in got[0]
+
+
+# ---------------------------------------------------------------------------
+# Step 4 — idle end of chat, the "saving" notice, the notes panel
+# ---------------------------------------------------------------------------
+
+
+def _idle_session(chat, *, pairs: int = 3, idle_s: float = 0.0) -> str:
+    sid = chat.create_session(finalize_active=False)
+    with chat._store_lock():
+        state = chat._read_session(sid)
+        state.update(_state(pairs))
+        state["updated_at"] = time.time() - idle_s
+        chat._write_session(sid, state)
+    return sid
+
+
+def test_idle_sweep_saves_a_chat_left_idle(chat, monkeypatch) -> None:
+    seen: list = []
+
+    def fake_consolidate(history, uid, *, start_index=0, end=False, **kw):
+        seen.append((start_index, len(history), end))
+        return len(history), ["saved"]
+
+    monkeypatch.setattr("skills.memory.writer_pass.consolidate", fake_consolidate)
+    sid = _idle_session(chat, idle_s=21 * 60)
+    assert chat.idle_sweep() == ["saved"]
+    assert seen == [(1, 7, True)]
+    with chat._store_lock():
+        assert chat._cursor(chat._read_session(sid))[0] == 7
+    assert chat.idle_sweep() == [] and len(seen) == 1   # nothing new: no second pass
+    assert chat.memory_saving() is None                 # released
+
+
+def test_idle_sweep_waits_for_the_idle_time(chat, monkeypatch) -> None:
+    monkeypatch.setattr("skills.memory.writer_pass.consolidate",
+                        lambda *a, **k: pytest.fail("ran too early"))
+    _idle_session(chat, idle_s=5 * 60)
+    assert chat.idle_sweep() == []
+    CONFIG["memory.writer.idle_minutes"] = 0             # off switch
+    assert chat.idle_sweep(now=time.time() + 10_000) == []
+
+
+def test_idle_sweep_skips_a_session_already_being_saved(chat, monkeypatch) -> None:
+    monkeypatch.setattr("skills.memory.writer_pass.consolidate",
+                        lambda *a, **k: pytest.fail("stacked a second pass"))
+    sid = _idle_session(chat, idle_s=30 * 60)
+    assert chat._claim_pass(sid, "checkpoint")
+    assert chat.idle_sweep() == []
+    assert chat.memory_saving()["kind"] == "checkpoint"
+    chat._release_pass(sid)
+
+
+def test_memory_saving_reports_the_running_pass(chat) -> None:
+    assert chat.memory_saving() is None
+    assert chat._claim_pass("s1", "end")
+    info = chat.memory_saving()
+    assert info["kind"] == "end" and info["since"] > 0
+    chat._release_pass("s1")
+    assert chat.memory_saving() is None
+
+
+def test_voice_notice(chat, monkeypatch) -> None:
+    spoken: list[str] = []
+    monkeypatch.setattr("skills.tts.speak", lambda text, *a, **k: spoken.append(text))
+    chat._voice_notice()
+    assert spoken == [chat._VOICE_NOTICE]
+    CONFIG["memory.writer.voice_notice_text"] = "Hold on."
+    chat._voice_notice()
+    CONFIG["memory.writer.voice_notice"] = False
+    chat._voice_notice()
+    assert spoken == [chat._VOICE_NOTICE, "Hold on."]
+
+
+def test_get_notes(chat) -> None:
+    sid = chat.create_session(finalize_active=False)
+    notes = chat.get_notes(sid)
+    assert notes["session_id"] == sid and notes["empty"] and not notes["in_use"]
+    with chat._store_lock():
+        state = chat._read_session(sid)
+        state.update(summary={"goal": "Plan a trip", "details": ["Flight LH123"]},
+                     archive=ARCHIVE, seq_base=4, summary_tainted=True)
+        chat._write_session(sid, state)
+    notes = chat.get_notes(sid)
+    assert notes["notes"]["goal"] == "Plan a trip" and notes["notes"]["details"] == ["Flight LH123"]
+    assert not notes["empty"] and notes["in_use"] and notes["untrusted"]
+    assert notes["archived"] == len(ARCHIVE)

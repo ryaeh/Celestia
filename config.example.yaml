@@ -60,6 +60,9 @@ memory:
     checkpoint_minutes: 60       # mid-chat pass once the oldest unsaved message is this old
     trim_margin: 12              # ...or when unsaved messages are within this many of
                                  # falling out of chat.session_max_messages
+    idle_minutes: 20             # a chat left idle this long counts as ended and is saved (0 = off)
+    voice_notice: true           # in voice chats, say so before a mid-chat save
+    voice_notice_text: "One moment, I'm saving what I've learned so far."
   session_consolidate_every: 6
   session_consolidate_min_user_turns: 2
   session_consolidate_on_end: true
@@ -121,10 +124,12 @@ memory:
     host: localhost
     port: 6333
   # Temporal knowledge-graph memory (Feature 10) — structural, time-aware recall
-  # alongside vector similarity. SQLite-backed, on-device. Default off until the
-  # extraction + retrieval passes land.
+  # alongside vector similarity. SQLite-backed, on-device. On by default since
+  # T15: the memory writer keeps text memory and graph edges in step.
   graph:
-    enabled: false
+    enabled: true                # T15: memories and their graph facts are written together
+    backfill: true               # link memories saved before T15 to the graph, ~10/min while idle
+    backfill_batch: 10
     active_graph: default        # named graphs live in data/memory/graph/<name>.db
     walk_hops: 2                 # graph-walk depth during recall
     retain_history: true         # never delete; versioned supersede

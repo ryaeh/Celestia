@@ -528,8 +528,9 @@ _WS_POLL_INTERVAL = 1.0
 def _collect_state() -> dict[str, Any]:
     """Snapshot the cross-process state the shell mirrors live. All reads are
     cheap (in-memory / mtime-cached), so polling them is fine."""
-    from celestia_core import security, incognito, gpu, shell_overlay, stream_cancel
+    from celestia_core import security, incognito, gpu, shell_overlay, stream_cancel, shell_chat
 
+    saving = shell_chat.memory_saving()
     return {
         "mode": security.get_mode(),
         "mode_label": security.armed_status_label(),
@@ -538,6 +539,8 @@ def _collect_state() -> dict[str, Any]:
         "gpu_task": gpu.current_task(),
         "busy": stream_cancel.any_active(),
         "overlay_seq": shell_overlay.toggle_seq(),
+        # T15: a memory pass (checkpoint / idle / end of chat) is running.
+        "memory_saving": saving["kind"] if saving else None,
     }
 
 
@@ -841,6 +844,26 @@ def post_memory_tidy(dry_run: bool = False):
     return run_tidy(force=True, dry_run=dry_run)
 
 
+@app.post("/memory/graph/backfill")
+def post_memory_graph_backfill(batch: int = 10):
+    """Link up to ``batch`` older memories to the knowledge graph now (T15).
+    The idle loop does this in the background; this runs one batch on demand."""
+    from skills.memory.graph_backfill import backfill_step, pending
+
+    uid = _memory_user_id()
+    lines = backfill_step(uid, batch=max(1, min(batch, 50)))
+    return {"lines": lines, "pending": len(pending(uid))}
+
+
+@app.get("/chat/notes")
+def get_chat_notes(session_id: str | None = None):
+    """The working-memory notes for a chat (T15): the structured running
+    summary, how many trimmed messages sit in its archive, and whether the
+    notes are marked untrusted. Read-only."""
+    from celestia_core import shell_chat
+    return shell_chat.get_notes(session_id)
+
+
 @app.post("/memory/decay")
 def post_memory_decay(dry_run: bool = False):
     """Run the memory decay sweep now (manual trigger, bypasses the throttle).
@@ -1046,6 +1069,13 @@ def run_server_forever(port: int | None = None) -> None:
         start_tidy_daemon()
     except Exception as e:
         print(f"[tidy] idle daemon skipped: {e}")
+    try:
+        # T15: save idle chats after memory.writer.idle_minutes; link older
+        # memories to the graph in small batches while idle.
+        from celestia_core.shell_chat import start_idle_daemon
+        start_idle_daemon()
+    except Exception as e:
+        print(f"[memory] idle daemon skipped: {e}")
     try:
         from celestia_core.shell_overlay import start_overlay_hotkey_listener
         start_overlay_hotkey_listener()

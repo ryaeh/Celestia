@@ -511,7 +511,7 @@ def main() -> int:
         from skills.memory.graph_extract import extract_and_store
         from skills.memory import graph_store as graph
 
-        if not get("memory.graph.enabled", False):
+        if not get("memory.graph.enabled", True):
             print("[graph] memory.graph.enabled is false — enable it in config.yaml first.")
             return 1
         excerpt = _dialog_excerpt(shell_chat.get_history(), 0)

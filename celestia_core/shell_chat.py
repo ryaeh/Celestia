@@ -475,21 +475,111 @@ def _should_consolidate_now(state: dict[str, Any], *, end: bool = False) -> bool
 
 _CONSOLIDATION_IDLE_SECONDS = 5.0
 _passes_lock = threading.Lock()
-_passes_running: set[str] = set()
+_passes_running: dict[str, dict[str, Any]] = {}
 
 
-def _claim_pass(sid: str) -> bool:
-    """One memory pass per session at a time (a slow pass mustn't be stacked)."""
+def _claim_pass(sid: str, kind: str = "checkpoint") -> bool:
+    """One memory pass per session at a time (a slow pass mustn't be stacked).
+    ``kind`` (checkpoint / idle / end) is what the shell's notice reports."""
     with _passes_lock:
         if sid in _passes_running:
             return False
-        _passes_running.add(sid)
+        _passes_running[sid] = {"kind": kind, "since": time.time()}
         return True
 
 
 def _release_pass(sid: str) -> None:
     with _passes_lock:
-        _passes_running.discard(sid)
+        _passes_running.pop(sid, None)
+
+
+def memory_saving() -> dict[str, Any] | None:
+    """The memory pass running in this process, if any — drives the shell's
+    "Saving memories…" notice via /ws/state. ``{"kind", "since"}`` or None."""
+    with _passes_lock:
+        for info in _passes_running.values():
+            return dict(info)
+    return None
+
+
+_VOICE_NOTICE = "One moment, I'm saving what I've learned so far."
+
+
+def _voice_notice() -> None:
+    """Spoken heads-up before a mid-chat memory pass in a voice chat (the pass
+    can slow the next reply while the memory model holds the GPU)."""
+    if not get("memory.writer.voice_notice", True):
+        return
+    try:
+        from skills.tts import speak
+
+        speak(str(get("memory.writer.voice_notice_text", _VOICE_NOTICE)))
+    except Exception:
+        pass
+
+
+def idle_sweep(now: float | None = None) -> list[str]:
+    """Save the active chat's unsaved messages once it has been idle for
+    ``memory.writer.idle_minutes`` (default 20) — the "end of chat" for people
+    who just walk away. Runs on the caller's thread (the idle daemon).
+    Returns log lines; [] when nothing was due."""
+    minutes = float(get("memory.writer.idle_minutes", 20) or 0)
+    if minutes <= 0:
+        return []
+    now = time.time() if now is None else now
+    with _store_lock():
+        sid = _read_active()
+        state = _read_session(sid) if sid else None
+        if not state or not state.get("history"):
+            return []
+        start, base, head = _cursor(state)
+        history = list(state["history"])
+        idle_for = now - float(state.get("updated_at") or now)
+        if start >= len(history) or idle_for < minutes * 60:
+            return []
+        if not _claim_pass(sid, "idle"):
+            return []
+    try:
+        from skills.memory.writer_pass import consolidate
+
+        uid = get("app.user_id", "atlas_user")
+        new_start, lines = consolidate(history, uid, start_index=start, end=True)
+        with _store_lock():
+            state = _read_session(sid)
+            if state is not None:
+                _mark_consumed(state, base, head, new_start)
+                _write_session(sid, state)
+        return lines
+    finally:
+        _release_pass(sid)
+
+
+_idle_thread: threading.Thread | None = None
+
+
+def start_idle_daemon(interval: float = 60.0) -> None:
+    """Background loop: idle sweep (and, when the graph is on, a small batch
+    of linking older memories to it). Started once by the shell server."""
+    global _idle_thread
+    if _idle_thread is not None and _idle_thread.is_alive():
+        return
+
+    def _loop() -> None:
+        while True:
+            time.sleep(interval)
+            try:
+                idle_sweep()
+            except Exception as e:
+                print(f"[memory] idle sweep failed: {e}")
+            try:
+                from skills.memory.graph_backfill import backfill_step
+
+                backfill_step(get("app.user_id", "atlas_user"))
+            except Exception as e:
+                print(f"[memory] graph backfill failed: {e}")
+
+    _idle_thread = threading.Thread(target=_loop, name="memory-idle", daemon=True)
+    _idle_thread.start()
 
 
 def _run_consolidation_bg(
@@ -499,6 +589,7 @@ def _run_consolidation_bg(
     seq_base: int = 0,
     head: int = 0,
     summary: Any = None,
+    announce: bool = False,
 ) -> None:
     """Background thread: wait for idle then run the memory pass.
 
@@ -509,6 +600,8 @@ def _run_consolidation_bg(
         time.sleep(_CONSOLIDATION_IDLE_SECONDS)
         if time.time() - _last_turn_time < _CONSOLIDATION_IDLE_SECONDS - 0.5:
             return  # new turn started during the wait; the next turn re-checks
+        if announce:
+            _voice_notice()
 
         uid = get("app.user_id", "atlas_user")
         new_summary: Any = None
@@ -734,7 +827,7 @@ def _run_finalize_bg(
         pass
 
     uid = get("app.user_id", "atlas_user")
-    if _claim_pass(sid):
+    if _claim_pass(sid, "end"):
         try:
             from skills.memory.writer_pass import consolidate
 
@@ -785,6 +878,24 @@ def create_session(*, finalize_active: bool = True) -> str:
             daemon=True,
         ).start()
     return sid
+
+
+def get_notes(session_id: str | None = None) -> dict[str, Any]:
+    """Working-memory notes for the shell's "What I'm keeping in mind" panel."""
+    from skills.memory import session_summary as ss
+
+    with _store_lock():
+        sid = session_id or _resolve_active()
+        state = (_read_session(sid) if sid else None) or {}
+    notes = ss.coerce(state.get("summary"))
+    return {
+        "session_id": sid,
+        "notes": notes,
+        "empty": ss.is_empty(notes),
+        "in_use": _session_note(state) is not None,   # trimmed → sent with each turn
+        "archived": len(state.get("archive") or []),
+        "untrusted": bool(state.get("summary_tainted")),
+    }
 
 
 def get_history(session_id: str | None = None) -> list[dict[str, str]]:
@@ -865,6 +976,7 @@ def send_message(
             args=(
                 sid, consolidation_history, consolidation_start,
                 consolidation_base, consolidation_head, consolidation_summary,
+                source == "voice",
             ),
             daemon=True,
             name="celestia-consolidate",
@@ -978,6 +1090,7 @@ def send_message_stream(
             args=(
                 sid, consolidation_history, consolidation_start,
                 consolidation_base, consolidation_head, consolidation_summary,
+                source == "voice",
             ),
             daemon=True,
             name="celestia-consolidate",

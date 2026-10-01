@@ -130,7 +130,7 @@ def _result_id(result: Any) -> str | None:
 
 
 def _write_edges(memory_id: str, triples: list[dict[str, str]]) -> list[str]:
-    if not triples or not get("memory.graph.enabled", False):
+    if not triples or not get("memory.graph.enabled", True):
         return []
     from skills.memory import graph_store as gs
 
@@ -207,7 +207,7 @@ def apply_ops(
 
             if op.op == "update":
                 store.update_entry(entry["id"], text=op.text, user_id=user_id)
-                if op.triples and get("memory.graph.enabled", False):
+                if op.triples and get("memory.graph.enabled", True):
                     _end_linked(entry["id"])
                     set_links(entry["id"], _write_edges(entry["id"], op.triples))
                 append_event(action="updated", text=op.text, kind=entry.get("kind", "fact"))

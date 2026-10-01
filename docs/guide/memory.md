@@ -34,9 +34,11 @@ You don't have to say “remember” for everything. When a chat ends, one backg
 
 Repeating something she already knows changes nothing, so you don't get duplicates. Plans you mention (“I need to renew my passport”) go to the **To-do** list, not memory.
 
-- **When it runs:** when you start a new chat, delete one, or quit `-i`. In a long chat it also runs **mid-chat**: just before older messages would drop out of the chat window, or once the oldest unsaved message is an hour old.
+- **When it runs:** when you start a new chat, delete one, or quit `-i`, and when the shell's chat has sat idle for 20 minutes (`memory.writer.idle_minutes`, `0` = off). In a long chat it also runs **mid-chat**: just before older messages would drop out of the chat window, or once the oldest unsaved message is an hour old.
+- **You can keep talking:** the pass runs in the background. The shell's top bar shows **Saving memories…** while it does. In a voice chat she says so first ("One moment, I'm saving what I've learned so far"), since the next reply can be a little slower (`memory.writer.voice_notice`, `memory.writer.voice_notice_text`).
 - **Nothing is lost if the app closes mid-chat:** the session remembers how far it got (`consolidated_seq`), and the next pass picks up from there.
-- **Text and graph stay in step:** with the graph on (`memory.graph.enabled`), each memory's graph facts are linked to it (`data/memory/graph_links.json`). Replacing a memory ends its graph facts (kept as graph history), and deleting one, including from the **Memory** page, deletes them.
+- **Text and graph stay in step:** the graph is on by default (`memory.graph.enabled`). Each memory's graph facts are linked to it (`data/memory/graph_links.json`). Replacing a memory ends its graph facts (kept as graph history), and deleting one, including from the **Memory** page, deletes them.
+- **Older memories get linked too:** memories saved before this had no graph facts. While the shell is idle it works through them, about 10 a minute, and only when the GPU is free (`memory.graph.backfill`, `memory.graph.backfill_batch`; progress in `data/memory/graph_backfill.json`). `POST /memory/graph/backfill` runs one batch now.
 - Saves are **silent**: no `[memory] saved` spam in chat unless verbose is on. Changes show in the shell **Activity** page and `data/memory/activity_feed.jsonl`.
 - The pass uses `memory.session_consolidate_model` (default `qwen3.5:4b`, thinking off). `memory.pipeline: legacy` switches back to the older every-6-turns typed consolidation. How the two compare is in `evals/README.md` (Consolidation eval).
 
@@ -55,7 +57,7 @@ A chat keeps its last `chat.session_max_messages` messages (default 60) in front
 | Still open | questions and to-dos not done yet |
 | Exact details | numbers, dates, names, paths, links, commands, kept word for word |
 
-Items carry over from one update to the next unless the model marks them wrong or resolved, so details don't fade with each rewrite. Once messages have been trimmed, the notes go along with every reply.
+Items carry over from one update to the next unless the model marks them wrong or resolved, so details don't fade with each rewrite. Once messages have been trimmed, the notes go along with every reply. To see them, open the status panel in the shell's top bar (**What I'm keeping in mind**) or call `GET /chat/notes`.
 
 **Recall of trimmed messages.** Trimmed messages aren't deleted. They move to the chat's archive, and the chat page still shows the whole conversation. When your message points back at something ("what was that command you gave me earlier?"), the matching old messages are brought back for that reply. This is a simple keyword match on your machine, with no extra model call.
 
