@@ -217,11 +217,32 @@ support tools" is **skipped with a reason**, not scored (it would otherwise
 "pass" every negative case). The exit code is non-zero when any model couldn't
 be evaluated. Useful flags: `--markdown report.md` (comparison + misses),
 `--timeout 900` (CPU-only runs), `--num-ctx 8192` (try a larger context window),
+`--repeat N --temperature model` (see below),
 `--report DIR` (merge saved `toolcall-*.json` runs without re-running).
 
 Red flags matter more than the headline pass rate. `--think` / `--no-think` pass
 Ollama's `think` flag for reasoning models (omitted = model default); compare
 both, since thinking usually helps accuracy but costs latency on the hot path.
+
+### Repeats and sampling
+
+Celestia's chat loop doesn't set a temperature, so the model samples at its own
+default. A single run at temperature 0 is reproducible but **not** what users get,
+and repeating it on the same machine mostly repeats the same answers. For model
+comparisons use `--repeat 3 --temperature model`: every case is attempted three
+times with seeds 1–3, the table shows the pooled pass rate plus its **± sd** across
+repeats, and cases that pass only sometimes are listed as *unstable*. Two models
+closer than about two standard deviations aren't meaningfully different.
+
+Each run also records the Ollama version,
+time-to-first-token (load + prompt evaluation), output tokens/s and — after the
+run — how much of the model sits in VRAM (`ollama ps`). On a GPU those last three
+are what the residency plan needs.
+
+`--no-think` turns thinking off for Qwen3-style reasoning models; models without a
+thinking switch get the flag dropped automatically (noted in the output). The
+extraction eval takes `--repeat`, `--lang` and `--no-think` too; it stays at
+temperature 0 like the production extractor.
 
 ### Run it on GitHub (no local GPU needed)
 
@@ -254,6 +275,32 @@ memory requests without `memory_add`/`memory_search`, and one fabricated
 "I've updated the priority…" with no tool call (the claim detector was widened to
 catch that wording after this run). Extraction on the same runners: `llama3.2:3b`
 F1 0.273 (your local baseline: 0.284 — consistent), `qwen2.5:3b` F1 0.20.
+
+### T02 results (GitHub CPU runners, Ollama 0.35.0, Sep 30 2026)
+
+[Run on PR #132](https://github.com/ryaeh/Celestia/actions/runs/36716549317) — tool-calling
+3 repeats at the model's own temperature; extraction at temperature 0 with thinking off.
+Numbers below are the English cases (a Turkish subset was in that run and has since been
+dropped from scope).
+
+| model | tool-call pass (English) | extraction F1 (English) | median latency / case |
+|---|---:|---:|---:|
+| `qwen2.5:3b` | **0.90** | 0.11 | **3.7 s** |
+| `qwen3.5:4b` | 0.77 | **0.83** | 11.6 s |
+| `llama3.2:3b` (old default) | 0.69 | 0.18 | 5.2 s |
+
+No single small model wins both jobs, so the defaults split them: **chat `qwen2.5:3b`**,
+**background memory `qwen3.5:4b`** (`memory.session_consolidate_model`,
+`memory.background_think: false`). `qwen2.5:3b` still sometimes *claims* an action it
+didn't take ("I've updated the priority…") — watch the `claim` column.
+
+**`qwen3:4b` is out.** With thinking turned off (`think: false`) it still writes its
+reasoning into the reply ("Okay, the user wants… Let me think…"), so replies run to the
+1024-token cap: 60–400 s per case on CPU, and several tool calls never happen because
+the budget is spent thinking out loud. As a chat model it would show that monologue to
+the user. [Run 36729215905](https://github.com/ryaeh/Celestia/actions/runs/36729215905)
+hit the 5-hour job limit in its second repeat; it's no longer in the default matrix.
+`qwen3.5:4b` doesn't have this problem.
 
 ### What to benchmark
 

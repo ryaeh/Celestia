@@ -12,7 +12,7 @@ Celestia is a local AI desktop companion (primarily Windows-targeted) built in P
 |---------|---------|---------------|
 | **Ollama** | LLM inference (chat + embeddings) | `ollama serve` (background) |
 
-Ollama must be running before any Celestia commands. Pull the models named in `config.example.yaml` (`llm.chat_model` — currently `llama3.2:3b` — plus `nomic-embed-text`; `qwen2.5vl:7b` for vision). Current work plan: `docs/project/landscape-2026-09.md`.
+Ollama must be running before any Celestia commands. Pull the models named in `config.example.yaml` (`llm.chat_model` — `qwen2.5:3b`; `memory.session_consolidate_model` — `qwen3.5:4b`; `nomic-embed-text`; `qwen2.5vl:7b` for vision). Current work plan: `docs/project/landscape-2026-09.md`.
 
 ### Running the application
 

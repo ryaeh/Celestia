@@ -9,6 +9,7 @@ from typing import Any
 import ollama
 
 from celestia_core.config import get
+from skills.memory.llm import background_chat
 from skills.memory.activity_feed import append_event
 from skills.memory.store import _should_skip_memory, add, get_all_entries
 from skills.memory.types import KINDS, MemoryKind, normalize_kind
@@ -244,7 +245,7 @@ def consolidate_session_messages(
     prompt = build_prompt(known_block, excerpt)
 
     try:
-        resp = ollama.chat(
+        resp = background_chat(
             model=model,
             messages=[{"role": "user", "content": prompt}],
             options={"num_predict": 512, "temperature": 0.1},

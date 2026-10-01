@@ -232,7 +232,6 @@ def test_slug(model: str, slug: str) -> None:
 @pytest.mark.parametrize("reply", [
     "Sure thing! I've updated the priority of 'finish the thesis draft' to high.",  # real qwen2.5:3b miss
     "I have now set that to high priority.",
-    "Tamam, güncelledim.",
 ])
 def test_claim_detects_update_style_fabrications(reply: str) -> None:
     r = te.score_case(_case(expect={"tool": "todo_update"}), [], reply, _OFFERED)
@@ -242,3 +241,74 @@ def test_claim_detects_update_style_fabrications(reply: str) -> None:
 def test_claim_ignores_promises_and_questions() -> None:
     for reply in ("Got it. I'll always respond in English.", "Should I set that to high priority?"):
         assert not te.score_case(_case(expect={"tool": "memory_add"}), [], reply, _OFFERED)["claimed"]
+
+
+# ---------------------------------------------------------------------------
+# T02 additions: language tags, repeats, sampling, timing, thinking
+# ---------------------------------------------------------------------------
+
+
+def test_aggregate_reports_pass_rate_per_language() -> None:
+    rows = [
+        {**te.score_case(_case(expect=None, lang="xx"), [], "", _OFFERED), "seconds": 1.0},
+        {**te.score_case(_case(expect=None, lang="xx"), [_call("todo_list")], "", _OFFERED), "seconds": 1.0},
+        {**te.score_case(_case(expect=None), [], "", _OFFERED), "seconds": 1.0},
+    ]
+    assert te.aggregate(rows)["pass_by_lang"] == {"en": 1.0, "xx": 0.5}
+
+
+def test_repeat_spread_finds_unstable_cases() -> None:
+    def r(cid: str, rep: int, ok: bool) -> dict:
+        return {"id": cid, "repeat": rep, "passed": ok}
+
+    rows = [r("a", 0, True), r("b", 0, True), r("a", 1, True), r("b", 1, False)]
+    spread = te.repeat_spread(rows)
+    assert spread["repeats"] == 2
+    assert spread["pass_rate_by_repeat"] == [1.0, 0.5]
+    assert spread["pass_rate_sd"] == 0.25
+    assert spread["unstable_cases"] == ["b"]
+
+
+def test_parse_temperature() -> None:
+    assert te.parse_temperature("model") is None
+    assert te.parse_temperature(None) is None
+    assert te.parse_temperature("0") == 0.0
+    assert te.parse_temperature("0.7") == 0.7
+
+
+def test_chat_omits_temperature_for_model_default_and_passes_seed() -> None:
+    client = _FakeClient()
+    te._chat(client, "m", [{"role": "user", "content": "x"}], [{"t": 1}], None, None, None, 3)
+    opts = client.calls[-1]["options"]
+    assert "temperature" not in opts and opts["seed"] == 3
+
+
+def test_timing_from_ollama_durations() -> None:
+    resp = {"prompt_eval_duration": 1_500_000_000, "load_duration": 500_000_000,
+            "eval_duration": 2_000_000_000, "eval_count": 50}
+    assert te.timing(resp) == (2.0, 25.0)
+    assert te.timing({}) == (None, None)
+
+
+def test_preflight_drops_think_for_models_without_thinking() -> None:
+    class NoThink:
+        def chat(self, **kw):
+            if "think" in kw:
+                raise RuntimeError('"llama3.2:3b" does not support thinking')
+            return {"message": {"content": ""}}
+
+    err, think = te.preflight(NoThink(), "llama3.2:3b", think=False)
+    assert err == "" and think is None
+
+
+def test_resident_memory_matches_tagged_and_latest_names() -> None:
+    class PS:
+        def __init__(self, name):
+            self.name = name
+
+        def ps(self):
+            return {"models": [{"model": self.name, "size": 10, "size_vram": 8}]}
+
+    assert te.resident_memory(PS("qwen3:4b"), "qwen3:4b") == {"size_bytes": 10, "size_vram_bytes": 8}
+    assert te.resident_memory(PS("mymodel:latest"), "mymodel") == {"size_bytes": 10, "size_vram_bytes": 8}
+    assert te.resident_memory(PS("qwen3:8b"), "qwen3:4b") is None

@@ -157,6 +157,7 @@ def score_case(case: dict[str, Any], extracted: list[dict[str, Any]]) -> dict[st
 
     return {
         "id": case.get("id", "?"),
+        "lang": case.get("lang", "en"),
         "n_extracted": len(extracted),
         "n_expected": len(expected),
         "tp_precision": len(accounted),   # extracted triples that were justified
@@ -171,6 +172,27 @@ def score_case(case: dict[str, Any], extracted: list[dict[str, Any]]) -> dict[st
 
 
 def aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
+    agg = _aggregate(results)
+    langs = sorted({r.get("lang", "en") for r in results})
+    agg["f1_by_lang"] = {lang: _aggregate([r for r in results if r.get("lang", "en") == lang])["f1"]
+                         for lang in langs}
+    return agg
+
+
+def repeat_spread(results: list[dict[str, Any]]) -> dict[str, Any]:
+    """F1 per repeat (``--repeat``) and its standard deviation."""
+    import statistics
+
+    repeats = sorted({r.get("repeat", 0) for r in results})
+    per = [_aggregate([r for r in results if r.get("repeat", 0) == k])["f1"] for k in repeats]
+    return {
+        "repeats": len(repeats),
+        "f1_by_repeat": per,
+        "f1_sd": round(statistics.pstdev(per), 3) if len(per) > 1 else 0.0,
+    }
+
+
+def _aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
     tp_p = sum(r["tp_precision"] for r in results)
     n_ext = sum(r["n_extracted"] for r in results)
     tp_r = sum(r["tp_recall"] for r in results)
@@ -222,17 +244,30 @@ def _default_model() -> str:
     )
 
 
-def run_extraction(excerpt: str, model: str) -> list[dict[str, Any]]:
-    """One extraction pass with the production prompt + parser; no graph writes."""
+def run_extraction(excerpt: str, model: str, think: bool | None = None) -> list[dict[str, Any]]:
+    """One extraction pass with the production prompt + parser; no graph writes.
+
+    ``think`` is passed to Ollama only when set (``--no-think`` for Qwen3-style
+    reasoning models); a model without a thinking switch retries without it.
+    """
     import ollama
 
     from skills.memory.graph_extract import _PROMPT, _parse_relations
 
-    resp = ollama.chat(
-        model=model,
-        messages=[{"role": "user", "content": _PROMPT + excerpt}],
-        options={"num_predict": 512, "temperature": 0.0},
-    )
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "messages": [{"role": "user", "content": _PROMPT + excerpt}],
+        "options": {"num_predict": 512, "temperature": 0.0},
+    }
+    if think is not None:
+        kwargs["think"] = think
+    try:
+        resp = ollama.chat(**kwargs)
+    except Exception as e:  # noqa: BLE001
+        if think is None or "think" not in str(e).lower():
+            raise
+        kwargs.pop("think")
+        resp = ollama.chat(**kwargs)
     msg = resp.get("message") if isinstance(resp, dict) else getattr(resp, "message", None)
     raw = (msg.get("content") if isinstance(msg, dict) else getattr(msg, "content", "")) or ""
     return _parse_relations(str(raw))
@@ -249,6 +284,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cases", type=Path, default=_GOLD_PATH, help="gold JSONL path")
     parser.add_argument("--only", help="comma-separated case ids to run")
     parser.add_argument("--json", type=Path, help="write full results JSON here")
+    parser.add_argument("--lang", help="run only cases tagged with this \"lang\" (default tag: en)")
+    parser.add_argument("--repeat", type=int, default=1, help="run every case N times; report F1 spread")
+    parser.add_argument("--no-think", dest="think", action="store_false", default=None,
+                        help="turn thinking off (Qwen3-style reasoning models)")
     parser.add_argument("-v", "--verbose", action="store_true", help="print triples per case")
     args = parser.parse_args(argv)
 
@@ -259,48 +298,63 @@ def main(argv: list[str] | None = None) -> int:
         cases = [c for c in cases if c.get("id") in wanted]
         if not cases:
             raise SystemExit(f"no cases match --only {args.only}")
+    if args.lang:
+        cases = [c for c in cases if c.get("lang", "en") == args.lang]
+        if not cases:
+            raise SystemExit(f"no cases for --lang {args.lang}")
 
-    print(f"extraction eval — model: {model}, cases: {len(cases)}\n")
+    from evals.toolcall_eval import ollama_version
+    from celestia_core.config import get
+
+    version = ollama_version(get("llm.host", "http://127.0.0.1:11434"))
+    repeat = max(1, args.repeat)
+    print(f"extraction eval — model: {model}, cases: {len(cases)} × {repeat}, ollama: {version or '?'}\n")
 
     results = []
-    for case in cases:
-        started = time.monotonic()
-        extracted = run_extraction(case["excerpt"], model)
-        elapsed = time.monotonic() - started
-        r = score_case(case, extracted)
-        r["seconds"] = round(elapsed, 1)
-        results.append(r)
+    for rep in range(repeat):
+        for case in cases:
+            started = time.monotonic()
+            extracted = run_extraction(case["excerpt"], model, think=args.think)
+            elapsed = time.monotonic() - started
+            r = score_case(case, extracted)
+            r["seconds"] = round(elapsed, 1)
+            r["repeat"] = rep
+            results.append(r)
 
-        if r["is_negative"]:
-            ok = "ok  " if r["clean_negative"] else "FAIL"
-            detail = "clean" if r["clean_negative"] else f"{r['n_extracted']} spurious"
-        else:
-            full = r["tp_recall"] == r["n_expected"] and not r["spurious"]
-            ok = "ok  " if full else "MISS"
-            detail = (
-                f"recall {r['tp_recall']}/{r['n_expected']}"
-                f" · extracted {r['n_extracted']} ({len(r['spurious'])} spurious)"
-            )
-        flag = "  !! FORBIDDEN" if r["forbidden_hits"] else ""
-        print(f"  [{ok}] {r['id']:<22} {detail} ({r['seconds']}s){flag}")
-        if args.verbose:
-            for s in r["spurious"]:
-                print(f"          spurious: {s}")
-            for m in r["missed"]:
-                print(f"          missed:   {m}")
+            if r["is_negative"]:
+                ok = "ok  " if r["clean_negative"] else "FAIL"
+                detail = "clean" if r["clean_negative"] else f"{r['n_extracted']} spurious"
+            else:
+                full = r["tp_recall"] == r["n_expected"] and not r["spurious"]
+                ok = "ok  " if full else "MISS"
+                detail = (
+                    f"recall {r['tp_recall']}/{r['n_expected']}"
+                    f" · extracted {r['n_extracted']} ({len(r['spurious'])} spurious)"
+                )
+            flag = "  !! FORBIDDEN" if r["forbidden_hits"] else ""
+            print(f"  [{ok}] {r['id']:<22} {detail} ({r['seconds']}s){flag}")
+            if args.verbose:
+                for s in r["spurious"]:
+                    print(f"          spurious: {s}")
+                for m in r["missed"]:
+                    print(f"          missed:   {m}")
 
     agg = aggregate(results)
     print(
         f"\n  precision {agg['precision']}  recall {agg['recall']}  f1 {agg['f1']}"
         f"  |  negatives clean {agg['negatives_clean']}/{agg['negatives_total']}"
-        f"  |  forbidden hits {agg['forbidden_hits']}"
+        f"  |  forbidden hits {agg['forbidden_hits']}  |  f1 by lang {agg['f1_by_lang']}"
     )
+    spread = repeat_spread(results)
+    if spread["repeats"] > 1:
+        print(f"  f1 by repeat {spread['f1_by_repeat']}  sd {spread['f1_sd']}")
 
     if args.json:
         args.json.parent.mkdir(parents=True, exist_ok=True)
         args.json.write_text(
             json.dumps(
-                {"model": model, "ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "aggregate": agg, "cases": results},
+                {"model": model, "ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "ollama_version": version,
+                 "think": args.think, "aggregate": agg, "spread": spread, "cases": results},
                 indent=2,
                 ensure_ascii=False,
             ),

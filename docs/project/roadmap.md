@@ -27,16 +27,12 @@ CI workflow, an MCP client and the companion overlay bubble are in review in
 **The plan changed (Sep 2026).** A landscape review turned into a scoped task list:
 [`landscape-2026-09.md`](landscape-2026-09.md) (task IDs **T01–T14**, decisions **D1–D9**).
 Headline: **security, privacy and model choice come before new agentic features**, and
-voice must work fully locally in **Turkish and English**. The build order below follows it.
+nothing goes to the cloud silently. The build order below follows it.
 
 ### Known gaps the plan fixes first
 
-- **Model default is undecided.** `config.example.yaml` ships `llama3.2:3b`; older docs said
-  `qwen2.5:7b`. First CI evals (40 cases, 2 runs): `qwen2.5:3b` pass 0.85–0.90 with 10–12/12
-  clean negatives vs `llama3.2:3b` 0.70 with 3/12 — the current default calls tools on plain
-  chat. T02 decides with a Turkish subset and the Qwen3/3.5 candidates.
-- **Turkish speech input doesn't work on the default config** (`voice.stt.model: base.en`
-  is English-only). T05.
+- **Model split decided (T02, #132):** chat `qwen2.5:3b`, background memory `qwen3.5:4b`.
+  The old default `llama3.2:3b` kept calling tools on plain chat. GPU runs of 8–9B pending.
 - **Voice can silently go to the cloud:** an Orpheus failure falls back to Edge TTS without
   asking. T05 makes cloud voice an explicit opt-in (D5).
 - **Armed mode never expires.** T08.
@@ -50,7 +46,7 @@ Feature briefs keep their numbers (`01`–`12`); tasks are `T01`–`T14`.
 
 | Order | What | Tasks | Status |
 |-------|------|-------|--------|
-| 1 | **Security & model sprint** — evals on `main`, model re-baseline, prompt-injection eval, memory-poisoning defense, local TR+EN voice | T01 → T02, T03, T04, T05 | T01 in review (PR #117); rest open |
+| 1 | **Security & model sprint** — evals on `main`, model re-baseline, prompt-injection eval, memory-poisoning defense, no silent cloud voice | T01 → T02, T03, T04, T05 | T01 done (PR #117); T02 PR #132, T04 PR #133 in review; T03, T05 open |
 | 2 | **Finish 10 — graph** — transaction-time (`invalidated_at`, as-of queries) | T07 | Open. Store/extract/hybrid recall/tidy already shipped. |
 | 3 | **02 — Time machine** on the privacy design (event-driven, encrypted, exclusion-aware; **no timer screenshots**, D7) + **03** semantic RAG on the same index | T09 | Open. 03 v1 (keyword conversation search, #86) shipped. |
 | 4 | **11 — Operating modes, reduced** — smaller if T02 yields one chat+vision model | — | Residency substrate (`gpu.py`) shipped |
@@ -84,7 +80,7 @@ From [`landscape-2026-09.md` §2](landscape-2026-09.md#2-decisions):
 
 **Positioning:** a free, offline Windows companion on an 8–12 GB NVIDIA GPU that sees the
 screen, keeps an inspectable time-aware memory, acts only through audited, gated, undoable
-permissions, and works end-to-end in Turkish + English. If a cloud assistant or a local chat
+permissions. If a cloud assistant or a local chat
 frontend does something equally well, it's out of scope.
 
 ---
@@ -94,7 +90,7 @@ frontend does something equally well, it's out of scope.
 The two hard gates still hold:
 
 - **Gate A — eval set before LLM-stacking.** Extraction + tool-calling evals exist (T01
-  lands the second on `main`); a prompt-injection track (T03) and a Turkish subset (T02) are
+  lands the second on `main`); a prompt-injection track (T03) is
   next. Single CPU runs vary by ~±5 points — compare models on repeated runs.
 - **Gate B — privacy off-switch before the first watcher.** Incognito shipped; the time
   machine (T09) adds exclusions, encryption, retention and "forget last hour/day" before it
@@ -153,8 +149,9 @@ briefs and backlogs linked at the top.
 
 | Choice | Decision |
 |--------|----------|
-| Chat model | **Undecided until T02** (D2). `config.example.yaml` ships `llama3.2:3b`; candidates: `qwen2.5:3b` (leads the first CI evals), `qwen3:8b`, `qwen3.5:9b` (thinking off), small tier `qwen3:4b`/`qwen3.5:4b`. No always-resident 14B+ (D3). |
-| Voice | Local by default: Whisper STT + Orpheus TTS; Turkish needs a multilingual STT model and a TR TTS backend (T05). Cloud voice (Edge) only as an explicit opt-in (D5). |
+| Chat model | **`qwen2.5:3b`** (T02 CPU evals, English cases, 3 repeats: pass 0.90 vs 0.69 for the old `llama3.2:3b`, far fewer stray tool calls). 8–9B GPU candidates still to test. No always-resident 14B+ (D3). |
+| Memory model | **`qwen3.5:4b`**, thinking off, for consolidation + graph extraction (extraction F1 0.69 vs 0.07 for the chat model). Background only. |
+| Voice | Local by default: Whisper STT + Orpheus TTS. Cloud voice (Edge) only as an explicit opt-in (D5, T05). |
 | Embeddings | nomic-embed-text via Ollama |
 | Identity | Personality/tone **never** changes with modes or adaptation — she adapts *within* herself |
 | Memory | Never silently delete — rank down, supersede with history, or ask |

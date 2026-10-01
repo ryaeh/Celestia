@@ -1,10 +1,10 @@
 # Celestia
 
-> **Active development — Sep 2026: security & model sprint** (evals, model re-baseline, prompt-injection and memory-poisoning defenses, fully local Turkish + English voice). See the [roadmap](docs/project/roadmap.md).
+> **Active development — Sep 2026: security & model sprint** (evals, model re-baseline, prompt-injection and memory-poisoning defenses, no silent cloud fallbacks). See the [roadmap](docs/project/roadmap.md).
 
 A local AI companion for Windows — chat, voice, memory, screen reading, and PC control. Runs on-device via [Ollama](https://ollama.com). No API keys, no subscription.
 
-**What makes it different:** a free, offline companion for an 8–12 GB NVIDIA GPU that **sees your screen**, keeps an **inspectable, time-aware memory**, **acts only through audited, gated permissions**, and is being built to work end-to-end in **Turkish and English**.
+**What makes it different:** a free, offline companion for an 8–12 GB NVIDIA GPU that **sees your screen**, keeps an **inspectable, time-aware memory**, **acts only through audited, gated permissions**.
 
 > **Personal project.** Not accepting pull requests or issues from external contributors.  
 > Built with the help of [Claude](https://claude.ai) (Anthropic). Made with AI.
@@ -14,7 +14,7 @@ A local AI companion for Windows — chat, voice, memory, screen reading, and PC
 ## What it does
 
 - **Chat** — conversational AI with full session history and memory that persists across restarts
-- **Voice** — push-to-talk with local STT (faster-whisper) and TTS (Orpheus). *Default STT model is English-only; Turkish voice is in progress (T05).*
+- **Voice** — push-to-talk with local STT (faster-whisper) and TTS (Orpheus).
 - **Memory** — remembers facts, instructions, preferences, and tasks; distills conversations into long-term memory and a temporal knowledge graph; shows *what it was remembering* under each reply
 - **Privacy** — incognito (pause all learning), secrets scrubbed before storage, web/file/clipboard content treated as untrusted data
 - **Screen / Vision** — capture a region, window, or full screen and ask questions about it
@@ -32,11 +32,12 @@ A local AI companion for Windows — chat, voice, memory, screen reading, and PC
 
 | Layer | Technology |
 |-------|-----------|
-| Chat model | Ollama — `llama3.2:3b` (the `config.example.yaml` default). **Being re-baselined (T02):** first evals favor `qwen2.5:3b`; `qwen2.5:7b` is a common upgrade. |
+| Chat model | Ollama — `qwen2.5:3b` (fast, most reliable tool-calling of the ≤4B models tested — [evals](evals/README.md)) |
+| Memory model | Ollama — `qwen3.5:4b` for background consolidation + graph extraction (thinking off) — much better extraction than the chat model |
 | Vision | Ollama — `qwen2.5vl:7b` (general + text), `llama3.2-vision:11b` for hard cases, `moondream` fast path |
 | Embeddings | Ollama — `nomic-embed-text` |
 | Vector memory | mem0 + ChromaDB (on disk, no Docker) |
-| STT | faster-whisper — default `base.en` on CPU (**English only**); use a multilingual model (e.g. `large-v3`) on CUDA for Turkish |
+| STT | faster-whisper — default `base.en` on CPU (English); `large-v3` on CUDA for higher quality |
 | TTS | Orpheus (llama-cpp, local GPU). Edge TTS (cloud) is currently a silent fallback — becoming explicit opt-in (T05) |
 | Desktop shell | Tauri v2 + React 19 + Vite + Tailwind |
 | Shell API | FastAPI + uvicorn (`127.0.0.1:8765`) |
@@ -72,7 +73,8 @@ python -m venv venv
 .\venv\Scripts\pip install -r requirements.txt
 
 # 2. Pull the models config.example.yaml uses
-ollama pull llama3.2:3b          # chat (llm.chat_model)
+ollama pull qwen2.5:3b           # chat (llm.chat_model)
+ollama pull qwen3.5:4b           # background memory (memory.session_consolidate_model)
 ollama pull qwen2.5vl:7b         # screen reading (vision.general_model / text_model)
 ollama pull nomic-embed-text     # memory embeddings
 # optional: llama3.2-vision:11b (hard screenshots), moondream (fast vision)

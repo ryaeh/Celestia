@@ -22,7 +22,8 @@ personality:
 llm:
   provider: ollama
   host: http://127.0.0.1:11434
-  chat_model: llama3.2:3b
+  chat_model: qwen2.5:3b       # Gate A (T02): best tool-calling + fewest stray tool calls of the
+                                # CPU-tested ≤4B models; see evals/README.md. Swap freely — re-run evals.
   vision_model: llama3.2-vision:11b
   vision_text_model: qwen2.5vl:7b
   vision_fast_model: moondream
@@ -44,6 +45,12 @@ memory:
   session_consolidate_on_end: true
   session_consolidate_verbose: false
   session_consolidate_max_facts: 3
+  # Background memory model (consolidation, last-session note, graph extraction) —
+  # split from chat on purpose: qwen2.5:3b barely extracts (F1 0.07) while
+  # qwen3.5:4b scores F1 0.69 on the extraction eval. Runs off the hot path.
+  # memory.graph.extraction_model (optional) overrides it for graph extraction only.
+  session_consolidate_model: qwen3.5:4b
+  background_think: false        # Ollama `think` for those passes (off = fast; matches the eval)
   kinds_enabled: [fact, instruction, summary, task]
   scrub_secrets: true            # redact API keys, tokens, JWTs, private keys, and
                                  # Luhn-valid card numbers before anything is written
@@ -116,8 +123,7 @@ voice:
   reply_cap_voice: true          # cap voice replies to ~2 sentences (CC-98)
   stt:
     enabled: true
-    model: base.en                # base.en = fast CPU, ENGLISH ONLY (*.en models can't do Turkish);
-                                  # large-v3 = multilingual (Turkish + English), quality GPU (device: cuda)
+    model: base.en                # base.en = fast CPU; large-v3 = quality GPU
     device: cpu                   # cpu or cuda
     compute_type: int8            # int8 for cpu, float16 for cuda
     idle_unload_minutes: 10
