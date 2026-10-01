@@ -796,7 +796,7 @@ def post_memory(body: MemoryBody):
     if not text:
         return JSONResponse(status_code=400, content={"error": "text required"})
     try:
-        add(text, _memory_user_id(), kind=body.kind)
+        add(text, _memory_user_id(), kind=body.kind, origin="user")
         append_event(action="saved", text=text, kind=body.kind, source="manual")
         return {"ok": True, **_memory_list_payload()}
     except Exception as e:
@@ -882,6 +882,18 @@ def patch_memory(memory_id: str, body: MemoryPatch):
         message = result
 
     return {"ok": True, "message": message, **_memory_list_payload()}
+
+
+@app.post("/memory/{memory_id}/approve")
+def approve_memory(memory_id: str):
+    """Lift quarantine on a memory held for review (T04): it becomes live and
+    gets back the kind its writer asked for. Rejecting = DELETE /memory/{id}."""
+    from skills.memory.store import update_entry
+
+    result = update_entry(memory_id, approve=True, user_id=_memory_user_id())
+    if result == "Memory not found.":
+        return JSONResponse(status_code=404, content={"error": result})
+    return {"ok": True, "message": result, **_memory_list_payload()}
 
 
 @app.delete("/memory/{memory_id}")

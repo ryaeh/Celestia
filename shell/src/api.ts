@@ -142,6 +142,7 @@ export type ProvenanceEntry = {
   kind: string;
   text: string;
   source: "memory" | "graph";
+  origin?: string;
 };
 
 export type ChatSession = {
@@ -587,6 +588,12 @@ export type MemoryEntry = {
   importance?: number;
   recall_count?: number;
   keep?: boolean;
+  /** Where it came from: user | assistant | consolidation | screen | tool:<name> | unknown. */
+  origin?: string;
+  /** Held for review (T04): came from untrusted content; never used until approved. */
+  quarantined?: boolean;
+  /** The kind the writer asked for, when quarantine downgraded it to a fact. */
+  requested_kind?: MemoryKind | string;
 };
 
 export type DecayResult = {
@@ -651,6 +658,12 @@ export async function deleteMemoryEntry(id: string): Promise<MemoryEntry[]> {
   const r = await apiFetch(`/memory/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
+  return memoryPayload(r);
+}
+
+/** Approve a memory held for review: it goes live with the kind it asked for. */
+export async function approveMemoryEntry(id: string): Promise<MemoryEntry[]> {
+  const r = await apiFetch(`/memory/${encodeURIComponent(id)}/approve`, { method: "POST" });
   return memoryPayload(r);
 }
 
