@@ -209,9 +209,10 @@ as in production, and the **final** summary is scored:
 |---|---:|---:|---:|---:|---:|---:|---:|
 | structured (`624e4ae`) | 4/6 | 0.879 | 0.778 | 0.875 | 6/6 | 2 | 1001 |
 | prose (step-3 baseline) | 1/6 | 0.515 | 0.333 | 0.25 | 6/6 | 0 | 517 |
+| structured + fixes (`bc8b0fe`, [run 36835544674](https://github.com/ryaeh/Celestia/actions/runs/36835544674)) | 4/6 | **0.97** | **0.944** | 0.75 | 6/6 | **0** | 1119 |
 
 The structured notes keep more than twice as many early facts and exact details.
-The two structured failures led to the fixes in the next commit:
+The two failures in the first structured run led to these fixes (`bc8b0fe`):
 
 - **Topic switch:** the model `drop`ped the whole Berlin trip when the chat moved to
   the server bug. Fix: the old goal moves to an "Earlier in this chat" list (kept in
@@ -221,6 +222,11 @@ The two structured failures led to the fixes in the next commit:
   the shared scrubber now redacts plain-sentence disclosures ("my wifi password is …",
   "the PIN was …") before any memory prompt, and items that mention credentials are
   filtered out of the notes.
+
+After the fixes, early retention is 0.94 and nothing leaks. The two remaining misses were
+about detail wording: "clap 4.5" got split into "clap" and "4.5", and the flight was kept
+without its date. The prompt now asks for each detail with a short label ("flight out
+May 12", "clap 4.5") and no bare words.
 
 ## Tool-call eval
 
