@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Brain, ChevronDown, ChevronRight } from "lucide-react";
 import type { ProvenanceEntry } from "../api";
+import { originLabel } from "@/lib/memoryOrigin";
 
 /**
  * "Why did you say that?" — an expandable row under a reply showing the memory
@@ -32,6 +33,11 @@ export default function MemoryProvenance({ entries }: { entries: ProvenanceEntry
             <li key={`${e.id || e.kind}-${i}`} className="provenance-item">
               <span className={`provenance-kind provenance-kind-${e.source}`}>{e.kind}</span>
               <span className="provenance-text">{e.text}</span>
+              {originLabel(e.origin) && (
+                <span className="provenance-origin" title="Where this memory came from">
+                  from {originLabel(e.origin)}
+                </span>
+              )}
             </li>
           ))}
         </ul>

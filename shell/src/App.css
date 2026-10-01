@@ -1126,3 +1126,7 @@ html.overlay-view #root { min-height: 0; height: 100vh; }
 @media (prefers-reduced-motion: reduce) {
   .overlay-card, .overlay-mic.is-live { animation: none; }
 }
+
+/* Memory review (T04) + provenance origin */
+.memory-review { border-color: color-mix(in oklab, var(--scoped) 40%, var(--border-light)); }
+.provenance-origin { margin-left: 6px; font-size: 0.68rem; color: var(--text-dim); white-space: nowrap; }

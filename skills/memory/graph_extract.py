@@ -122,8 +122,13 @@ def extract_and_store(
     user_id: str = "default",
     source: str = "chat",
     model: str | None = None,
+    ground_in: str | None = None,
 ) -> list[str]:
     """Run one extraction pass over ``excerpt`` and write relations to the graph.
+
+    ``ground_in`` (T04): when the excerpt's window read untrusted content, pass
+    the user's own messages here — relations whose object isn't backed by them
+    are dropped, so injected text can't plant graph facts.
 
     Returns short summary lines for the verbose consolidation log. Never raises —
     extraction failures are reported as lines, not exceptions.
@@ -151,10 +156,27 @@ def extract_and_store(
     with gpu_task("graph-extract", blocking=False) as got:
         if not got:
             return ["graph extract deferred: gpu busy"]
-        return _extract_with_model(excerpt, use_model, source)
+        return _extract_with_model(excerpt, use_model, source, ground_in)
 
 
-def _extract_with_model(excerpt: str, use_model: str, source: str) -> list[str]:
+def ground_relations(relations: list[dict[str, Any]], reference: str) -> list[dict[str, Any]]:
+    """Keep relations backed by *reference* (the user's words): the object must
+    be supported, and so must the subject unless it's the user themself."""
+    from celestia_core.untrusted import supported_by
+
+    first_person = {"user", "i", "me"}
+    kept = []
+    for r in relations:
+        subject = str(r.get("subject", "")).strip().lower()
+        if not supported_by(str(r.get("object", "")), reference):
+            continue
+        if subject not in first_person and not supported_by(subject, reference):
+            continue
+        kept.append(r)
+    return kept
+
+
+def _extract_with_model(excerpt: str, use_model: str, source: str, ground_in: str | None = None) -> list[str]:
     try:
         resp = ollama.chat(
             model=use_model,
@@ -171,7 +193,15 @@ def _extract_with_model(excerpt: str, use_model: str, source: str) -> list[str]:
     if not relations:
         return []
 
+    dropped = 0
+    if ground_in is not None:
+        grounded = ground_relations(relations, ground_in)
+        dropped = len(relations) - len(grounded)
+        relations = grounded
     stored = store_relations(relations, source=source)
     if stored:
         append_event(action="graph", text=f"+{stored} relation(s) to knowledge graph", kind="fact", source="graph")
-    return [f"[graph] {r['subject']} {r['predicate']} {r['object']}" for r in relations[:stored]]
+    lines = [f"[graph] {r['subject']} {r['predicate']} {r['object']}" for r in relations[:stored]]
+    if dropped:
+        lines.append(f"(graph: dropped {dropped} relation(s) not backed by the user's words — untrusted content in window)")
+    return lines

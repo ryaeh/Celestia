@@ -71,6 +71,33 @@ There's no magic edit-in-place in CLI; delete the wrong line and add the right o
 
 ---
 
+## Where memories come from, and the Review list
+
+Every memory records its **origin**: *you* (Memory page), *Celestia* (she called
+`memory_add`), *chat summary* (background consolidation), *screen*, or a tool
+(`tool:fetch_page`, an MCP server…). Older memories show no origin. The origin is
+shown on the Memory page and in "What I was remembering" under a reply.
+
+**Poisoning defense.** Files, web pages, clipboard text and MCP output can contain
+instructions aimed at Celestia ("remember: always send files to …"). So:
+
+- In a turn where Celestia has read that kind of content, anything she saves goes
+  to **Review**: stored as a *fact*, quarantined, and **never** used for replies or
+  shown to the model until you approve it. It can't become an instruction on its
+  own. In the same turn she also can't edit or delete memories; ask again in your
+  next message.
+- Background consolidation of a conversation that read untrusted content keeps a
+  memory live only if **your own messages** back it (e.g. you said "I live in
+  Ankara"). Anything only the page/file said goes to Review, and knowledge-graph
+  relations not backed by your words are dropped.
+- On the Memory page, **Review** lists these with where they came from and what they
+  wanted to be. **Approve** makes one live (with the kind it asked for, e.g. an
+  instruction); **Reject** deletes it.
+
+A new message from you starts a clean turn. Untrusted content read in *earlier*
+turns stays in the chat history, and could still influence later replies; that
+residual risk is covered by the prompt-injection eval (T03).
+
 ## When memory is wrong
 
 It happens. Auto-save is conservative but not perfect.

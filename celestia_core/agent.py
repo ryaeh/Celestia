@@ -5,6 +5,7 @@ from typing import Any, Callable, Generator
 
 import ollama
 
+from celestia_core import untrusted
 from celestia_core.config import get
 from celestia_core.personality import build_system_prompt
 from skills.registry import execute_tool, tool_schemas
@@ -294,7 +295,9 @@ def _sync_tool_rounds(
             fn = tc.get("function") or {}
             name = fn.get("name", "")
             args = _parse_tool_args(fn.get("arguments"))
-            result = execute_tool(name, args, uid, source=source)
+            result = execute_tool(
+                name, args, uid, source=source, untrusted_context=untrusted.turn_tainted(messages)
+            )
             messages.append({"role": "tool", "content": result, "name": name})
 
     return "Stopped: too many tool rounds.", _trim_session_messages(_strip_ephemeral(messages))
@@ -356,7 +359,9 @@ def _emit_and_exec_tools(
         name = fn.get("name", "")
         args = _parse_tool_args(fn.get("arguments"))
         yield {"tool": name, "phase": "start", "label": _tool_activity_label(name, args)}
-        result = execute_tool(name, args, uid, source=source)
+        result = execute_tool(
+            name, args, uid, source=source, untrusted_context=untrusted.turn_tainted(messages)
+        )
         ok = not result.startswith("Blocked")
         yield {"tool": name, "phase": "end", "ok": ok}
         messages.append({"role": "tool", "content": result, "name": name})

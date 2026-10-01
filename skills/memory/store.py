@@ -26,7 +26,14 @@ def take_last_provenance() -> list[dict[str, Any]]:
     return prov
 
 from skills.memory.last_session import context_block as last_session_block, is_greeting
-from skills.memory.types import DEFAULT_KIND, MemoryKind, normalize_kind
+from skills.memory.types import (
+    DEFAULT_KIND,
+    ORIGIN_UNKNOWN,
+    MemoryKind,
+    normalize_kind,
+    normalize_origin,
+    trust_policy,
+)
 
 _memory = None
 _lock = threading.Lock()
@@ -43,7 +50,7 @@ def _get_cached_instructions(user_id: str) -> list[dict[str, Any]]:
     if cached and now - cached[0] < _INSTRUCTION_CACHE_TTL:
         return cached[1]
     all_entries = get_all_entries(user_id, limit=100)
-    instructions = [e for e in all_entries if e["kind"] == "instruction"]
+    instructions = [e for e in all_entries if e["kind"] == "instruction" and not e["quarantined"]]
     _INSTRUCTION_CACHE[user_id] = (now, instructions)
     return instructions
 
@@ -148,14 +155,22 @@ def _extract_created(item: dict) -> float:
 
 
 def _entry_from_item(item: dict) -> dict[str, Any]:
-    return {
+    meta = item.get("metadata") or {}
+    if not isinstance(meta, dict):
+        meta = {}
+    entry = {
         "id": item.get("id", ""),
         "text": _extract_text(item),
         "kind": _extract_kind(item),
         "updated_at": _extract_updated(item),
         "importance": _extract_importance(item),
         "created_at": _extract_created(item),
+        "origin": normalize_origin(meta.get("origin")) if meta.get("origin") else ORIGIN_UNKNOWN,
+        "quarantined": bool(meta.get("quarantined")),
     }
+    if meta.get("requested_kind"):
+        entry["requested_kind"] = normalize_kind(str(meta.get("requested_kind")))
+    return entry
 
 
 def get_all_entries(user_id: str, limit: int = 100) -> list[dict[str, Any]]:
@@ -179,22 +194,41 @@ def add(
     kind: str | MemoryKind = DEFAULT_KIND,
     infer: bool = False,
     importance: float | None = None,
+    origin: str = ORIGIN_UNKNOWN,
+    untrusted: bool = False,
+    quarantined: bool | None = None,
 ) -> dict[str, Any]:
+    """Write one memory.
+
+    ``origin`` records where it came from (``types.normalize_origin``).
+    ``untrusted=True`` (the text reached the model from a file, web page,
+    clipboard, screen or MCP server) applies ``types.trust_policy``: stored as a
+    quarantined fact, never an instruction, never injected until the user
+    approves it. ``quarantined`` overrides the policy explicitly — used when the
+    *user* approves or edits an entry on the Memory page.
+    """
     from skills.memory.ranking import default_importance
     from skills.memory.scrub import scrub_for_storage
 
     m = _get_memory()
-    k = normalize_kind(str(kind))
+    requested = normalize_kind(str(kind))
+    k, q = trust_policy(requested, untrusted=untrusted)
+    if quarantined is not None:
+        k, q = (requested, False) if not quarantined else ("fact", True)
     # Universal backstop: strip secrets before they ever reach the vector store
     # (covers consolidation, the memory_save tool, and pin-to-memory alike).
     content = scrub_for_storage(content)
     imp = float(importance) if importance is not None else default_importance(k)
-    result = m.add(
-        content,
-        user_id=user_id,
-        metadata={"kind": k, "importance": imp, "created_at": time.time()},
-        infer=infer,
-    )
+    metadata: dict[str, Any] = {
+        "kind": k,
+        "importance": imp,
+        "created_at": time.time(),
+        "origin": normalize_origin(origin),
+        "quarantined": q,
+    }
+    if q and requested != k:
+        metadata["requested_kind"] = requested
+    result = m.add(content, user_id=user_id, metadata=metadata, infer=infer)
     if k == "instruction":
         _invalidate_instruction_cache(user_id)
     return result
@@ -224,22 +258,40 @@ def _should_skip_memory(text: str) -> bool:
     return False
 
 
-def add_json(content: str, user_id: str = "default", kind: str = DEFAULT_KIND) -> str:
+def add_json(
+    content: str,
+    user_id: str = "default",
+    kind: str = DEFAULT_KIND,
+    *,
+    origin: str = ORIGIN_UNKNOWN,
+    untrusted: bool = False,
+) -> str:
     try:
-        add(content, user_id, kind=kind)
+        add(content, user_id, kind=kind, origin=origin, untrusted=untrusted)
+        if untrusted:
+            return (
+                "Saved for the user's review, not as a live memory: this turn read untrusted "
+                "content (a file, web page, clipboard or tool output), so it stays quarantined "
+                f"until the user approves it on the Memory page: {content[:80]}"
+            )
         return f"Saved ({normalize_kind(kind)}): {content[:80]}"
     except Exception as e:
         return f"Memory save failed: {e}"
 
 
-def search(query: str, user_id: str = "default", limit: int = 5) -> list[dict]:
+def search(
+    query: str, user_id: str = "default", limit: int = 5, *, include_quarantined: bool = False
+) -> list[dict]:
+    """Semantic search. Quarantined entries are excluded unless asked for —
+    they must never reach the model's context before the user approves them."""
     m = _get_memory()
     try:
         raw = m.search(query, user_id=user_id, limit=limit)
         items = raw.get("results", raw) if isinstance(raw, dict) else raw
         if not isinstance(items, list):
             return []
-        return [_entry_from_item(it) for it in items if _extract_text(it)]
+        out = [_entry_from_item(it) for it in items if _extract_text(it)]
+        return out if include_quarantined else [e for e in out if not e["quarantined"]]
     except Exception:
         return []
 
@@ -319,7 +371,11 @@ def update_entry(
     text: str | None = None,
     kind: str | None = None,
     user_id: str | None = None,
+    approve: bool = False,
 ) -> str:
+    """Edit text/kind, or ``approve=True`` to lift quarantine (restoring the
+    kind the writer originally asked for unless ``kind`` says otherwise).
+    Origin is preserved; a quarantined entry stays quarantined through edits."""
     # Resolve the entry. With a known user_id, one scan finds it; otherwise
     # _find_entry locates the owning user and entry together in a single pass.
     if user_id:
@@ -333,13 +389,19 @@ def update_entry(
         return "Memory not found."
 
     new_text = (text or entry["text"]).strip()
-    new_kind = normalize_kind(kind) if kind else entry["kind"]
+    if approve:
+        new_kind = normalize_kind(kind) if kind else entry.get("requested_kind") or entry["kind"]
+    else:
+        new_kind = normalize_kind(kind) if kind else entry["kind"]
+    quarantine_after = False if approve else entry.get("quarantined", False)
+    if quarantine_after:
+        new_kind = "fact"  # quarantined entries are facts until approved
     m = _get_memory()
 
     # In-place text update is atomic — no window where the memory is deleted but
-    # not yet re-added. A kind change touches metadata (not updatable in place),
-    # so it still requires a rewrite.
-    if new_kind == entry["kind"] and hasattr(m, "update"):
+    # not yet re-added. A kind or quarantine change touches metadata (not
+    # updatable in place), so it still requires a rewrite.
+    if new_kind == entry["kind"] and not approve and hasattr(m, "update"):
         try:
             m.update(memory_id, data=new_text)
             _invalidate_instruction_cache(uid)
@@ -351,13 +413,14 @@ def update_entry(
         m.delete(memory_id)
     except Exception:
         pass
-    add(new_text, uid, kind=new_kind)
+    add(new_text, uid, kind=new_kind, origin=entry.get("origin", ORIGIN_UNKNOWN), quarantined=quarantine_after)
     _invalidate_instruction_cache(uid)
-    return "Updated."
+    return "Approved." if approve else "Updated."
 
 
 def format_list(user_id: str = "default", *, kind: str | None = None) -> str:
-    entries = get_all_entries(user_id, limit=50)
+    # Model-facing (memory_list tool): quarantined entries stay out of context.
+    entries = [e for e in get_all_entries(user_id, limit=50) if not e["quarantined"]]
     if kind:
         k = normalize_kind(kind)
         entries = [e for e in entries if e["kind"] == k]
@@ -421,6 +484,7 @@ def build_context(query: str, user_id: str = "default") -> str:
                     "kind": "instruction",
                     "text": str(e["text"])[:240],
                     "source": "memory",
+                    "origin": e.get("origin", ORIGIN_UNKNOWN),
                     "_line": line,
                 }
             )
@@ -448,6 +512,7 @@ def build_context(query: str, user_id: str = "default") -> str:
                         "kind": str(h.get("kind") or "fact"),
                         "text": str(h["text"])[:240],
                         "source": "memory",
+                        "origin": h.get("origin", ORIGIN_UNKNOWN),
                         "_line": line,
                     }
                 )
