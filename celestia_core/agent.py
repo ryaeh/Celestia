@@ -216,8 +216,13 @@ def _prepare_messages(
     user_message: str,
     history: list[dict[str, Any]] | None,
     voice_mode: bool,
+    session_note: str | None = None,
 ) -> tuple[str, str, list[dict[str, Any]], str | None]:
     """Build the initial message list for a turn.
+
+    ``session_note`` (T15 working memory) summarizes earlier messages of this
+    chat that were trimmed out of ``history``. Like the memory context it is a
+    per-turn system message after the history, so it is never stored.
 
     Returns (uid, model, messages, early_reply_or_None).
     When early_reply_or_None is not None, the preflight fired and messages
@@ -245,6 +250,8 @@ def _prepare_messages(
         messages = _normalize_history(history) or []
         for hint in _pc_control_hints(user_message):
             messages.append(hint)
+        if session_note:
+            messages.append({"role": "system", "content": session_note})
         if mem_ctx:
             messages.append({"role": "system", "content": mem_ctx})
         if voice_mode and get("voice.reply_cap_voice", True):
@@ -410,8 +417,9 @@ def run_turn(
     source: str = "cli",
     history: list[dict[str, Any]] | None = None,
     voice_mode: bool = False,
+    session_note: str | None = None,
 ) -> tuple[str, list[dict[str, Any]]]:
-    uid, model, messages, early = _prepare_messages(user_message, history, voice_mode)
+    uid, model, messages, early = _prepare_messages(user_message, history, voice_mode, session_note)
     if early is not None:
         return early, _trim_session_messages(_strip_ephemeral(messages))
 
@@ -444,6 +452,7 @@ def run_turn_stream(
     max_tool_rounds: int = 8,
     voice_mode: bool = False,
     cancel_check: Callable[[], bool] | None = None,
+    session_note: str | None = None,
 ) -> Generator[dict[str, Any], None, None]:
     """Generator that yields token events then a final done/error event.
 
@@ -459,7 +468,7 @@ def run_turn_stream(
     Tool-call turns are handled synchronously (non-streaming) so the caller
     always receives a clean done event with the full message history.
     """
-    uid, model, messages, early = _prepare_messages(user_message, history, voice_mode)
+    uid, model, messages, early = _prepare_messages(user_message, history, voice_mode, session_note)
     if early is not None:
         yield {
             "done": True,

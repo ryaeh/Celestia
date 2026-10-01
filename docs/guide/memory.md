@@ -40,6 +40,14 @@ Repeating something she already knows changes nothing, so you don't get duplicat
 - Saves are **silent**: no `[memory] saved` spam in chat unless verbose is on. Changes show in the shell **Activity** page and `data/memory/activity_feed.jsonl`.
 - The pass uses `memory.session_consolidate_model` (default `qwen3.5:4b`, thinking off). `memory.pipeline: legacy` switches back to the older every-6-turns typed consolidation. How the two compare is in `evals/README.md` (Consolidation eval).
 
+## Long chats (working memory)
+
+A chat keeps its last `chat.session_max_messages` messages (default 60) in front of the model. Before older ones fall out, the memory checkpoint also updates a **running summary** of the whole chat. Once messages have actually been trimmed, that summary goes along with every reply ("Earlier in this conversation: …"), so a two-hour chat doesn't forget how it started.
+
+- The summary lives in the session file only. It isn't long-term memory, and it keeps working in **incognito** (where nothing is saved to memory).
+- If part of the chat read a web page or file, the summary is marked as untrusted data from then on, the same as the page itself.
+- Turn it off with `chat.session_summary: false`.
+
 ## What gets injected each reply
 
 Default: **`always_budgeted`** — she pulls a small, relevant slice of memory every turn (capped around 8 items / ~1200 characters), so she doesn't forget you but also doesn't slow down every message.

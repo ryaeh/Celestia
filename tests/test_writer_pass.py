@@ -299,3 +299,62 @@ def test_consolidate_dispatches_on_pipeline(env, monkeypatch) -> None:
     CONFIG["memory.pipeline"] = "writer"
     assert wp.consolidate(CHAT, "u", start_index=1) == (1, [])     # deferred → cursor unchanged
     assert calls == ["legacy", "writer"]
+
+
+# ---------------------------------------------------------------------------
+# Step 3 — session_pass: memory + running summary
+# ---------------------------------------------------------------------------
+
+
+def test_session_pass_writer_returns_the_writers_summary(env, monkeypatch) -> None:
+    monkeypatch.setattr(wp, "run_pass", lambda *a, **k: wp.PassResult(consumed=3, summary="The user moved to Izmir.", ran=True))
+    monkeypatch.setattr(wp, "summarize", lambda *a, **k: pytest.fail("writer already summarizes"))
+    r = wp.session_pass(CHAT, "u", summary="old")
+    assert (r.new_start, r.summary) == (3, "The user moved to Izmir.")
+
+
+def test_session_pass_writer_deferred_keeps_old_summary(env, monkeypatch) -> None:
+    monkeypatch.setattr(wp, "run_pass", lambda *a, **k: wp.PassResult(consumed=0))
+    r = wp.session_pass(CHAT, "u", start_index=1, summary="old")
+    assert (r.new_start, r.summary) == (1, "old")
+
+
+def test_session_pass_incognito_updates_summary_but_saves_nothing(env, monkeypatch) -> None:
+    monkeypatch.setattr("celestia_core.incognito.is_on", lambda: True)
+    monkeypatch.setattr(wp, "run_pass", lambda *a, **k: pytest.fail("no memory pass in incognito"))
+    monkeypatch.setattr(wp, "summarize", lambda m, s, prev: prev + " +moved")
+    r = wp.session_pass(CHAT, "u", summary="old")
+    assert r.summary == "old +moved" and r.new_start == len(CHAT) and env["mem"].rows == {}
+
+
+def test_session_pass_summary_deferred_retries_the_window(env, monkeypatch) -> None:
+    monkeypatch.setattr("celestia_core.incognito.is_on", lambda: True)
+    monkeypatch.setattr(wp, "summarize", lambda *a: None)
+    r = wp.session_pass(CHAT, "u", start_index=1, summary="old")
+    assert (r.new_start, r.summary) == (1, "old")
+
+
+def test_session_pass_legacy_consolidates_and_summarizes(env, monkeypatch) -> None:
+    CONFIG["memory.pipeline"] = "legacy"
+    monkeypatch.setattr(wp, "consolidate", lambda *a, **k: (3, ["legacy"]))
+    monkeypatch.setattr(wp, "summarize", lambda m, s, prev: "summary")
+    r = wp.session_pass(CHAT, "u")
+    assert (r.new_start, r.lines, r.summary) == (3, ["legacy"], "summary")
+
+
+def test_summarize_folds_new_messages_into_previous(env, monkeypatch) -> None:
+    seen: list = []
+    monkeypatch.setattr("celestia_core.gpu.gpu_task", lambda *a, **k: _gpu(True))
+    monkeypatch.setattr(
+        "skills.memory.llm.background_chat",
+        lambda **kw: (seen.append(kw), {"message": {"content": "- The user moved to Izmir.\n- They like it."}})[1],
+    )
+    out = wp.summarize(CHAT, 0, "The user talked about work.")
+    prompt = seen[0]["messages"][0]["content"]
+    assert "The user talked about work." in prompt and "moved to Izmir" in prompt
+    assert out == "The user moved to Izmir. They like it."      # bullets flattened
+
+
+def test_summarize_defers_when_gpu_busy(env, monkeypatch) -> None:
+    monkeypatch.setattr("celestia_core.gpu.gpu_task", lambda *a, **k: _gpu(False))
+    assert wp.summarize(CHAT, 0, "old") is None

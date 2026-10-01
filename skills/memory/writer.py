@@ -36,6 +36,7 @@ _JSON_BLOCK = re.compile(r"\{[\s\S]*\}")
 _MAX_OPS = 12
 _MAX_TEXT = 300
 _MAX_TERM = 80
+_MAX_SUMMARY = 800
 
 PROMPT = (
     "You maintain the long-term memory of a personal assistant. Read the EXISTING "
@@ -64,7 +65,9 @@ PROMPT = (
     "(something the user plans to do).\n"
     "- triples: the same information as [subject, predicate, object] with short terms; "
     'use "user" for the user. forget needs no text or triples.\n'
-    "- summary: 1-2 sentences on what this chat was about (may be empty).\n"
+    "- summary: the running summary of the WHOLE conversation so far (SESSION SUMMARY plus "
+    "NEW CHAT) in 2-4 sentences: topics, names, decisions, open questions. It replaces the "
+    "old summary. Write it even when no memory changes.\n"
     "Output: an object with \"ops\" (a list, often empty) and \"summary\". Each op has "
     "op, target (add: null), kind, text and triples, exactly as described above. Use "
     "only facts from this chat; never invent names or values.\n")
@@ -253,4 +256,34 @@ def parse_ops(raw: str, existing: set[str] | dict[str, str] | None = None) -> Wr
         if len(ops) >= _MAX_OPS:
             break
 
-    return WriterResult(ops=ops, summary=_clean(data.get("summary"), 400), dropped=dropped)
+    return WriterResult(ops=ops, summary=_clean(data.get("summary"), _MAX_SUMMARY), dropped=dropped)
+
+
+# ---------------------------------------------------------------------------
+# Running session summary (T15 step 3) — working memory for long chats
+# ---------------------------------------------------------------------------
+
+SUMMARY_PROMPT = (
+    "Update the running summary of a conversation between a user and their assistant. "
+    "You get the PREVIOUS SUMMARY (may be empty) and the NEW MESSAGES that came after it. "
+    "Write 2-4 sentences covering the whole conversation so far: topics, names, decisions, "
+    "open questions, and anything the user asked to be done later. Third person "
+    '("The user ..."). Plain text only: no lists, no headings. Never include passwords, '
+    "PINs or keys.\n"
+)
+
+
+def build_summary_prompt(transcript: str, previous: str = "") -> str:
+    return (
+        SUMMARY_PROMPT
+        + "\nPREVIOUS SUMMARY:\n"
+        + (previous.strip() or "(none)")
+        + "\n\n--- NEW MESSAGES ---\n"
+        + transcript.strip()
+    )
+
+
+def clean_summary(raw: str) -> str:
+    """Model output → one plain paragraph (bullets / headings flattened)."""
+    text = re.sub(r"^\s*(#+|[-*•]|\d+[.)])\s*", "", raw or "", flags=re.M)
+    return _clean(text, _MAX_SUMMARY)

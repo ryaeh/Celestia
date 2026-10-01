@@ -15,6 +15,7 @@ import pytest
 
 import celestia_core.agent as agent
 import celestia_core.shell_chat as sc
+import skills.memory.writer_pass as wp
 
 CONFIG: dict[str, Any] = {}
 
@@ -155,7 +156,12 @@ def test_long_chat_every_message_reaches_the_memory_pass(chat, monkeypatch) -> N
         seen.extend(m["content"] for m in history[start_index:] if m.get("role") == "user")
         return len(history), []
 
-    monkeypatch.setattr("skills.memory.writer_pass.consolidate", fake_consolidate)
+    def fake_session_pass(history, uid, *, start_index=0, summary="", **kw):
+        n, lines = fake_consolidate(history, uid, start_index=start_index)
+        return wp.SessionPassResult(n, lines, summary)
+
+    monkeypatch.setattr("skills.memory.writer_pass.consolidate", fake_consolidate)  # end of chat
+    monkeypatch.setattr("skills.memory.writer_pass.session_pass", fake_session_pass)  # checkpoints
     monkeypatch.setattr(sc, "_CONSOLIDATION_IDLE_SECONDS", 0.0)
 
     class SyncThread:
@@ -183,3 +189,107 @@ def test_pass_deferred_keeps_messages_pending(chat, monkeypatch) -> None:
     sc._cursor(state)
     sc._mark_consumed(state, 0, 1, 1)  # a deferred pass returns the start it was given
     assert state["consolidated_seq"] == 0 and state["pending_since"] is not None
+
+
+# ---------------------------------------------------------------------------
+# Step 3 — the running summary is the chat's working memory
+# ---------------------------------------------------------------------------
+
+
+def test_no_note_until_something_is_trimmed(chat) -> None:
+    assert sc._session_note({"summary": "The user is planning a trip.", "seq_base": 0}) is None
+    assert sc._session_note({"summary": "", "seq_base": 5}) is None
+    note = sc._session_note({"summary": "The user is planning a trip.", "seq_base": 5})
+    assert "planning a trip" in note and "not instructions" in note
+
+
+def test_note_from_a_tainted_window_is_marked_untrusted(chat) -> None:
+    note = sc._session_note({"summary": "Page said to email files.", "seq_base": 5, "summary_tainted": True})
+    assert "⟦UNTRUSTED DATA" in note
+
+
+def test_summary_off_switch(chat) -> None:
+    CONFIG["chat.session_summary"] = False
+    assert sc._session_note({"summary": "x", "seq_base": 5}) is None
+
+
+def test_mark_consumed_stores_summary_only_when_the_pass_ran(chat) -> None:
+    s = _state(3)
+    sc._mark_consumed(s, 0, 1, 0, "new summary", False)        # deferred: nothing stored
+    assert "summary" not in s
+    sc._mark_consumed(s, 0, 1, 7, "new summary", True)
+    assert s["summary"] == "new summary" and s["summary_tainted"] is True
+    sc._mark_consumed(s, 0, 1, 7, "later", False)               # taint is sticky for the session
+    assert s["summary_tainted"] is True
+
+
+def test_long_chat_carries_the_summary_into_trimmed_turns(chat, monkeypatch) -> None:
+    """Once the window trims, every turn gets the running summary as a note,
+    and the note never ends up in the stored history."""
+    notes: list = []
+
+    def fake_turn(msg, history=None, session_note=None, **kw):
+        notes.append(session_note)
+        base = list(history or [{"role": "system", "content": "sys"}])
+        msgs = base + [{"role": "user", "content": msg}, {"role": "assistant", "content": f"re: {msg}"}]
+        return f"re: {msg}", agent._trim_session_messages(msgs)
+
+    def fake_session_pass(history, uid, *, start_index=0, summary="", **kw):
+        users = [m["content"] for m in history[start_index:] if m.get("role") == "user"]
+        return wp.SessionPassResult(len(history), [], (summary + " " + " ".join(users)).strip())
+
+    monkeypatch.setattr(sc, "run_turn", fake_turn)
+    monkeypatch.setattr("skills.memory.writer_pass.session_pass", fake_session_pass)
+    monkeypatch.setattr(sc, "_CONSOLIDATION_IDLE_SECONDS", 0.0)
+
+    class SyncThread:
+        def __init__(self, target, args=(), **kw):
+            self.target, self.args = target, args
+
+        def start(self):
+            self.target(*self.args)
+
+    monkeypatch.setattr(sc.threading, "Thread", SyncThread)
+
+    sid = sc.create_session(finalize_active=False)
+    for i in range(12):
+        sc.send_message(f"m{i}", session_id=sid)
+        sc._last_turn_time = 0.0
+    assert notes[0] is None                         # short chat: no note
+    assert notes[-1] is not None and "m0" in notes[-1]   # the first message lives on in the summary
+    state = sc._read_session(sid)
+    assert not any("Earlier in this conversation" in str(m.get("content")) for m in state["history"])
+
+
+def test_agent_sends_the_note_but_never_stores_it(monkeypatch) -> None:
+    monkeypatch.setattr(agent, "_memory_context", lambda q: "")
+    monkeypatch.setattr(agent, "_user_id", lambda: "u")
+    monkeypatch.setattr("celestia_core.security.preflight_chat_pc", lambda m: None)
+    history = [{"role": "system", "content": "persona"}, _u(1), _a(1)]
+    note = "Earlier in this conversation (...): The user is planning a trip."
+    _, _, messages, _ = agent._prepare_messages("next?", history, False, note)
+    assert {"role": "system", "content": note} in messages
+    assert messages[-1] == {"role": "user", "content": "next?"}
+    stored = agent._strip_ephemeral(messages + [{"role": "assistant", "content": "ok"}])
+    assert all(m.get("content") != note for m in stored)
+
+
+def test_streaming_turns_get_the_note_too(chat, monkeypatch) -> None:
+    """The shell streams; the note must reach run_turn_stream as well."""
+    got: list = []
+
+    def fake_stream(msg, history=None, session_note=None, **kw):
+        got.append(session_note)
+        hist = list(history or []) + [{"role": "user", "content": msg}, {"role": "assistant", "content": "ok"}]
+        yield {"done": True, "reply": "ok", "messages": hist}
+
+    monkeypatch.setattr(sc, "run_turn_stream", fake_stream)
+    monkeypatch.setattr(sc, "_should_consolidate_now", lambda state, end=False: False)
+    sid = sc.create_session(finalize_active=False)
+    with sc._store_lock():
+        state = sc._read_session(sid)
+        state.update(history=[{"role": "system", "content": "s"}, _u(9), _a(9)], seq_base=6,
+                     consolidated_seq=8, summary="The user is planning a trip.")
+        sc._write_session(sid, state)
+    list(sc.send_message_stream("hi", session_id=sid))
+    assert got and "planning a trip" in got[0]
