@@ -156,7 +156,7 @@ def test_long_chat_every_message_reaches_the_memory_pass(chat, monkeypatch) -> N
         seen.extend(m["content"] for m in history[start_index:] if m.get("role") == "user")
         return len(history), []
 
-    def fake_session_pass(history, uid, *, start_index=0, summary="", **kw):
+    def fake_session_pass(history, uid, *, start_index=0, summary=None, **kw):
         n, lines = fake_consolidate(history, uid, start_index=start_index)
         return wp.SessionPassResult(n, lines, summary)
 
@@ -234,9 +234,10 @@ def test_long_chat_carries_the_summary_into_trimmed_turns(chat, monkeypatch) -> 
         msgs = base + [{"role": "user", "content": msg}, {"role": "assistant", "content": f"re: {msg}"}]
         return f"re: {msg}", agent._trim_session_messages(msgs)
 
-    def fake_session_pass(history, uid, *, start_index=0, summary="", **kw):
+    def fake_session_pass(history, uid, *, start_index=0, summary=None, **kw):
         users = [m["content"] for m in history[start_index:] if m.get("role") == "user"]
-        return wp.SessionPassResult(len(history), [], (summary + " " + " ".join(users)).strip())
+        prev = (summary or {}).get("facts", [])
+        return wp.SessionPassResult(len(history), [], {"goal": "Testing", "facts": prev + users})
 
     monkeypatch.setattr(sc, "run_turn", fake_turn)
     monkeypatch.setattr("skills.memory.writer_pass.session_pass", fake_session_pass)
@@ -258,7 +259,7 @@ def test_long_chat_carries_the_summary_into_trimmed_turns(chat, monkeypatch) -> 
     assert notes[0] is None                         # short chat: no note
     assert notes[-1] is not None and "m0" in notes[-1]   # the first message lives on in the summary
     state = sc._read_session(sid)
-    assert not any("Earlier in this conversation" in str(m.get("content")) for m in state["history"])
+    assert not any("Notes on this conversation" in str(m.get("content")) for m in state["history"])
 
 
 def test_agent_sends_the_note_but_never_stores_it(monkeypatch) -> None:
@@ -266,7 +267,7 @@ def test_agent_sends_the_note_but_never_stores_it(monkeypatch) -> None:
     monkeypatch.setattr(agent, "_user_id", lambda: "u")
     monkeypatch.setattr("celestia_core.security.preflight_chat_pc", lambda m: None)
     history = [{"role": "system", "content": "persona"}, _u(1), _a(1)]
-    note = "Earlier in this conversation (...): The user is planning a trip."
+    note = "Notes on this conversation so far (...):\nGoal: The user is planning a trip."
     _, _, messages, _ = agent._prepare_messages("next?", history, False, note)
     assert {"role": "system", "content": note} in messages
     assert messages[-1] == {"role": "user", "content": "next?"}
@@ -293,3 +294,99 @@ def test_streaming_turns_get_the_note_too(chat, monkeypatch) -> None:
         sc._write_session(sid, state)
     list(sc.send_message_stream("hi", session_id=sid))
     assert got and "planning a trip" in got[0]
+
+
+def test_structured_summary_is_rendered_into_the_note(chat) -> None:
+    note = sc._session_note({"seq_base": 4, "summary": {
+        "goal": "Plan a Berlin trip", "now": "Debugging the server",
+        "details": ["Flight May 12", "Port 9000"], "open": ["Renew passport"]}})
+    assert note.startswith("Notes on this conversation so far")
+    for part in ("Goal: Plan a Berlin trip", "Right now: Debugging the server", "- Flight May 12", "Still open:"):
+        assert part in note
+    assert sc._session_note({"seq_base": 4, "summary": {"goal": "", "facts": []}}) is None
+
+
+# ---------------------------------------------------------------------------
+# Archive + recall — trimmed messages are kept and come back when referred to
+# ---------------------------------------------------------------------------
+
+
+def test_trimmed_messages_move_to_the_archive(chat) -> None:
+    sys_ = {"role": "system", "content": "s"}
+    tool = {"role": "tool", "content": "raw tool output"}
+    state: dict[str, Any] = {"history": [sys_, _u(1), tool, _a(1), _u(2), _a(2)]}
+    sc._record_turn(state, [sys_, _u(2), _a(2), _u(3), _a(3)])         # u1, tool, a1 trimmed
+    assert [(m["role"], m["content"], m["seq"]) for m in state["archive"]] == [("user", "u1", 0), ("assistant", "a1", 2)]
+    assert state["seq_base"] == 3
+
+
+def test_archive_cap(chat) -> None:
+    CONFIG["chat.archive_max_messages"] = 3
+    sys_ = {"role": "system", "content": "s"}
+    state: dict[str, Any] = {"history": [sys_] + [_u(i) for i in range(6)]}
+    sc._record_turn(state, [sys_, _u(5)])
+    assert [m["content"] for m in state["archive"]] == ["u2", "u3", "u4"]
+
+
+def test_whole_chat_stays_visible_after_trimming(chat, monkeypatch) -> None:
+    monkeypatch.setattr(sc, "_should_consolidate_now", lambda state, end=False: False)
+    sid = sc.create_session(finalize_active=False)
+    for i in range(12):
+        sc.send_message(f"m{i}", session_id=sid)
+    shown = [m["content"] for m in sc.get_history(sid) if m["role"] == "user"]
+    assert shown == [f"m{i}" for i in range(12)]                       # window is 10 messages
+    assert len(sc._read_session(sid)["history"]) <= 11              # system prompt + last 10
+    assert any(r["id"] == sid for r in sc.search_sessions("m0"))       # search sees the archive too
+
+
+ARCHIVE = [
+    {"role": "user", "content": "my shell server says address already in use on port 8765", "seq": 0},
+    {"role": "assistant", "content": "Find the process with: netstat -ano | findstr 8765", "seq": 1},
+    {"role": "user", "content": "I'm hosting dinner on Saturday for six people", "seq": 2},
+    {"role": "assistant", "content": "Fun! Any dietary restrictions?", "seq": 3},
+]
+
+
+def test_recall_brings_back_the_matching_exchange(chat) -> None:
+    note = sc._recall_note({"archive": ARCHIVE}, "what was that netstat command you gave me earlier?")
+    assert note.startswith("From earlier in this chat")
+    assert "netstat -ano | findstr 8765" in note and "[User] my shell server" in note   # with its question
+    assert "dinner" not in note
+
+
+def test_recall_needs_two_terms_without_a_back_reference(chat) -> None:
+    assert sc._recall_note({"archive": ARCHIVE}, "is the server ok") is None          # one weak term
+    assert sc._recall_note({"archive": ARCHIVE}, "dinner on Saturday, should I make soup?") is not None
+    assert sc._recall_note({"archive": ARCHIVE}, "tell me a joke") is None
+
+
+def test_recall_is_marked_untrusted_after_a_tainted_window(chat) -> None:
+    note = sc._recall_note({"archive": ARCHIVE, "summary_tainted": True}, "which port was it again? 8765?")
+    assert "⟦UNTRUSTED DATA" in note
+
+
+def test_recall_off_switch_and_turn_notes(chat) -> None:
+    state = {"archive": ARCHIVE, "seq_base": 4, "summary": {"goal": "Fix the server"}}
+    both = sc._turn_notes(state, "what was the netstat command again?")
+    assert "Goal: Fix the server" in both and "netstat -ano" in both
+    CONFIG["chat.recall_archived"] = False
+    assert "netstat" not in sc._turn_notes(state, "what was the netstat command again?")
+
+
+def test_recall_reaches_the_turn(chat, monkeypatch) -> None:
+    got: list = []
+
+    def fake_turn(msg, history=None, session_note=None, **kw):
+        got.append(session_note)
+        return "ok", list(history or []) + [{"role": "user", "content": msg}, {"role": "assistant", "content": "ok"}]
+
+    monkeypatch.setattr(sc, "run_turn", fake_turn)
+    monkeypatch.setattr(sc, "_should_consolidate_now", lambda state, end=False: False)
+    sid = sc.create_session(finalize_active=False)
+    with sc._store_lock():
+        state = sc._read_session(sid)
+        state.update(history=[{"role": "system", "content": "s"}, _u(9), _a(9)], archive=ARCHIVE, seq_base=4,
+                     consolidated_seq=6)
+        sc._write_session(sid, state)
+    sc.send_message("what was the netstat command you gave me earlier?", session_id=sid)
+    assert got and "netstat -ano" in got[0]

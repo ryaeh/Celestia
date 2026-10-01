@@ -326,8 +326,10 @@ def consolidate(
     start_index: int = 0,
     end: bool = False,
     extract_graph: bool = True,
+    summary: str = "",
 ) -> tuple[int, list[str]]:
     """Drop-in for ``consolidate_session_messages``: returns (new_start, lines).
+    ``summary`` (rendered running summary) is context for the writer.
 
     With the writer pipeline a deferred pass returns ``start_index`` unchanged so
     the same window is retried at the next checkpoint or at the end of the chat.
@@ -338,7 +340,7 @@ def consolidate(
         return consolidate_session_messages(
             messages, user_id, start_index=start_index, end=end, extract_graph=extract_graph
         )
-    result = run_pass(messages, user_id, start_index=start_index)
+    result = run_pass(messages, user_id, start_index=start_index, summary=summary)
     return (result.consumed or start_index), result.lines
 
 
@@ -352,7 +354,7 @@ def consolidate(
 class SessionPassResult:
     new_start: int          # messages[:new_start] are done (== start_index when deferred)
     lines: list[str]
-    summary: str            # the running summary after this pass (unchanged when deferred)
+    summary: Any            # running summary after this pass (session_summary state; unchanged when deferred)
     tainted: bool = False   # this window read untrusted content
 
 
@@ -362,10 +364,12 @@ def _window_tainted(messages: list[dict[str, Any]], start_index: int) -> bool:
     return any(m.get("role") == "tool" and is_wrapped(m.get("content")) for m in messages[start_index:])
 
 
-def summarize(messages: list[dict[str, Any]], start_index: int, previous: str = "") -> str | None:
-    """Fold ``messages[start_index:]`` into the running summary with a small
-    dedicated call. Used when the memory writer doesn't run (incognito, memory
-    saving off, legacy pipeline). Returns None when deferred (GPU busy / error)."""
+def summarize(messages: list[dict[str, Any]], start_index: int, previous: Any = None) -> Any | None:
+    """Fold ``messages[start_index:]`` into the structured running summary
+    (``session_summary``: goal / now / facts / decisions / open / details, with
+    carry-over). Returns the new state dict, ``previous`` unchanged when there's
+    nothing to add, or None when deferred (GPU busy / model error)."""
+    from skills.memory import session_summary as ss
     from skills.memory.scrub import scrub_for_storage
 
     text = transcript(messages, start_index)
@@ -373,7 +377,6 @@ def summarize(messages: list[dict[str, Any]], start_index: int, previous: str = 
         return previous
     from celestia_core.gpu import gpu_task
     from skills.memory.llm import background_chat
-    from skills.memory.writer import build_summary_prompt, clean_summary
 
     with gpu_task("session-summary", blocking=False) as got:
         if not got:
@@ -381,14 +384,18 @@ def summarize(messages: list[dict[str, Any]], start_index: int, previous: str = 
         try:
             resp = background_chat(
                 model=_model(),
-                messages=[{"role": "user", "content": build_summary_prompt(scrub_for_storage(text), previous)}],
-                options={"num_predict": 300, "temperature": 0.0},
+                messages=[{"role": "user", "content": ss.build_prompt(scrub_for_storage(text), previous)}],
+                format=ss.OUTPUT_SCHEMA,
+                options={"num_predict": 900, "temperature": 0.0},
             )
         except Exception:
             return None
     msg = resp.get("message") if isinstance(resp, dict) else getattr(resp, "message", None)
     raw = (msg.get("content") if isinstance(msg, dict) else getattr(msg, "content", "")) or ""
-    return clean_summary(str(raw)) or previous
+    update = ss.parse(str(raw))
+    if update is None:
+        return previous
+    return ss.merge(previous, update)
 
 
 def session_pass(
@@ -396,37 +403,40 @@ def session_pass(
     user_id: str,
     *,
     start_index: int = 0,
-    summary: str = "",
+    summary: Any = None,
     end: bool = False,
     extract_graph: bool = True,
 ) -> SessionPassResult:
     """One checkpoint over ``messages[start_index:]``: long-term memory (when
-    allowed) and the session's running summary (``chat.session_summary``).
+    allowed) and the session's structured running summary (``chat.session_summary``).
 
-    Writer pipeline: one call does both. Otherwise (incognito, memory saving
-    off, or the legacy pipeline) the summary gets its own small call, so working
-    memory keeps up even while long-term memory is paused.
+    The summary has its own call (``summarize``) whatever the memory pipeline:
+    it keeps working memory going in incognito / with saving off, and keeps the
+    memory writer's prompt as the eval measured it. At the end of a chat only
+    memory runs — the summary has no one left to serve.
     """
     tainted = _window_tainted(messages, start_index)
-    want_summary = bool(get("chat.session_summary", True))
+    want_summary = bool(get("chat.session_summary", True)) and not end
 
-    if pipeline() == "writer" and pass_allowed(messages, start_index):
-        r = run_pass(messages, user_id, start_index=start_index, summary=summary)
-        if not r.consumed:
-            return SessionPassResult(start_index, r.lines, summary)
-        return SessionPassResult(r.consumed, r.lines, r.summary or summary, tainted)
+    from skills.memory import session_summary as ss
 
-    new_start, lines = len(messages), []
-    if pipeline() == "legacy":
+    new_start, lines, memory_ran = len(messages), [], False
+    if pass_allowed(messages, start_index) or pipeline() == "legacy":
+        context = ss.render(summary) if summary else ""
         new_start, lines = consolidate(
-            messages, user_id, start_index=start_index, end=end, extract_graph=extract_graph
+            messages, user_id, start_index=start_index, end=end,
+            extract_graph=extract_graph, summary=context,
         )
-    if want_summary and not end:
+        if new_start == start_index and new_start < len(messages):
+            return SessionPassResult(start_index, lines, summary)   # memory pass deferred: retry all
+        memory_ran = True
+
+    if want_summary:
         updated = summarize(messages, start_index, summary)
         if updated is None:
-            if pipeline() != "legacy":
+            if not memory_ran:
                 return SessionPassResult(start_index, ["summary deferred"], summary)
-            lines.append("summary deferred")  # legacy memory already advanced
+            lines.append("summary deferred")  # memory already advanced; summary skips this window
         else:
             summary = updated
     return SessionPassResult(new_start, lines, summary, tainted)

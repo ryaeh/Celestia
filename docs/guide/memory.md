@@ -42,11 +42,27 @@ Repeating something she already knows changes nothing, so you don't get duplicat
 
 ## Long chats (working memory)
 
-A chat keeps its last `chat.session_max_messages` messages (default 60) in front of the model. Before older ones fall out, the memory checkpoint also updates a **running summary** of the whole chat. Once messages have actually been trimmed, that summary goes along with every reply ("Earlier in this conversation: …"), so a two-hour chat doesn't forget how it started.
+A chat keeps its last `chat.session_max_messages` messages (default 60) in front of the model. Two things stop a long chat from forgetting how it started:
 
-- The summary lives in the session file only. It isn't long-term memory, and it keeps working in **incognito** (where nothing is saved to memory).
-- If part of the chat read a web page or file, the summary is marked as untrusted data from then on, the same as the page itself.
-- Turn it off with `chat.session_summary: false`.
+**Notes on the chat so far.** At each memory checkpoint a background step updates structured notes:
+
+| Field | Holds |
+|---|---|
+| Goal | what the chat is about |
+| Right now | what you're in the middle of |
+| Facts from the user | things you said in this chat |
+| Decided | what was agreed or chosen |
+| Still open | questions and to-dos not done yet |
+| Exact details | numbers, dates, names, paths, links, commands, kept word for word |
+
+Items carry over from one update to the next unless the model marks them wrong or resolved, so details don't fade with each rewrite. Once messages have been trimmed, the notes go along with every reply.
+
+**Recall of trimmed messages.** Trimmed messages aren't deleted. They move to the chat's archive, and the chat page still shows the whole conversation. When your message points back at something ("what was that command you gave me earlier?"), the matching old messages are brought back for that reply. This is a simple keyword match on your machine, with no extra model call.
+
+- Both live in the session file only. They aren't long-term memory, and they keep working in **incognito**.
+- If part of the chat read a web page or file, the notes and recalled messages are marked as untrusted data from then on.
+- Switches: `chat.session_summary`, `chat.recall_archived`, `chat.archive_max_messages`.
+- How well the notes keep early details is measured by `evals/summary_eval.py`.
 
 ## What gets injected each reply
 

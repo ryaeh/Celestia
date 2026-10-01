@@ -306,15 +306,32 @@ def test_consolidate_dispatches_on_pipeline(env, monkeypatch) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_session_pass_writer_returns_the_writers_summary(env, monkeypatch) -> None:
-    monkeypatch.setattr(wp, "run_pass", lambda *a, **k: wp.PassResult(consumed=3, summary="The user moved to Izmir.", ran=True))
-    monkeypatch.setattr(wp, "summarize", lambda *a, **k: pytest.fail("writer already summarizes"))
-    r = wp.session_pass(CHAT, "u", summary="old")
-    assert (r.new_start, r.summary) == (3, "The user moved to Izmir.")
+def test_session_pass_runs_memory_then_its_own_summary(env, monkeypatch) -> None:
+    calls: list = []
+    monkeypatch.setattr(wp, "consolidate", lambda *a, **k: (calls.append(("memory", k.get("summary"))), (3, ["[add] x"]))[1])
+    monkeypatch.setattr(wp, "summarize", lambda m, s, prev: (calls.append(("summary", prev)), {"goal": "Moving"})[1])
+    r = wp.session_pass(CHAT, "u", summary={"goal": "Old goal"})
+    assert (r.new_start, r.summary) == (3, {"goal": "Moving"})
+    assert calls[0] == ("memory", "Goal: Old goal")          # writer gets the summary as context
+    assert calls[1] == ("summary", {"goal": "Old goal"})
+
+
+def test_session_pass_memory_done_summary_deferred_still_advances(env, monkeypatch) -> None:
+    monkeypatch.setattr(wp, "consolidate", lambda *a, **k: (3, []))
+    monkeypatch.setattr(wp, "summarize", lambda *a: None)
+    r = wp.session_pass(CHAT, "u", summary={"goal": "Old"})
+    assert (r.new_start, r.summary) == (3, {"goal": "Old"}) and "summary deferred" in r.lines
+
+
+def test_session_pass_end_of_chat_skips_the_summary(env, monkeypatch) -> None:
+    monkeypatch.setattr(wp, "consolidate", lambda *a, **k: (3, []))
+    monkeypatch.setattr(wp, "summarize", lambda *a: pytest.fail("no summary at end of chat"))
+    assert wp.session_pass(CHAT, "u", end=True).new_start == 3
 
 
 def test_session_pass_writer_deferred_keeps_old_summary(env, monkeypatch) -> None:
     monkeypatch.setattr(wp, "run_pass", lambda *a, **k: wp.PassResult(consumed=0))
+    monkeypatch.setattr(wp, "summarize", lambda *a: pytest.fail("memory deferred → retry the whole window"))
     r = wp.session_pass(CHAT, "u", start_index=1, summary="old")
     assert (r.new_start, r.summary) == (1, "old")
 
@@ -344,15 +361,19 @@ def test_session_pass_legacy_consolidates_and_summarizes(env, monkeypatch) -> No
 
 def test_summarize_folds_new_messages_into_previous(env, monkeypatch) -> None:
     seen: list = []
+    update = {"goal": "Moving house", "now": "Talking about the new place", "facts": ["The user moved to Izmir"],
+              "decisions": [], "open": [], "details": ["Moved last weekend"], "drop": []}
     monkeypatch.setattr("celestia_core.gpu.gpu_task", lambda *a, **k: _gpu(True))
     monkeypatch.setattr(
         "skills.memory.llm.background_chat",
-        lambda **kw: (seen.append(kw), {"message": {"content": "- The user moved to Izmir.\n- They like it."}})[1],
+        lambda **kw: (seen.append(kw), {"message": {"content": json.dumps(update)}})[1],
     )
-    out = wp.summarize(CHAT, 0, "The user talked about work.")
+    prev = {"goal": "Work chat", "details": ["Port 9000"]}
+    out = wp.summarize(CHAT, 0, prev)
     prompt = seen[0]["messages"][0]["content"]
-    assert "The user talked about work." in prompt and "moved to Izmir" in prompt
-    assert out == "The user moved to Izmir. They like it."      # bullets flattened
+    assert "PREVIOUS NOTES:\nGoal: Work chat" in prompt and "moved to Izmir" in prompt
+    assert seen[0]["format"]["required"][0] == "goal"           # schema-constrained
+    assert out["goal"] == "Moving house" and out["details"] == ["Port 9000", "Moved last weekend"]  # carry-over
 
 
 def test_summarize_defers_when_gpu_busy(env, monkeypatch) -> None:

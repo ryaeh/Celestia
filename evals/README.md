@@ -178,6 +178,29 @@ Latest: [run 36768684847](https://github.com/ryaeh/Celestia/actions/runs/3676868
 `tests/test_consolidation_eval.py` builds a perfect answer from every case's
 specs and checks it passes, so a mislabeled case fails CI offline.
 
+## Summary eval (T15 working memory)
+
+Scores the running summary that keeps long chats from forgetting their start.
+Each case in `summary_gold.jsonl` is a chat cut into 2–4 checkpoints; the
+summarizer runs once per checkpoint (previous summary + that window), exactly
+as in production, and the **final** summary is scored:
+
+| metric | meaning |
+|---|---|
+| retention | expected facts still present at the end (`early retention`: the ones from the first checkpoint) |
+| exact | exact values (`exact` list: numbers, dates, paths, commands) kept verbatim |
+| now | the summary knows what the chat is on at the end |
+| forbidden | secrets, hypotheticals-as-decisions, invented content |
+| avg chars | size of what's sent with each turn |
+
+```powershell
+.\venv\Scripts\python.exe -m evals.summary_eval --model qwen3.5:4b              # structured vs prose
+.\venv\Scripts\python.exe -m evals.summary_eval --model qwen3.5:4b --pipeline structured -v
+```
+
+`structured` is `skills/memory/session_summary.py` (fields + carry-over);
+`prose` is the earlier plain-paragraph summary, kept as the baseline.
+
 ## Tool-call eval
 
 Scores how reliably a chat model picks the right tool — or correctly picks

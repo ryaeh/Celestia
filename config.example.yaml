@@ -9,10 +9,15 @@ app:
 chat:
   session_enabled: true
   session_max_messages: 60
-  # Working memory for long chats: once older messages fall out of the window
-  # above, a running summary of the chat so far is sent with each turn. Kept
-  # in the session file only (also in incognito); updated at memory checkpoints.
+  # Working memory for long chats. Once older messages fall out of the window
+  # above, each turn gets structured notes on the chat so far (goal, what's
+  # happening now, facts, decisions, open items, exact details), updated at
+  # memory checkpoints. Session file only — also kept in incognito.
   session_summary: true
+  # Trimmed messages are archived in the session (the chat page still shows the
+  # whole chat) and recalled for a turn when the new message refers to them.
+  recall_archived: true
+  archive_max_messages: 2000
   consolidate_before_delete: true  # when deleting a chat, distill it into long-term
                                     # memory first so what she learned survives — only
                                     # the raw transcript is removed (false = hard delete)
