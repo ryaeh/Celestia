@@ -201,6 +201,27 @@ as in production, and the **final** summary is scored:
 `structured` is `skills/memory/session_summary.py` (fields + carry-over);
 `prose` is the earlier plain-paragraph summary, kept as the baseline.
 
+### Summary results (GitHub CPU runners, Oct 1 2026)
+
+[Run 36828362108](https://github.com/ryaeh/Celestia/actions/runs/36828362108), `qwen3.5:4b`, thinking off:
+
+| pipeline | passed | retention | early retention | exact | now | forbidden | avg chars |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| structured (`624e4ae`) | 4/6 | 0.879 | 0.778 | 0.875 | 6/6 | 2 | 1001 |
+| prose (step-3 baseline) | 1/6 | 0.515 | 0.333 | 0.25 | 6/6 | 0 | 517 |
+
+The structured notes keep more than twice as many early facts and exact details.
+The two structured failures led to the fixes in the next commit:
+
+- **Topic switch:** the model `drop`ped the whole Berlin trip when the chat moved to
+  the server bug. Fix: the old goal moves to an "Earlier in this chat" list (kept in
+  code), facts and details lose at most 3 items per update, and the prompt says a
+  topic change is not a reason to drop.
+- **Password:** "my portal password is Tulip#2291" was kept as an exact detail. Fix:
+  the shared scrubber now redacts plain-sentence disclosures ("my wifi password is …",
+  "the PIN was …") before any memory prompt, and items that mention credentials are
+  filtered out of the notes.
+
 ## Tool-call eval
 
 Scores how reliably a chat model picks the right tool — or correctly picks

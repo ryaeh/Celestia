@@ -27,6 +27,17 @@ import re
 from typing import Any
 
 LIST_FIELDS: dict[str, int] = {"facts": 10, "decisions": 8, "open": 8, "details": 12}
+# Kept by code, not written by the model: earlier goals, so a topic switch
+# doesn't erase what the chat was about before.
+TOPICS_CAP = 5
+# Most items a single update may drop from these fields. A model that "cleans
+# up" after a topic switch can't wipe them; real corrections are rarely more.
+DROP_CAP = {"facts": 3, "details": 3}
+# Items that talk about credentials never belong in the notes, whatever the
+# model writes (values are already scrubbed before the prompt; this catches the rest).
+_SECRETISH = re.compile(
+    r"(?i)\[REDACTED|\b(password|passcode|passphrase|pin code|api key|secret key|access token)\b"
+)
 TEXT_FIELDS = ("goal", "now")
 _MAX_ITEM = 180
 _MAX_TEXT = 240
@@ -39,13 +50,16 @@ PROMPT = (
     "- goal: what this conversation is about overall (one short sentence).\n"
     "- now: what is being worked on at the end of the NEW MESSAGES (one short sentence).\n"
     "- facts: things the USER stated in this conversation (short, third person: \"The user ...\").\n"
-    "- decisions: what was agreed, chosen or concluded.\n"
+    "- decisions: what the USER chose or agreed to. An assistant suggestion is not a "
+    "decision unless the user accepted it.\n"
     "- open: questions still unanswered and things still to do. When one is answered or "
     "done, put it in drop and add the outcome to decisions.\n"
     "- details: exact values worth keeping word for word: numbers, names, dates, times, "
     "prices, file paths, URLs, commands, error messages, versions. Copy them exactly.\n"
     "- drop: items from the PREVIOUS NOTES that are now wrong, replaced or resolved "
-    "(copy the item text exactly). Anything not dropped is kept automatically.\n"
+    "(copy the item text exactly). Anything not dropped is kept automatically. A change "
+    "of topic is NOT a reason to drop: a conversation can cover several topics, and the "
+    "earlier ones still matter.\n"
     "Rules:\n"
     "- Only what was actually said. Do not guess or add advice.\n"
     "- Never include passwords, PINs, API keys or other secrets.\n"
@@ -66,7 +80,7 @@ OUTPUT_SCHEMA: dict[str, Any] = {
 
 
 def empty() -> dict[str, Any]:
-    return {"goal": "", "now": "", **{f: [] for f in LIST_FIELDS}}
+    return {"goal": "", "now": "", **{f: [] for f in LIST_FIELDS}, "topics": []}
 
 
 def coerce(summary: Any) -> dict[str, Any]:
@@ -81,12 +95,13 @@ def coerce(summary: Any) -> dict[str, Any]:
         out[f] = _clean(summary.get(f), _MAX_TEXT)
     for f, cap in LIST_FIELDS.items():
         out[f] = _clean_list(summary.get(f))[-cap:]
+    out["topics"] = _clean_list(summary.get("topics"))[-TOPICS_CAP:]
     return out
 
 
 def is_empty(summary: Any) -> bool:
     s = coerce(summary)
-    return not any(s[f] for f in (*TEXT_FIELDS, *LIST_FIELDS))
+    return not any(s[f] for f in (*TEXT_FIELDS, *LIST_FIELDS, "topics"))
 
 
 def _clean(value: Any, limit: int) -> str:
@@ -98,7 +113,7 @@ def _clean(value: Any, limit: int) -> str:
 def _clean_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
-    return [c for c in (_clean(v, _MAX_ITEM) for v in value) if c]
+    return [c for c in (_clean(v, _MAX_ITEM) for v in value) if c and not _SECRETISH.search(c)]
 
 
 def _key(text: str) -> str:
@@ -142,6 +157,10 @@ def parse(raw: str) -> dict[str, Any] | None:
     if not isinstance(data, dict):
         return None
     out = coerce(data)
+    out.pop("topics", None)  # code-maintained; the model doesn't write it
+    for f in TEXT_FIELDS:
+        if _SECRETISH.search(out[f]):
+            out[f] = ""
     out["drop"] = _clean_list(data.get("drop"))
     return out
 
@@ -151,26 +170,36 @@ def merge(previous: Any, update: dict[str, Any]) -> dict[str, Any]:
 
     Lists: every previous item the model neither restated nor dropped (carry-over),
     then the model's items, deduplicated; the oldest go first when over the cap.
-    A resolved ``open`` item leaves only via ``drop`` — omission isn't enough.
+    A resolved ``open`` item leaves only via ``drop`` — omission isn't enough —
+    and ``facts`` / ``details`` lose at most ``DROP_CAP`` items per update.
     Text fields: the update's value, or the previous one when it came back empty.
+    When the goal changes, the old goal moves to ``topics``.
     """
     prev = coerce(previous)
     drops = update.get("drop") or []
     out = empty()
     for f in TEXT_FIELDS:
         out[f] = update.get(f) or prev[f]
+    topics = list(prev["topics"])
+    if prev["goal"] and out["goal"] and not _same_item(prev["goal"], out["goal"]):
+        if not any(_same_item(prev["goal"], t) for t in topics):
+            topics.append(prev["goal"])
+    out["topics"] = topics[-TOPICS_CAP:]
     for f, cap in LIST_FIELDS.items():
         new_items: list[str] = []
         for item in update.get(f) or []:
             if not any(_same_item(item, x) for x in new_items):
                 new_items.append(item)
-        kept = [
-            p for p in prev[f]
-            if not any(_same_item(p, d) for d in drops)
-            and not any(_same_item(p, n) for n in new_items)
-        ]
-        merged = kept + new_items  # oldest first, so the cap trims the oldest
-        out[f] = merged[-cap:]
+        budget = DROP_CAP.get(f, len(prev[f]))
+        kept: list[str] = []
+        for p in prev[f]:
+            if any(_same_item(p, n) for n in new_items):
+                continue  # restated: the new wording replaces it
+            if budget > 0 and any(_same_item(p, d) for d in drops):
+                budget -= 1
+                continue
+            kept.append(p)
+        out[f] = (kept + new_items)[-cap:]  # oldest first, so the cap trims the oldest
     return out
 
 
@@ -181,6 +210,7 @@ _LABELS = {
     "decisions": "Decided",
     "open": "Still open",
     "details": "Exact details",
+    "topics": "Earlier in this chat",
 }
 
 
@@ -191,7 +221,7 @@ def render(summary: Any) -> str:
     for f in TEXT_FIELDS:
         if s[f]:
             lines.append(f"{_LABELS[f]}: {s[f]}")
-    for f in LIST_FIELDS:
+    for f in (*LIST_FIELDS, "topics"):
         if s[f]:
             lines.append(f"{_LABELS[f]}:")
             lines.extend(f"- {item}" for item in s[f])

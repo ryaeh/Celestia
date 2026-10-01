@@ -3,7 +3,8 @@
 The "privacy-guardian lite" cheap-80% of Feature 08 (the full anomaly monitor is
 descoped/late). A regex pass over text headed for long-term storage replaces
 high-confidence, high-cost secrets — private keys, JWTs, prefixed API keys/tokens,
-``password = ...`` style assignments, and Luhn-valid card numbers — with a stable
+``password = ...`` style assignments, plain-sentence disclosures ("my wifi
+password is …"), and Luhn-valid card numbers — with a stable
 ``[REDACTED:<kind>]`` placeholder.
 
 Two layers use it:
@@ -51,13 +52,22 @@ _KEY_PREFIXED = re.compile(
 )
 
 # name=value / name: value where the name signals a credential. Keeps the name,
-# redacts only the value. Deliberately requires an explicit ``=``/``:`` (config,
-# code, .env, JSON) — natural-language forms ("my password is …") are left alone
-# to avoid mangling prose, per the false-positives-over-recall bias.
+# redacts only the value (config, code, .env, JSON). Plain-sentence forms are
+# handled by the narrower _SPOKEN below.
 _ASSIGNMENT = re.compile(
     r"(?i)\b(password|passwd|pwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token"
     r"|client[_-]?secret|bearer)\b"
     r"(\s*[:=]\s*)"
+    r"(['\"]?)([^\s'\"]{4,})\3"
+)
+
+# Natural-language disclosures: "my password is X", "wifi password: X", "the PIN
+# was X". Narrow on purpose — a credential noun, then is/was/:/=, then a 4+
+# character token — so "my pin is in the drawer" or "password manager" stay.
+_SPOKEN = re.compile(
+    r"(?i)\b((?:wi-?fi |portal |account |admin |email |bank )?"
+    r"(?:password|passcode|passphrase|pin(?: code)?|wi-?fi key|api key|secret key|access token))"
+    r"(\s+(?:is|was)\s+|\s*[:=]\s*)"
     r"(['\"]?)([^\s'\"]{4,})\3"
 )
 
@@ -105,6 +115,13 @@ def scrub_secrets(text: str) -> tuple[str, list[str]]:
         return f"{m.group(1)}{m.group(2)}{_redact('credential')}"
 
     out = _ASSIGNMENT.sub(_assign_repl, out)
+
+    def _spoken_repl(m: re.Match) -> str:
+        if m.group(4).startswith("[REDACTED"):
+            return m.group(0)
+        return f"{m.group(1)}{m.group(2)}{_redact('credential')}"
+
+    out = _SPOKEN.sub(_spoken_repl, out)
 
     def _card_repl(m: re.Match) -> str:
         digits = re.sub(r"\D", "", m.group(0))

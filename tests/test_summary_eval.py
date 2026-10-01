@@ -131,3 +131,47 @@ def test_main_end_to_end_with_stub(monkeypatch, tmp_path) -> None:
     assert se.main(["--model", "stub", "--only", "trip-then-code", "--json", str(out)]) == 0
     runs = {r["pipeline"]: r["aggregate"] for r in json.loads(out.read_text(encoding="utf-8"))["runs"]}
     assert runs["structured"]["early_retention"] > runs["prose"]["early_retention"]
+
+
+# ---------------------------------------------------------------------------
+# Fixes from the first real run (qwen3.5:4b): topic switch, drop-all, secrets
+# ---------------------------------------------------------------------------
+
+
+def test_topic_switch_moves_the_old_goal_to_topics() -> None:
+    s = ss.merge(ss.empty(), _upd(goal="Planning a Berlin trip in May"))
+    s = ss.merge(s, _upd(goal="Fixing the Celestia shell server port"))
+    assert s["goal"] == "Fixing the Celestia shell server port"
+    assert s["topics"] == ["Planning a Berlin trip in May"]
+    assert "Earlier in this chat:\n- Planning a Berlin trip in May" in ss.render(s)
+
+
+def test_a_cleanup_cannot_wipe_facts_and_details() -> None:
+    facts = [f"The user said thing {i}" for i in range(6)]
+    s = ss.merge(ss.empty(), _upd(facts=facts, details=["Flight May 12", "Budget 900 EUR", "Hotel Alexanderplatz", "Port 8765"]))
+    s = ss.merge(s, _upd(drop=facts + ["Flight May 12", "Budget 900 EUR", "Hotel Alexanderplatz", "Port 8765"]))
+    assert len(s["facts"]) == 3 and len(s["details"]) == 1      # DROP_CAP = 3 per field
+    s2 = ss.merge(ss.empty(), _upd(open=["a", "b", "c", "d", "e"]))
+    assert ss.merge(s2, _upd(drop=["a", "b", "c", "d", "e"]))["open"] == []   # open items resolve freely
+
+
+def test_credential_items_never_survive_parse() -> None:
+    u = _upd(details=["Tulip#2291", "Portal password Tulip#2291", "[REDACTED:credential]", "October 15"],
+             decisions=["Store the portal password in a password manager"], goal="password is Tulip#2291")
+    assert u["details"] == ["Tulip#2291", "October 15"]   # bare value can't be recognized here…
+    assert u["decisions"] == [] and u["goal"] == ""
+
+
+def test_spoken_passwords_are_scrubbed_before_the_prompt() -> None:
+    """…which is why the value is scrubbed out of the transcript first."""
+    from skills.memory.scrub import scrub_secrets
+
+    for text, keep in [
+        ("my application portal password is Tulip#2291 in case I forget", "Tulip#2291"),
+        ("my wifi password is sunflower2024 btw", "sunflower2024"),
+        ("the PIN was 4821.", "4821"),
+    ]:
+        out, found = scrub_secrets(text)
+        assert keep not in out and found == ["credential"], out
+    for text in ("my pin is in the drawer", "use a password manager for that", "I forgot my password again"):
+        assert scrub_secrets(text) == (text, [])
