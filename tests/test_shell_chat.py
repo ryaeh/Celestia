@@ -271,7 +271,7 @@ def test_delete_consolidates_history_before_removal(chat_tmp, stub_run_turn, mon
     before the file is removed, so the learnings survive the delete."""
     captured: list[tuple] = []
     monkeypatch.setattr(
-        sc, "_run_finalize_bg", lambda sid, history, start: captured.append((sid, history, start))
+        sc, "_run_finalize_bg", lambda sid, history, start, *_cursor: captured.append((sid, history, start))
     )
     sid = sc.create_session(finalize_active=False)
     sc.send_message("remember the dentist is on Tuesday", session_id=sid)

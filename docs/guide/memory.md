@@ -23,14 +23,22 @@ She also keeps a separate **last session** note (`data/memory/last_session.json`
 
 ## Auto-save (happens in the background)
 
-You don't have to say “remember” for everything. After enough chat turns, she quietly extracts facts, summaries, tasks, and instructions from the conversation.
+You don't have to say “remember” for everything. When a chat ends, one background pass reads it next to the memories she already has and decides what changes:
 
-- Saves are **silent** — no `[memory] saved` spam in chat (unless you turn verbose on in config).
-- What got saved shows up in the shell **Memory** page, or in `data/memory/activity_feed.jsonl` if you want to peek at the log.
+| Change | When |
+|--------|------|
+| **add** | something new you told her that no memory covers |
+| **update** | a memory is still true but you added detail (“my sister Elif…”) |
+| **replace** | a memory stopped being true (you moved, changed jobs, reversed a rule). The old one goes to `data/memory/history.jsonl` |
+| **forget** | you said it was wrong or asked her to forget it. It's deleted, not kept as history |
 
-On **new chat** or when you quit `-i`, she consolidates what's left and updates the last-session note.
+Repeating something she already knows changes nothing, so you don't get duplicates. Plans you mention (“I need to renew my passport”) go to the **To-do** list, not memory.
 
----
+- **When it runs:** when you start a new chat, delete one, or quit `-i`. In a long chat it also runs **mid-chat**: just before older messages would drop out of the chat window, or once the oldest unsaved message is an hour old.
+- **Nothing is lost if the app closes mid-chat:** the session remembers how far it got (`consolidated_seq`), and the next pass picks up from there.
+- **Text and graph stay in step:** with the graph on (`memory.graph.enabled`), each memory's graph facts are linked to it (`data/memory/graph_links.json`). Replacing a memory ends its graph facts (kept as graph history), and deleting one, including from the **Memory** page, deletes them.
+- Saves are **silent**: no `[memory] saved` spam in chat unless verbose is on. Changes show in the shell **Activity** page and `data/memory/activity_feed.jsonl`.
+- The pass uses `memory.session_consolidate_model` (default `qwen3.5:4b`, thinking off). `memory.pipeline: legacy` switches back to the older every-6-turns typed consolidation. How the two compare is in `evals/README.md` (Consolidation eval).
 
 ## What gets injected each reply
 
@@ -45,8 +53,11 @@ memory:
   inject: always_budgeted   # always_budgeted | smart | off
   inject_max_lines: 8
   inject_max_chars: 1200
-  session_consolidate_mode: auto
-  session_consolidate_every: 6
+  session_consolidate_mode: auto      # auto | explicit (only when you say "remember") | off
+  pipeline: writer                    # writer (default) | legacy
+  writer:
+    checkpoint_minutes: 60            # mid-chat pass once the oldest unsaved message is this old
+    trim_margin: 12
 ```
 
 - **smart** — only inject when the message looks memory-related

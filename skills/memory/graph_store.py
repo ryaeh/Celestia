@@ -423,6 +423,56 @@ def end_relation(subject: str, predicate: str, obj: str, *, at: float | None = N
         return cur.rowcount > 0
 
 
+def end_edges(edge_ids: list[str], *, at: float | None = None) -> int:
+    """Close specific current edges by id (``valid_until`` stamped, rows kept).
+
+    Used by the T15 memory writer when the text memory an edge was derived from
+    is superseded or updated: its graph facts become history alongside it.
+    Returns how many edges were ended.
+    """
+    ids = [e for e in edge_ids if e]
+    if not ids:
+        return 0
+    ts = at if at is not None else _now()
+    marks = ",".join("?" * len(ids))
+    with _write_lock:
+        conn = _get_conn()
+        cur = conn.execute(
+            f"UPDATE edges SET valid_until = ? WHERE id IN ({marks}) AND valid_until IS NULL",
+            (ts, *ids),
+        )
+        conn.commit()
+        return cur.rowcount
+
+
+def forget_edges(edge_ids: list[str]) -> int:
+    """Delete specific edges by id — the one destructive operation, reserved for
+    the user's own "forget this" / "that was wrong" (the fact shouldn't survive
+    even as history). Nodes are left; they carry no facts on their own.
+    Returns how many edges were deleted.
+    """
+    ids = [e for e in edge_ids if e]
+    if not ids:
+        return 0
+    marks = ",".join("?" * len(ids))
+    with _write_lock:
+        conn = _get_conn()
+        cur = conn.execute(f"DELETE FROM edges WHERE id IN ({marks})", ids)
+        conn.commit()
+        return cur.rowcount
+
+
+def get_edges(edge_ids: list[str]) -> list[dict[str, Any]]:
+    """Edges by id (current or ended), in no particular order."""
+    ids = [e for e in edge_ids if e]
+    if not ids:
+        return []
+    conn = _get_conn()
+    marks = ",".join("?" * len(ids))
+    rows = conn.execute(f"SELECT * FROM edges WHERE id IN ({marks})", ids).fetchall()
+    return [_edge_dict(conn, r) for r in rows]
+
+
 # ---------------------------------------------------------------------------
 # Queries
 # ---------------------------------------------------------------------------

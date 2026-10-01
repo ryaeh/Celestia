@@ -12,6 +12,13 @@ const ACTION_COLOR: Record<string, string> = {
   add:          "text-[var(--safe)] bg-[var(--safe)]/10",
   update:       "text-[var(--scoped)] bg-[var(--scoped)]/10",
   consolidate:  "text-[var(--text-muted)] bg-[var(--bg-panel)]",
+  // T15 memory writer
+  saved:        "text-[var(--safe)] bg-[var(--safe)]/10",
+  updated:      "text-[var(--scoped)] bg-[var(--scoped)]/10",
+  replaced:     "text-[var(--scoped)] bg-[var(--scoped)]/10",
+  forgot:       "text-[var(--armed)] bg-[var(--armed)]/10",
+  "added to-do": "text-[var(--accent-bright)] bg-[var(--accent-glow)]",
+  "held for review": "text-[var(--armed)] bg-[var(--armed)]/10",
 };
 
 function actionColor(action: string): string {

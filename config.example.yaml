@@ -40,6 +40,17 @@ memory:
   activity_feed_path: data/memory/activity_feed.jsonl
   session_consolidate: true
   session_consolidate_mode: auto
+  # T15 memory pipeline. writer = one pass (session_consolidate_model) that reads
+  # the chat + your existing memories and adds / updates / replaces / forgets
+  # them, writing text memory and the graph together. Runs at the end of a chat
+  # and at mid-chat checkpoints. legacy = the older every-N-turns typed
+  # consolidation + separate graph extraction (session_consolidate_every,
+  # _min_user_turns and _max_facts apply to legacy only).
+  pipeline: writer
+  writer:
+    checkpoint_minutes: 60       # mid-chat pass once the oldest unsaved message is this old
+    trim_margin: 12              # ...or when unsaved messages are within this many of
+                                 # falling out of chat.session_max_messages
   session_consolidate_every: 6
   session_consolidate_min_user_turns: 2
   session_consolidate_on_end: true

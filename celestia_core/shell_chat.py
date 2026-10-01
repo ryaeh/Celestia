@@ -103,7 +103,10 @@ def _new_session_state() -> dict[str, Any]:
         "title": "New chat",
         "updated_at": time.time(),
         "history": None,
-        "consolidate_from": 0,
+        # T15 memory cursor — see _cursor(): absolute message numbers.
+        "seq_base": 0,
+        "consolidated_seq": 0,
+        "pending_since": None,
         "turn_count": 0,
     }
 
@@ -200,8 +203,106 @@ def _ui_messages(history: list[dict[str, Any]] | None) -> list[dict[str, str]]:
     return out
 
 
+# ---------------------------------------------------------------------------
+# Memory checkpoints (T15)
+#
+# The cursor is *absolute*: ``consolidated_seq`` counts non-system messages
+# since the chat began, and ``seq_base`` is the absolute number of the first
+# non-system message still in ``history``. The agent trims old messages from
+# the front of long chats, which shifts list indexes; absolute numbers don't
+# move, so trimming can never make the memory pass skip (or redo) a message.
+# ---------------------------------------------------------------------------
+
+
+def _head_len(history: list[dict[str, Any]]) -> int:
+    n = 0
+    for m in history:
+        if m.get("role") != "system":
+            break
+        n += 1
+    return n
+
+
+def _msg_key(m: dict[str, Any]) -> str:
+    return json.dumps(m, sort_keys=True, ensure_ascii=False, default=str)
+
+
+def _dropped_count(old: list[dict[str, Any]] | None, new: list[dict[str, Any]]) -> int:
+    """How many non-system messages the turn trimmed from the front of ``old``.
+
+    ``agent._trim_session_messages`` only ever drops from the front (after the
+    leading system messages), so ``old[d:]`` must be a prefix of ``new``.
+    """
+    o = [_msg_key(m) for m in (old or [])[_head_len(old or []):]]
+    n = [_msg_key(m) for m in new[_head_len(new):]]
+    for d in range(len(o) + 1):
+        rest = o[d:]
+        if n[: len(rest)] == rest:
+            return d
+    return len(o)
+
+
+def _cursor(state: dict[str, Any]) -> tuple[int, int, int]:
+    """(start index into history, seq_base, head length) for the next pass.
+
+    Migrates the pre-T15 index cursor (``consolidate_from``) on first use.
+    """
+    history = state.get("history") or []
+    head = _head_len(history)
+    base = int(state.get("seq_base") or 0)
+    if "consolidated_seq" not in state:
+        state["consolidated_seq"] = base + max(0, int(state.get("consolidate_from") or 0) - head)
+    done = int(state["consolidated_seq"])
+    return min(head + max(0, done - base), len(history)), base, head
+
+
+def _record_turn(state: dict[str, Any], new_history: list[dict[str, Any]]) -> None:
+    """Store a turn's history, advancing ``seq_base`` past anything trimmed."""
+    _cursor(state)  # migrate before the history (and its indexes) change
+    state["seq_base"] = int(state.get("seq_base") or 0) + _dropped_count(state.get("history"), new_history)
+    state["history"] = new_history
+    state["turn_count"] = int(state.get("turn_count") or 0) + 1
+    if not state.get("pending_since"):
+        state["pending_since"] = time.time()
+
+
+def _mark_consumed(state: dict[str, Any], seq_base: int, head: int, new_start: int) -> None:
+    """Advance the cursor after a pass over a snapshot taken at ``seq_base``."""
+    _cursor(state)
+    done = seq_base + max(0, new_start - head)
+    if done > int(state["consolidated_seq"]):
+        state["consolidated_seq"] = done
+    start, _, _ = _cursor(state)
+    if start >= len(state.get("history") or []):
+        state["pending_since"] = None
+
+
+def _checkpoint_reason(state: dict[str, Any]) -> str | None:
+    """Why a mid-chat memory pass should run now (writer pipeline), or None.
+
+    - ``trim``: unsaved messages are about to fall out of the session window
+      (``chat.session_max_messages``) within the next few turns.
+    - ``time``: the oldest unsaved message is older than
+      ``memory.writer.checkpoint_minutes`` (a long chat).
+    The end of a chat is handled by session finalize, not here.
+    """
+    history = state.get("history") or []
+    start, _, head = _cursor(state)
+    if start >= len(history):
+        return None
+    max_msgs = int(get("chat.session_max_messages", 60))
+    margin = int(get("memory.writer.trim_margin", 12))
+    if (start - head) < (len(history) - max_msgs + margin):
+        return "trim"
+    minutes = float(get("memory.writer.checkpoint_minutes", 60) or 0)
+    since = state.get("pending_since")
+    if minutes > 0 and since and time.time() - float(since) >= minutes * 60:
+        return "time"
+    return None
+
+
 def _should_consolidate_now(state: dict[str, Any], *, end: bool = False) -> bool:
-    """Check — while holding the store lock — whether consolidation should run."""
+    """Check — while holding the store lock — whether a background pass should run."""
     history = state.get("history")
     if not history:
         return False
@@ -210,11 +311,15 @@ def _should_consolidate_now(state: dict[str, Any], *, end: bool = False) -> bool
         consolidate_mode,
         should_run_consolidation,
     )
+    from skills.memory.writer_pass import pipeline
 
     if consolidate_mode() == "off" or not get("memory.session_consolidate", True):
         return False
 
-    start = int(state.get("consolidate_from") or 0)
+    if pipeline() == "writer":
+        return _checkpoint_reason(state) is not None
+
+    start, _, _ = _cursor(state)
     if not should_run_consolidation(history, start_index=start, end=end):
         return False
 
@@ -228,42 +333,61 @@ def _should_consolidate_now(state: dict[str, Any], *, end: bool = False) -> bool
 
 
 _CONSOLIDATION_IDLE_SECONDS = 5.0
+_passes_lock = threading.Lock()
+_passes_running: set[str] = set()
+
+
+def _claim_pass(sid: str) -> bool:
+    """One memory pass per session at a time (a slow pass mustn't be stacked)."""
+    with _passes_lock:
+        if sid in _passes_running:
+            return False
+        _passes_running.add(sid)
+        return True
+
+
+def _release_pass(sid: str) -> None:
+    with _passes_lock:
+        _passes_running.discard(sid)
 
 
 def _run_consolidation_bg(
     sid: str,
     history: list[dict[str, Any]],
     start_index: int,
+    seq_base: int = 0,
+    head: int = 0,
 ) -> None:
-    """Background thread: wait for idle then run LLM consolidation.
+    """Background thread: wait for idle then run the memory pass.
 
     Sleeps briefly so a new turn arriving immediately after the done event
     cancels the pass — avoiding GPU contention with an in-flight chat request.
     """
-    time.sleep(_CONSOLIDATION_IDLE_SECONDS)
-    if time.time() - _last_turn_time < _CONSOLIDATION_IDLE_SECONDS - 0.5:
-        return  # new turn started during the wait; skip this pass
-
-    uid = get("app.user_id", "atlas_user")
     try:
-        from skills.memory.session_consolidate import consolidate_session_messages
+        time.sleep(_CONSOLIDATION_IDLE_SECONDS)
+        if time.time() - _last_turn_time < _CONSOLIDATION_IDLE_SECONDS - 0.5:
+            return  # new turn started during the wait; the next turn re-checks
 
-        new_start, stored_lines = consolidate_session_messages(
-            history, uid, start_index=start_index
-        )
-    except Exception as e:
-        stored_lines = [f"consolidate error: {e}"]
-        new_start = start_index
+        uid = get("app.user_id", "atlas_user")
+        try:
+            from skills.memory.writer_pass import consolidate
 
-    with _store_lock():
-        state = _read_session(sid)
-        if state is not None:
-            state["consolidate_from"] = new_start
-            _write_session(sid, state)
+            new_start, stored_lines = consolidate(history, uid, start_index=start_index)
+        except Exception as e:
+            stored_lines = [f"consolidate error: {e}"]
+            new_start = start_index
 
-    if stored_lines and get("memory.session_consolidate_verbose", False):
-        for line in stored_lines:
-            print(f"[memory] saved: {line}")
+        with _store_lock():
+            state = _read_session(sid)
+            if state is not None:
+                _mark_consumed(state, seq_base, head, new_start)
+                _write_session(sid, state)
+
+        if stored_lines and get("memory.session_consolidate_verbose", False):
+            for line in stored_lines:
+                print(f"[memory] {line}")
+    finally:
+        _release_pass(sid)
 
 
 def _maybe_consolidate(state: dict[str, Any], *, end: bool = False) -> list[str]:
@@ -274,25 +398,23 @@ def _maybe_consolidate(state: dict[str, Any], *, end: bool = False) -> list[str]
 
     from skills.memory.session_consolidate import (
         consolidate_mode,
-        consolidate_session_messages,
         should_run_consolidation,
     )
+    from skills.memory.writer_pass import consolidate
 
     if consolidate_mode() == "off" or not get("memory.session_consolidate", True):
         return []
 
-    start = int(state.get("consolidate_from") or 0)
+    start, base, head = _cursor(state)
     if not should_run_consolidation(history, start_index=start, end=end):
         return []
 
     uid = get("app.user_id", "atlas_user")
-    # Graph extraction is a background-only deep pass — never block session
-    # finalize (new chat / switch chat) on the extra LLM call. The background
-    # consolidation pass handles graph relations during active chatting.
-    new_start, stored = consolidate_session_messages(
-        history, uid, start_index=start, extract_graph=False
-    )
-    state["consolidate_from"] = new_start
+    # Legacy: graph extraction is a background-only deep pass — never block
+    # session finalize on the extra LLM call. The writer pipeline writes the
+    # graph from the same single call, so the flag doesn't apply to it.
+    new_start, stored = consolidate(history, uid, start_index=start, end=end, extract_graph=False)
+    _mark_consumed(state, base, head, new_start)
     return stored
 
 
@@ -450,9 +572,11 @@ def _finalize_session(state: dict[str, Any]) -> None:
         pass
 
 
-def _run_finalize_bg(sid: str, history: list[dict[str, Any]], start: int) -> None:
-    """Background end-of-session finalize: last-session note + consolidation
-    (typed memory + knowledge graph). Kept off the create_session path so
+def _run_finalize_bg(
+    sid: str, history: list[dict[str, Any]], start: int, seq_base: int = 0, head: int = 0
+) -> None:
+    """Background end-of-session finalize: last-session note + the memory pass
+    (text memory + knowledge graph). Kept off the create_session path so
     starting a new chat returns immediately instead of blocking on the LLM.
     """
     try:
@@ -463,19 +587,20 @@ def _run_finalize_bg(sid: str, history: list[dict[str, Any]], start: int) -> Non
         pass
 
     uid = get("app.user_id", "atlas_user")
-    try:
-        from skills.memory.session_consolidate import consolidate_session_messages
+    if _claim_pass(sid):
+        try:
+            from skills.memory.writer_pass import consolidate
 
-        new_start, _ = consolidate_session_messages(
-            history, uid, start_index=start, end=True, extract_graph=True
-        )
-        with _store_lock():
-            state = _read_session(sid)
-            if state is not None and new_start != int(state.get("consolidate_from") or 0):
-                state["consolidate_from"] = new_start
-                _write_session(sid, state)
-    except Exception:
-        pass
+            new_start, _ = consolidate(history, uid, start_index=start, end=True, extract_graph=True)
+            with _store_lock():
+                state = _read_session(sid)
+                if state is not None:
+                    _mark_consumed(state, seq_base, head, new_start)
+                    _write_session(sid, state)
+        except Exception:
+            pass
+        finally:
+            _release_pass(sid)
 
     # Memory lifecycle step 3: throttled decay-delete of memories that earned no
     # keep. Internally gated by memory.decay.enabled + a once-per-interval throttle,
@@ -491,7 +616,7 @@ def _run_finalize_bg(sid: str, history: list[dict[str, Any]], start: int) -> Non
 def create_session(*, finalize_active: bool = True) -> str:
     finalize_sid: str | None = None
     finalize_history: list[dict[str, Any]] = []
-    finalize_start = 0
+    finalize_start = finalize_base = finalize_head = 0
     with _store_lock():
         active_id = _resolve_active()
         if finalize_active and active_id:
@@ -499,7 +624,7 @@ def create_session(*, finalize_active: bool = True) -> str:
             if state is not None and state.get("history"):
                 finalize_sid = active_id
                 finalize_history = list(state["history"])
-                finalize_start = int(state.get("consolidate_from") or 0)
+                finalize_start, finalize_base, finalize_head = _cursor(state)
         sid = str(uuid.uuid4())
         _write_session(sid, _new_session_state())
         _write_active(sid)
@@ -508,7 +633,7 @@ def create_session(*, finalize_active: bool = True) -> str:
     if finalize_sid:
         threading.Thread(
             target=_run_finalize_bg,
-            args=(finalize_sid, finalize_history, finalize_start),
+            args=(finalize_sid, finalize_history, finalize_start, finalize_base, finalize_head),
             name="finalize-session",
             daemon=True,
         ).start()
@@ -563,20 +688,20 @@ def send_message(
     run_consolidation_bg: bool = False
     consolidation_history: list[dict[str, Any]] = []
     consolidation_start: int = 0
+    consolidation_base = consolidation_head = 0
 
     with _store_lock():
         # Re-read the single session so a concurrent consolidation write
-        # (consolidate_from) is preserved rather than clobbered.
+        # (the memory cursor) is preserved rather than clobbered.
         state = _read_session(sid) or _new_session_state()
         if use_session:
-            state["history"] = new_history
-            state["turn_count"] = int(state.get("turn_count") or 0) + 1
+            _record_turn(state, new_history)
             # Check whether to consolidate — do it in a background thread so it
             # does not block the response being returned to the user (CC-94).
-            if _should_consolidate_now(state):
+            if _should_consolidate_now(state) and _claim_pass(sid):
                 run_consolidation_bg = True
                 consolidation_history = list(state["history"])
-                consolidation_start = int(state.get("consolidate_from") or 0)
+                consolidation_start, consolidation_base, consolidation_head = _cursor(state)
         state["updated_at"] = time.time()
         _write_session(sid, state)
         _write_active(sid)
@@ -585,7 +710,7 @@ def send_message(
     if run_consolidation_bg:
         threading.Thread(
             target=_run_consolidation_bg,
-            args=(sid, consolidation_history, consolidation_start),
+            args=(sid, consolidation_history, consolidation_start, consolidation_base, consolidation_head),
             daemon=True,
             name="celestia-consolidate",
         ).start()
@@ -671,19 +796,18 @@ def send_message_stream(
 
     run_consolidation_bg = False
     consolidation_history: list[dict[str, Any]] = []
-    consolidation_start = 0
+    consolidation_start = consolidation_base = consolidation_head = 0
 
     with _store_lock():
         # Re-read the single session so a concurrent consolidation write
-        # (consolidate_from) is preserved rather than clobbered.
+        # (the memory cursor) is preserved rather than clobbered.
         state = _read_session(sid) or _new_session_state()
         if use_session and new_history:
-            state["history"] = new_history
-            state["turn_count"] = int(state.get("turn_count") or 0) + 1
-            if _should_consolidate_now(state):
+            _record_turn(state, new_history)
+            if _should_consolidate_now(state) and _claim_pass(sid):
                 run_consolidation_bg = True
                 consolidation_history = list(state["history"])
-                consolidation_start = int(state.get("consolidate_from") or 0)
+                consolidation_start, consolidation_base, consolidation_head = _cursor(state)
         state["updated_at"] = time.time()
         _write_session(sid, state)
         _write_active(sid)
@@ -692,7 +816,7 @@ def send_message_stream(
     if run_consolidation_bg:
         threading.Thread(
             target=_run_consolidation_bg,
-            args=(sid, consolidation_history, consolidation_start),
+            args=(sid, consolidation_history, consolidation_start, consolidation_base, consolidation_head),
             daemon=True,
             name="celestia-consolidate",
         ).start()
@@ -760,7 +884,7 @@ def delete_session(session_id: str) -> dict[str, Any]:
     """
     consolidate = bool(get("chat.consolidate_before_delete", True))
     finalize_history: list[dict[str, Any]] = []
-    finalize_start = 0
+    finalize_start = finalize_base = finalize_head = 0
 
     with _store_lock():
         _resolve_active()
@@ -771,7 +895,7 @@ def delete_session(session_id: str) -> dict[str, Any]:
             state = _read_session(session_id)
             if state is not None and state.get("history"):
                 finalize_history = list(state["history"])
-                finalize_start = int(state.get("consolidate_from") or 0)
+                finalize_start, finalize_base, finalize_head = _cursor(state)
 
         try:
             (_sessions_dir() / f"{session_id}.json").unlink(missing_ok=True)
@@ -795,12 +919,12 @@ def delete_session(session_id: str) -> dict[str, Any]:
 
     # Distill from the snapshot in the background. The session file is already
     # gone; consolidation writes to the memory store, so the learnings persist.
-    # _run_finalize_bg's trailing consolidate_from write-back is a harmless no-op
-    # against the now-deleted session.
+    # _run_finalize_bg's trailing cursor write-back is a harmless no-op against
+    # the now-deleted session.
     if consolidate and finalize_history:
         threading.Thread(
             target=_run_finalize_bg,
-            args=(session_id, finalize_history, finalize_start),
+            args=(session_id, finalize_history, finalize_start, finalize_base, finalize_head),
             name="delete-finalize-session",
             daemon=True,
         ).start()

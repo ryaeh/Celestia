@@ -8,7 +8,7 @@ written from the same decision and stay in sync.
 
 This module is the pure half — prompt building and parsing — so the
 consolidation eval (``evals/consolidation_eval.py``) scores exactly what
-production will run. Applying ops to the stores is a separate step.
+production will run. ``writer_pass.py`` runs it and applies the ops.
 
 Ops:
   add        new memory (nothing existing covers it)

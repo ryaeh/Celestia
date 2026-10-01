@@ -77,6 +77,8 @@ skills/
   memory/graph_store.py   # Temporal knowledge graph (Feature 10): SQLite nodes/edges with versioned-supersede + multi-hop walk
   memory/graph_extract.py # Background LLM pass: chat excerpt → (subject,predicate,object) triples into graph_store
   memory/writer.py        # T15 memory writer (prompt + parser): chat + summary + existing memories → add/update/supersede/forget ops, each with text + triples
+  memory/writer_pass.py   # T15: runs the writer over a chat window and applies ops to text memory + graph together; consolidate() dispatches writer|legacy (memory.pipeline)
+  memory/links.py         # T15 sidecars: memory id → graph edge ids (data/memory/graph_links.json) + superseded-memory history.jsonl
   tts/                    # Orpheus (llama-cpp local) or Edge TTS; queue.py handles sentence streaming
   stt/engine.py           # faster-whisper; model lazily loaded, idle-unloaded after N minutes
   vision/                 # Capture → preprocess → Ollama vision model → optional confirm flow
@@ -103,6 +105,8 @@ evals/                    # Gate A eval harness — extraction + tool-call gold-
 **Security modes**: `safe` (blocks all PC tools except always-ok list) → `scoped` (PC tools gated to workspace paths) → `armed` (full PC control). State is persisted to `data/security_state.json` and shared across tray/shell/CLI processes. Always call `security.gate_pc_tool()` before executing any PC tool.
 
 **Session storage**: Chat sessions live in `data/shell_chat/sessions/<uuid>.json` with the active session pointer in `data/shell_chat/active`. The full `_file_lock()` mechanism in `shell_chat.py` handles concurrent access from tray, shell API, and CLI simultaneously.
+
+**Memory pass (T15)**: `skills/memory/writer_pass.consolidate()` runs at the end of a chat (new/delete/quit) and at mid-chat checkpoints (`shell_chat._checkpoint_reason`: unsaved messages about to be trimmed out of `chat.session_max_messages`, or `memory.writer.checkpoint_minutes`). The session cursor is absolute (`seq_base` + `consolidated_seq`) because the agent trims history from the front; never index history with a stored integer. Each applied op moves text memory and its linked graph edges together; `store.delete_by_id` cascades to linked edges.
 
 **Config**: `get("key.subkey", default)` from `celestia_core/config.py` everywhere. After editing `config.yaml`, run `--trust-config` to update the integrity hash. Secrets go in `.env` only — never `config.yaml`.
 

@@ -309,9 +309,22 @@ def delete_by_id(memory_id: str) -> str:
     try:
         m.delete(memory_id)
         _invalidate_instruction_cache()
-        return "Deleted."
     except Exception as e:
         return f"Delete failed: {e}"
+    # T15: a deleted memory takes the graph facts derived from it along (the
+    # user removed the fact; it shouldn't live on in the graph). Supersede ends
+    # and unlinks the edges *before* deleting, so history survives that path.
+    try:
+        from skills.memory.links import pop_links
+
+        edge_ids = pop_links(memory_id)
+        if edge_ids:
+            from skills.memory import graph_store as gs
+
+            gs.forget_edges(edge_ids)
+    except Exception:
+        pass
+    return "Deleted."
 
 
 def delete_matching(user_id: str, match_text: str) -> str:

@@ -228,9 +228,9 @@ def _run_interactive(args) -> int:
             return
         from skills.memory.session_consolidate import (
             consolidate_mode,
-            consolidate_session_messages,
             should_run_consolidation,
         )
+        from skills.memory.writer_pass import consolidate
         if consolidate_mode() == "off" or not get("memory.session_consolidate", True):
             return
         if not should_run_consolidation(chat_history, start_index=consolidate_from, end=end):
@@ -240,8 +240,8 @@ def _run_interactive(args) -> int:
             if chat_turns < every or chat_turns % every != 0:
                 return
         uid = get("app.user_id", "atlas_user")
-        consolidate_from, stored = consolidate_session_messages(
-            chat_history, uid, start_index=consolidate_from,
+        consolidate_from, stored = consolidate(
+            chat_history, uid, start_index=consolidate_from, end=end,
         )
         if stored and get("memory.session_consolidate_verbose", False):
             for line in stored:
