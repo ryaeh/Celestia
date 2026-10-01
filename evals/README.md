@@ -210,6 +210,7 @@ as in production, and the **final** summary is scored:
 | structured (`624e4ae`) | 4/6 | 0.879 | 0.778 | 0.875 | 6/6 | 2 | 1001 |
 | prose (step-3 baseline) | 1/6 | 0.515 | 0.333 | 0.25 | 6/6 | 0 | 517 |
 | structured + fixes (`bc8b0fe`, [run 36835544674](https://github.com/ryaeh/Celestia/actions/runs/36835544674)) | 4/6 | **0.97** | **0.944** | 0.75 | 6/6 | **0** | 1119 |
+| + labelled-details prompt (`e664dfb`, [run 36841179651](https://github.com/ryaeh/Celestia/actions/runs/36841179651)) — reverted | 4/6 | 0.909 | 0.833 | 0.75 | 6/6 | 0 | 1157 |
 
 The structured notes keep more than twice as many early facts and exact details.
 The two failures in the first structured run led to these fixes (`bc8b0fe`):
@@ -225,8 +226,10 @@ The two failures in the first structured run led to these fixes (`bc8b0fe`):
 
 After the fixes, early retention is 0.94 and nothing leaks. The two remaining misses were
 about detail wording: "clap 4.5" got split into "clap" and "4.5", and the flight was kept
-without its date. The prompt now asks for each detail with a short label ("flight out
-May 12", "clap 4.5") and no bare words.
+without its date. Asking for labelled details ("flight out May 12") didn't help (exact
+unchanged, retention down), so that prompt change was reverted. With 6 cases, swings of
+about ±0.1 between runs are noise (the prose baseline moved 0.25 → 0.375 on exact with no
+change); more real-chat cases would make these numbers firmer.
 
 ## Tool-call eval
 
