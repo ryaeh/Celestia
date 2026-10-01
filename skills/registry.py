@@ -61,7 +61,20 @@ def _h_memory_search(args: dict[str, Any], uid: str) -> str:
 
 
 def _h_memory_add(args: dict[str, Any], uid: str) -> str:
-    return memory.add_json(args["content"], uid, kind=str(args.get("kind") or "fact"))
+    return memory.add_json(args["content"], uid, kind=str(args.get("kind") or "fact"), origin="assistant")
+
+
+# T04 — memory-poisoning defense. In a turn that has read untrusted content
+# (file, web page, clipboard, MCP output), the model's memory writes are held
+# for review and destructive memory changes are refused: injected text must not
+# be able to plant an instruction or erase what the user told Celestia.
+_TAINT_REFUSED = frozenset({"memory_edit", "memory_delete"})
+
+
+def _h_memory_add_untrusted(args: dict[str, Any], uid: str) -> str:
+    return memory.add_json(
+        args["content"], uid, kind=str(args.get("kind") or "fact"), origin="assistant", untrusted=True
+    )
 
 
 def _h_memory_list(args: dict[str, Any], uid: str) -> str:
@@ -217,9 +230,26 @@ def execute_tool(
     user_id: str,
     *,
     source: str = "cli",
+    untrusted_context: bool = False,
 ) -> str:
+    """Run one tool call.
+
+    ``untrusted_context`` — the current turn already pulled untrusted content
+    into the model's context (``untrusted.turn_tainted``); memory writes are
+    then quarantined and memory edits/deletes refused (T04).
+    """
     try:
-        if name in _TOOL_DISPATCH:
+        if untrusted_context and name in _TAINT_REFUSED:
+            result = (
+                f"Blocked: {name} isn't allowed in a turn that read untrusted content "
+                "(a file, web page, clipboard or tool output could be steering this). "
+                "Ask the user to confirm the change in their next message."
+            )
+            security.audit_tool(name, arguments, result, source=source)
+            return result
+        if untrusted_context and name == "memory_add":
+            result = _h_memory_add_untrusted(arguments, user_id)
+        elif name in _TOOL_DISPATCH:
             result = _TOOL_DISPATCH[name](arguments, user_id)
         elif is_mcp_tool(name):
             result, blocked = execute_mcp_tool(name, arguments)

@@ -28,7 +28,7 @@
 | Graph temporality | `skills/memory/graph_store.py` edges already have `valid_from`, `valid_until`, `source`, `confidence`, `created_at` + versioned supersede | Research item "add bi-temporal fields" is **mostly done**. Only the gap in T07 remains. |
 | Evals | `evals/extraction_eval.py` is on `main`. `evals/toolcall_eval.py` (+ e2e test), `.github/workflows/evals.yml` (real models on GitHub CPU runners) live on branch `claude/hopeful-feynman-pgew8n` = [PR #117](https://github.com/ryaeh/Celestia/pull/117), 6 commits ahead of `main`, CI green | T01: merge PR #117 before any eval-gated task. |
 | n8n | `skills/integrations/n8n.py`: fire-and-forget webhook notify; `automation.n8n_enabled: false` | Already small and off by default. Just don't grow it (T13). |
-| Memory origin | `skills/memory/store.py` stores `kind`, `importance`, `created_at` metadata. There is **no origin/trust field** | Needed for T04. |
+| Memory origin | `skills/memory/store.py` stores `kind`, `importance`, `created_at` metadata. There is **no origin/trust field** (as of the review) | T04 adds `origin` + `quarantined`. |
 | MCP client | PR #117 adds `skills/mcp/` (not `skills/mcp_client/`): stdio servers, `mcp__<server>__<tool>` names, per-server `min_mode` / per-tool `tool_modes` (**default `armed`**), filtered in `tool_schemas()` + re-checked by `security.gate_mcp_tool()`, allow/deny lists, audit log, every result `untrusted.wrap`ped. **Off by default.** | T11 is **partly done**. Still missing: manifest hash pinning (`tools_sha256`), `security.policy` integration, T03 malicious-server fixture. Keep `mcp.enabled: false` until T03 + T04 land (D1). `min_mode` = the plan's `max_mode` (lowest mode where the tool is offered). |
 | Desktop overlay | PR #117 adds the companion bubble (`shell/src/pages/Overlay.tsx`, Tauri window `overlay`, hotkey `ui.overlay_hotkey`). Not click-through yet; not verified on Windows. | The "Later" desktop-pet item is **v1 built**. |
 
@@ -57,7 +57,7 @@ well, it's out of scope (same rule as `docs/planned-features/README.md`).
 | # | Decision | Status |
 |---|----------|--------|
 | D1 | Security and privacy work comes **before** new agentic features (01, 04, MCP). | Adopted |
-| D2 | Model swap only via Gate A evals (T02). Candidates: `qwen3.5:9b` (thinking **off**), `qwen3:8b`, small tier `qwen3.5:4b`/`qwen3:4b`. | Pending T02 |
+| D2 | Model swap only via Gate A evals (T02). Candidates: `qwen3.5:9b` (thinking **off**), `qwen3:8b`, small tier `qwen3.5:4b`/`qwen3:4b`. | Decided for the small tier (T02, CPU evals): chat `qwen2.5:3b`, background memory `qwen3.5:4b` (thinking off). `qwen3:4b` rejected (reasoning leaks into replies with thinking off). 8–9B still needs an owner GPU run. |
 | D3 | Keep "no always-resident 14B+". Big/MoE/GUI models only as transient GPU-idle workers. | Kept |
 | D4 | Keep mem0 + SQLite graph. **Do not** migrate to Graphiti/Zep (needs Neo4j/FalkorDB + many LLM calls). | Kept |
 | D5 | No cloud calls by default. Edge TTS becomes an explicit opt-in. | Adopted (T05) |
@@ -78,7 +78,7 @@ well, it's out of scope (same rule as `docs/planned-features/README.md`).
 | T01 | [#118](https://github.com/ryaeh/Celestia/issues/118) | Evals on `main` | P0 | Done — [PR #117](https://github.com/ryaeh/Celestia/pull/117) merged 2026-09-30 |
 | T02 | [#119](https://github.com/ryaeh/Celestia/issues/119) | Model re-baseline | P0 | In progress — `--repeat` at production sampling, Ollama version + TTFT/VRAM recorded; 4 CPU candidates run; split chosen (chat `qwen2.5:3b`, background memory `qwen3.5:4b`); GPU runs of 8–9B need the owner |
 | T03 | [#120](https://github.com/ryaeh/Celestia/issues/120) | Prompt-injection eval track | P0 | Open |
-| T04 | [#121](https://github.com/ryaeh/Celestia/issues/121) | Memory-poisoning defense | P0 | Open |
+| T04 | [#121](https://github.com/ryaeh/Celestia/issues/121) | Memory-poisoning defense | P0 | Done — [PR #133](https://github.com/ryaeh/Celestia/pull/133) merged 2026-10-01 |
 | T05 | [#122](https://github.com/ryaeh/Celestia/issues/122) | Fully local voice (no silent cloud fallback) | P0 | Open |
 | T06 | [#123](https://github.com/ryaeh/Celestia/issues/123) | Voice barge-in | P1 | Open |
 | T07 | [#124](https://github.com/ryaeh/Celestia/issues/124) | Graph transaction-time gap | P1 | Open |
