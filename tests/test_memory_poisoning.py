@@ -40,14 +40,16 @@ class FakeMem:
         self.rows[mid] = {"id": mid, "memory": content, "metadata": dict(metadata), "user_id": user_id}
         return {"results": [self.rows[mid]]}
 
-    def get_all(self, user_id, limit=100):
-        return {"results": [r for r in self.rows.values() if r["user_id"] == user_id][:limit]}
+    # Read signatures mirror mem0 2.x: scope via filters=, no top-level user_id.
+    def get_all(self, *, filters, limit=100):
+        uid = filters["user_id"]
+        return {"results": [r for r in self.rows.values() if r["user_id"] == uid][:limit]}
 
-    def search(self, query, user_id, limit=5):
-        return self.get_all(user_id, limit)
+    def search(self, query, *, filters, limit=5):
+        return self.get_all(filters=filters, limit=limit)
 
-    def update(self, memory_id, data):
-        self.rows[memory_id]["memory"] = data
+    def update(self, memory_id, text):
+        self.rows[memory_id]["memory"] = text
 
     def delete(self, memory_id):
         self.rows.pop(memory_id, None)

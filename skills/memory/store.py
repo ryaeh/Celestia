@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import threading
 import time
 from contextvars import ContextVar
+from datetime import datetime, timezone
 from typing import Any
 
 from celestia_core.config import get
+
+_log = logging.getLogger("celestia.memory")
 
 # Provenance of the memory/graph entries injected by the most recent build_context
 # call, for the "why did you say that?" UI. Stored in a ContextVar so it travels
@@ -101,7 +105,50 @@ def _get_memory():
                         },
                     }
                 )
+                _repair_float_timestamps(_memory)
     return _memory
+
+
+def _now_iso() -> str:
+    """UTC ISO-8601 timestamp. mem0 keeps metadata in the same payload as its own
+    ``created_at``/``updated_at`` fields and parses them as ISO strings on read
+    (mem0 >= 1.0.11), so a float here breaks every get_all/search."""
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _scope(user_id: str) -> dict[str, Any]:
+    """Entity scope for mem0 2.x reads (top-level ``user_id=`` is rejected)."""
+    return {"filters": {"user_id": user_id}}
+
+
+def _repair_float_timestamps(memory: Any) -> None:
+    """One-time fix for entries written with ``created_at = time.time()``: rewrite
+    float created_at/updated_at as ISO strings so mem0 can read them back.
+    Idempotent and best-effort — touches only rows that still hold floats."""
+    try:
+        col = memory.vector_store.collection
+        rows = col.get(include=["metadatas"])
+    except Exception as e:
+        _log.error("memory timestamp repair: could not read collection: %s", e)
+        return
+    ids, metas = [], []
+    for mid, meta in zip(rows.get("ids") or [], rows.get("metadatas") or []):
+        if not isinstance(meta, dict):
+            continue
+        fixed = dict(meta)
+        for key in ("created_at", "updated_at"):
+            if isinstance(fixed.get(key), (int, float)) and not isinstance(fixed.get(key), bool):
+                fixed[key] = datetime.fromtimestamp(float(fixed[key]), timezone.utc).isoformat()
+        if fixed != meta:
+            ids.append(mid)
+            metas.append(fixed)
+    if not ids:
+        return
+    try:
+        col.update(ids=ids, metadatas=metas)
+        print(f"[memory] repaired timestamps on {len(ids)} entries")
+    except Exception as e:
+        _log.error("memory timestamp repair: update failed: %s", e)
 
 
 def _extract_text(item: dict) -> str:
@@ -176,14 +223,15 @@ def _entry_from_item(item: dict) -> dict[str, Any]:
 def get_all_entries(user_id: str, limit: int = 100) -> list[dict[str, Any]]:
     m = _get_memory()
     try:
-        raw = m.get_all(user_id=user_id, limit=limit)
+        raw = m.get_all(**_scope(user_id), limit=limit)
         items = raw.get("results", raw) if isinstance(raw, dict) else raw
         if not isinstance(items, list):
             return []
         out = [_entry_from_item(it) for it in items if _extract_text(it)]
         out.sort(key=lambda e: e["updated_at"], reverse=True)
         return out
-    except Exception:
+    except Exception as e:
+        _log.error("memory get_all failed: %s", e)
         return []
 
 
@@ -222,7 +270,7 @@ def add(
     metadata: dict[str, Any] = {
         "kind": k,
         "importance": imp,
-        "created_at": time.time(),
+        "created_at": _now_iso(),
         "origin": normalize_origin(origin),
         "quarantined": q,
     }
@@ -286,13 +334,14 @@ def search(
     they must never reach the model's context before the user approves them."""
     m = _get_memory()
     try:
-        raw = m.search(query, user_id=user_id, limit=limit)
+        raw = m.search(query, **_scope(user_id), limit=limit)
         items = raw.get("results", raw) if isinstance(raw, dict) else raw
         if not isinstance(items, list):
             return []
         out = [_entry_from_item(it) for it in items if _extract_text(it)]
         return out if include_quarantined else [e for e in out if not e["quarantined"]]
-    except Exception:
+    except Exception as e:
+        _log.error("memory search failed: %s", e)
         return []
 
 
@@ -354,7 +403,7 @@ def _find_entry(memory_id: str) -> tuple[str | None, dict[str, Any] | None]:
     m = _get_memory()
     for uid in _known_user_ids():
         try:
-            raw = m.get_all(user_id=uid, limit=200)
+            raw = m.get_all(**_scope(uid), limit=200)
             items = raw.get("results", raw) if isinstance(raw, dict) else raw
             if isinstance(items, list):
                 for it in items:
@@ -403,7 +452,7 @@ def update_entry(
     # updatable in place), so it still requires a rewrite.
     if new_kind == entry["kind"] and not approve and hasattr(m, "update"):
         try:
-            m.update(memory_id, data=new_text)
+            m.update(memory_id, text=new_text)
             _invalidate_instruction_cache(uid)
             return "Updated."
         except Exception:

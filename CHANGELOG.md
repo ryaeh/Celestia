@@ -10,6 +10,17 @@ Roadmap for upcoming work: [`docs/project/roadmap.md`](docs/project/roadmap.md).
 
 ## Unreleased
 
+### Fixed
+- **Long-term memory recall was silently broken.** Memories were saved but never
+  read back: `add()` wrote `created_at` as a float into the mem0 payload, where
+  mem0 (>= 1.0.11) expects an ISO string, so every `get_all`/`search` raised and
+  `store.py` swallowed it — empty Memory page, nothing injected into chat. A fresh
+  install also pulled mem0 2.x (`mem0ai>=1.0` was unpinned), which rejects
+  top-level `user_id=`. Now: ISO timestamps, `filters={"user_id": …}` reads,
+  `mem0ai>=2.2,<3`, read failures logged to `data/logs/errors.log`, and existing
+  float-timestamp entries are repaired in place on first load. Test runs no longer
+  write to the real `errors.log`.
+
 ### Security
 - **Memory-poisoning defense (T04, #121).** Every memory records its origin
   (`user` / `assistant` / `consolidation` / `screen` / `tool:<name>`). In a turn

@@ -76,6 +76,17 @@ def test_add_json_stamps_created_at(mock_mem):
     assert "created_at" in mock_mem.add.call_args.kwargs["metadata"]
 
 
+def test_add_json_created_at_is_iso_string(mock_mem):
+    """mem0 parses payload created_at as ISO on every read — a float (time.time())
+    there made get_all/search raise, so nothing was ever recalled."""
+    from datetime import datetime
+
+    add_json("something durable", "test_user", kind="fact")
+    ts = mock_mem.add.call_args.kwargs["metadata"]["created_at"]
+    assert isinstance(ts, str)
+    assert datetime.fromisoformat(ts).tzinfo is not None
+
+
 def test_add_json_handles_exception(mock_mem):
     """If the underlying add() raises, add_json must return an error string."""
     mock_mem.add.side_effect = RuntimeError("Chroma connection failed")
@@ -120,6 +131,61 @@ def test_get_all_entries_empty_on_exception(mock_mem):
     mock_mem.get_all.side_effect = RuntimeError("DB offline")
     entries = get_all_entries("test_user")
     assert entries == []
+
+
+def test_get_all_entries_logs_failure(mock_mem, caplog):
+    """A read failure must not be silent — it hid broken recall before."""
+    mock_mem.get_all.side_effect = RuntimeError("DB offline")
+    with caplog.at_level("ERROR", logger="celestia.memory"):
+        get_all_entries("test_user")
+    assert "DB offline" in caplog.text
+
+
+def test_reads_scope_by_filters_not_top_level_user_id(mock_mem):
+    """mem0 2.x rejects get_all/search(user_id=...); scope must go in filters."""
+    get_all_entries("test_user")
+    search_json("anything", "test_user")
+    for call in (mock_mem.get_all.call_args, mock_mem.search.call_args):
+        assert "user_id" not in call.kwargs
+        assert call.kwargs["filters"] == {"user_id": "test_user"}
+
+
+# ---------------------------------------------------------------------------
+# _repair_float_timestamps()
+# ---------------------------------------------------------------------------
+
+def test_repair_rewrites_float_timestamps_as_iso():
+    from datetime import datetime
+
+    col = MagicMock()
+    col.get.return_value = {
+        "ids": ["old", "ok"],
+        "metadatas": [
+            {"data": "Location: Ankara", "created_at": 1791026685.9, "updated_at": 1791026685.9, "kind": "fact"},
+            {"data": "fine", "created_at": "2026-10-03T11:00:00+00:00", "kind": "fact"},
+        ],
+    }
+    mem = MagicMock()
+    mem.vector_store.collection = col
+
+    store_module._repair_float_timestamps(mem)
+
+    col.update.assert_called_once()
+    kwargs = col.update.call_args.kwargs
+    assert kwargs["ids"] == ["old"]  # already-ISO rows are left alone
+    fixed = kwargs["metadatas"][0]
+    assert fixed["kind"] == "fact" and fixed["data"] == "Location: Ankara"
+    for key in ("created_at", "updated_at"):
+        assert abs(datetime.fromisoformat(fixed[key]).timestamp() - 1791026685.9) < 1e-3
+
+
+def test_repair_is_noop_when_nothing_to_fix():
+    col = MagicMock()
+    col.get.return_value = {"ids": ["a"], "metadatas": [{"created_at": "2026-10-03T11:00:00+00:00"}]}
+    mem = MagicMock()
+    mem.vector_store.collection = col
+    store_module._repair_float_timestamps(mem)
+    col.update.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
