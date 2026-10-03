@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, ArrowUp, Square, Camera, ScanEye, Sparkles, Monitor, Crop, AppWindow } from "lucide-react";
+import { Mic, MicOff, ArrowUp, Square, Camera, ScanEye, Monitor, Crop, AppWindow } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type CaptureMode = "fullscreen" | "region" | "active_window";
@@ -80,7 +80,6 @@ export default function ChatInput({
           submit();
         }}
       >
-        <span className="chat-input-icon" aria-hidden><Sparkles size={16} /></span>
         <textarea
           ref={taRef}
           name="celestia-chat-query"
@@ -117,7 +116,7 @@ export default function ChatInput({
             onClick={handleMicClick}
           >
             {pttListening
-              ? <MicOff size={16} className="text-red-400 animate-pulse" />
+              ? <MicOff size={16} className="text-[var(--armed)]" />
               : <Mic size={16} />
             }
           </Button>

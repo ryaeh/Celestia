@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 // Celestia theme system
 // Each theme id maps to a `[data-theme="<id>"]` block in App.css that overrides
 // the palette tokens. We only store the id; the CSS does the rest. The swatch
-// triplet drives the picker preview (cool → mid → warm aura colors).
+// drives the picker preview: a hard two-tone split of ground | accent.
 // ---------------------------------------------------------------------------
 
 export type ThemeId =
@@ -19,18 +19,18 @@ export type ThemeMeta = {
   id: ThemeId;
   label: string;
   tone: "dark" | "light";
-  /** [base, cool aura, warm aura] — used for the picker preview chip. */
+  /** [ground, accent, moon] — the picker chip shows ground | accent. */
   swatch: [string, string, string];
   hint: string;
 };
 
 export const THEMES: ThemeMeta[] = [
-  { id: "aurora",   label: "Aurora",   tone: "dark",  swatch: ["#0a0912", "#b07bff", "#ff9d7a"], hint: "Warm violet & coral" },
-  { id: "twilight", label: "Twilight", tone: "dark",  swatch: ["#080b16", "#7c83ff", "#4fd6e8"], hint: "Violet & cyan" },
-  { id: "ember",    label: "Ember",    tone: "dark",  swatch: ["#120c0a", "#ff8a5c", "#ffd27a"], hint: "Amber & coral" },
-  { id: "slate",    label: "Slate",    tone: "dark",  swatch: ["#0c0e13", "#6ea8fe", "#9fb8d6"], hint: "Cool & minimal" },
-  { id: "moss",     label: "Moss",     tone: "dark",  swatch: ["#07120f", "#3fd6a8", "#b6e88a"], hint: "Calm teal & green" },
-  { id: "daylight", label: "Daylight", tone: "light", swatch: ["#f6f2ec", "#7c5cff", "#ff8f6b"], hint: "Soft cream, light" },
+  { id: "aurora",   label: "Aurora",   tone: "dark",  swatch: ["#151311", "#e8946a", "#e2bd78"], hint: "Charcoal & clay" },
+  { id: "twilight", label: "Twilight", tone: "dark",  swatch: ["#10131a", "#8fb3e8", "#e6d29a"], hint: "Night ink & starlight" },
+  { id: "ember",    label: "Ember",    tone: "dark",  swatch: ["#16110d", "#eda55f", "#f0d49a"], hint: "Hearth & amber" },
+  { id: "slate",    label: "Slate",    tone: "dark",  swatch: ["#131416", "#9ab4cf", "#cfc6b4"], hint: "Graphite & steel" },
+  { id: "moss",     label: "Moss",     tone: "dark",  swatch: ["#111410", "#9cc49a", "#d8cf92"], hint: "Moss & sage" },
+  { id: "daylight", label: "Daylight", tone: "light", swatch: ["#f3eee5", "#a34a24", "#8a6414"], hint: "Paper & ink" },
 ];
 
 export const DEFAULT_THEME: ThemeId = "aurora";

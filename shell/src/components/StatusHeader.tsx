@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import Aura from "./Aura";
 import { fetchGpuInfo, type GpuInfo, type LiveState, type Status } from "../api";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp, PictureInPicture2 } from "lucide-react";
@@ -30,11 +29,14 @@ type StatusHeaderProps = {
   live?: LiveState;
 };
 
+// Status is always a dot plus a word (never colour alone); the full backend
+// label ("scoped (allowlist), tray max …") stays available as the tooltip.
 const MODE_STYLE: Record<string, string> = {
-  armed:  "bg-[var(--armed)]/15  text-[var(--armed)]  border-[var(--armed)]/40",
-  scoped: "bg-[var(--scoped)]/15 text-[var(--scoped)] border-[var(--scoped)]/40",
-  safe:   "bg-[var(--safe)]/15   text-[var(--safe)]   border-[var(--safe)]/40",
+  armed:  "status-pill-armed",
+  scoped: "status-pill-scoped",
+  safe:   "status-pill-safe",
 };
+const MODE_WORD: Record<string, string> = { armed: "Armed", scoped: "Scoped", safe: "Safe" };
 
 const CHECK_LABELS = ["Context", "Memory", "Tools", "Models"];
 
@@ -87,22 +89,16 @@ export default function StatusHeader({ status, live }: StatusHeaderProps) {
         <span className="top-bar-divider" aria-hidden />
 
         {/* Mode badge */}
-        <Badge
-          className={cn(
-            "text-[0.65rem] font-semibold tracking-wide px-1.5 py-0 h-5 border",
-            MODE_STYLE[mode] ?? MODE_STYLE.safe,
-          )}
+        <span
+          className={cn("status-pill", MODE_STYLE[mode] ?? MODE_STYLE.safe)}
+          title={modeLabel}
         >
-          {modeLabel}
-        </Badge>
+          {MODE_WORD[mode] ?? MODE_WORD.safe}
+        </span>
 
         {/* Personality badge */}
         {personality && (
-          <Badge
-            className="text-[0.65rem] font-semibold tracking-wide px-1.5 py-0 h-5 border bg-[var(--accent-glow)] text-[var(--accent-bright)] border-[var(--accent-bright)]/30"
-          >
-            {personality.toUpperCase()}
-          </Badge>
+          <span className="badge">{personality}</span>
         )}
 
         <span className="top-bar-spacer" />
@@ -178,9 +174,7 @@ export default function StatusHeader({ status, live }: StatusHeaderProps) {
           {status?.tray_max_mode && (
             <div className="top-bar-card">
               <span className="top-bar-card-label">Tray cap</span>
-              <Badge className="text-[0.65rem] bg-[var(--accent-glow)] text-[var(--accent-bright)] border-[var(--accent-bright)]/30">
-                {status.tray_max_mode.toUpperCase()}
-              </Badge>
+              <span className="badge">{status.tray_max_mode}</span>
             </div>
           )}
 

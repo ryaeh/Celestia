@@ -68,7 +68,7 @@ export default function VisionPreview({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-7 gap-1 px-2 ml-1 text-[var(--text-muted)] hover:text-red-400"
+                  className="h-7 gap-1 px-2 ml-1 text-[var(--text-muted)] hover:text-[var(--armed)]"
                   onClick={onStop}
                 >
                   <Square size={11} />
@@ -107,7 +107,7 @@ export default function VisionPreview({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-8 w-8 p-0 shrink-0 text-[var(--text-muted)] hover:text-red-400"
+                  className="h-8 w-8 p-0 shrink-0 text-[var(--text-muted)] hover:text-[var(--armed)]"
                   onClick={onCancel}
                 >
                   <X size={14} />
