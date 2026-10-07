@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import time
+from datetime import datetime
 from typing import Any, Callable, Generator
 
 import ollama
@@ -63,6 +65,9 @@ def _message_to_dict(msg: Any) -> dict[str, Any]:
     name = data.get("name")
     if name:
         out["name"] = str(name)
+    ts = data.get("ts")
+    if isinstance(ts, (int, float)) and not isinstance(ts, bool):
+        out["ts"] = ts  # shell sessions stamp each message; dropped before the model sees it
     tool_calls = data.get("tool_calls")
     if tool_calls:
         serializable: list[dict[str, Any]] = []
@@ -74,6 +79,11 @@ def _message_to_dict(msg: Any) -> dict[str, Any]:
         if serializable:
             out["tool_calls"] = serializable
     return out
+
+
+def _model_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The message list as Ollama should see it — without the session-store ``ts``."""
+    return [{k: v for k, v in m.items() if k != "ts"} if "ts" in m else m for m in messages]
 
 
 def _normalize_history(history: list[Any] | None) -> list[dict[str, Any]] | None:
@@ -184,6 +194,8 @@ def _strip_ephemeral(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for m in messages:
         role = m.get("role", "")
         if role == "system":
+            if str(m.get("content") or "").startswith(_TIME_NOTE_PREFIX):
+                continue  # the clock note is rebuilt every turn, even on turn 1
             if not passed_first_user:
                 result.append(m)  # keep personality prompt; skip repeated hints
         else:
@@ -204,6 +216,51 @@ def _build_fresh_messages(
         messages.append({"role": "system", "content": mem_ctx})
     messages.append({"role": "user", "content": user_message})
     return messages
+
+
+_TIME_NOTE_PREFIX = "[Time] "
+
+
+def _fmt_day_time(dt: datetime) -> str:
+    # Built by hand: %-d is not portable to Windows strftime.
+    return f"{dt:%A} {dt.day} {dt:%B %Y}, {dt:%H:%M}"
+
+
+def _fmt_gap(seconds: float) -> str:
+    minutes = int(seconds // 60)
+    if minutes < 120:
+        return f"{minutes} minutes"
+    hours = minutes // 60
+    if hours < 48:
+        return f"{hours} hours"
+    return f"{hours // 24} days"
+
+
+def _time_note(history: list[dict[str, Any]] | None, now: float | None = None) -> str | None:
+    """Per-turn system note with the local date/time, plus how long the chat sat idle.
+
+    Shell sessions stamp each message with ``ts``; when the previous message is
+    older than ``chat.time_gap_hours`` the note says so, so the model treats the
+    earlier context as from then rather than moments ago. Never stored.
+    """
+    if not get("chat.time_awareness", True):
+        return None
+    now = time.time() if now is None else now
+    note = f"{_TIME_NOTE_PREFIX}It is {_fmt_day_time(datetime.fromtimestamp(now))} (local time)."
+    last_ts = None
+    for m in reversed(history or []):
+        ts = m.get("ts")
+        if m.get("role") in ("user", "assistant") and isinstance(ts, (int, float)):
+            last_ts = float(ts)
+            break
+    gap_hours = float(get("chat.time_gap_hours", 3))
+    if last_ts is not None and now - last_ts >= gap_hours * 3600:
+        when = _fmt_day_time(datetime.fromtimestamp(last_ts))
+        note += (
+            f" The previous message in this conversation was {_fmt_gap(now - last_ts)} ago"
+            f" ({when}); the earlier context is from then, not from just now."
+        )
+    return note
 
 
 _VOICE_CAP_HINT = (
@@ -241,6 +298,7 @@ def _prepare_messages(
         return uid, model, messages, early
 
     mem_ctx = _memory_context(user_message)
+    time_note = _time_note(history)
     if history:
         messages = _normalize_history(history) or []
         for hint in _pc_control_hints(user_message):
@@ -249,11 +307,15 @@ def _prepare_messages(
             messages.append({"role": "system", "content": mem_ctx})
         if voice_mode and get("voice.reply_cap_voice", True):
             messages.append({"role": "system", "content": _VOICE_CAP_HINT})
+        if time_note:
+            messages.append({"role": "system", "content": time_note})
         messages.append({"role": "user", "content": user_message})
     else:
         messages = _build_fresh_messages(user_message, mem_ctx)
         if voice_mode and get("voice.reply_cap_voice", True):
             messages.insert(-1, {"role": "system", "content": _VOICE_CAP_HINT})
+        if time_note:
+            messages.insert(-1, {"role": "system", "content": time_note})
 
     return uid, model, messages, None
 
@@ -277,7 +339,7 @@ def _sync_tool_rounds(
         try:
             response = client.chat(
                 model=model,
-                messages=messages,
+                messages=_model_messages(messages),
                 tools=schemas,
                 options={"num_predict": int(get("llm.max_tokens", 1024))},
             )
@@ -384,7 +446,7 @@ def _stream_tool_rounds(
         try:
             response = client.chat(
                 model=model,
-                messages=messages,
+                messages=_model_messages(messages),
                 tools=schemas,
                 options={"num_predict": int(get("llm.max_tokens", 1024))},
             )
@@ -476,7 +538,7 @@ def run_turn_stream(
     try:
         stream = client.chat(
             model=model,
-            messages=messages,
+            messages=_model_messages(messages),
             tools=schemas,
             options={"num_predict": max_tokens},
             stream=True,
