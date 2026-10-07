@@ -25,12 +25,12 @@ export type ThemeMeta = {
 };
 
 export const THEMES: ThemeMeta[] = [
-  { id: "aurora",   label: "Aurora",   tone: "dark",  swatch: ["#151311", "#e8946a", "#e2bd78"], hint: "Charcoal & clay" },
-  { id: "twilight", label: "Twilight", tone: "dark",  swatch: ["#10131a", "#8fb3e8", "#e6d29a"], hint: "Night ink & starlight" },
-  { id: "ember",    label: "Ember",    tone: "dark",  swatch: ["#16110d", "#eda55f", "#f0d49a"], hint: "Hearth & amber" },
-  { id: "slate",    label: "Slate",    tone: "dark",  swatch: ["#131416", "#9ab4cf", "#cfc6b4"], hint: "Graphite & steel" },
-  { id: "moss",     label: "Moss",     tone: "dark",  swatch: ["#111410", "#9cc49a", "#d8cf92"], hint: "Moss & sage" },
-  { id: "daylight", label: "Daylight", tone: "light", swatch: ["#f3eee5", "#a34a24", "#8a6414"], hint: "Paper & ink" },
+  { id: "aurora",   label: "Aurora",   tone: "dark",  swatch: ["#151a1e", "#7fd1b9", "#f0d78c"], hint: "Night sky & aurora" },
+  { id: "twilight", label: "Twilight", tone: "dark",  swatch: ["#17161f", "#a9b8f5", "#f0d9a0"], hint: "Dusk blue & starlight" },
+  { id: "ember",    label: "Ember",    tone: "dark",  swatch: ["#1c1512", "#f0a868", "#f3d59c"], hint: "Hearth & amber" },
+  { id: "slate",    label: "Slate",    tone: "dark",  swatch: ["#181b1f", "#9fbad8", "#d6ccb6"], hint: "Graphite & steel" },
+  { id: "moss",     label: "Moss",     tone: "dark",  swatch: ["#151a13", "#a8cf8f", "#e2d48e"], hint: "Forest & sage" },
+  { id: "daylight", label: "Daylight", tone: "light", swatch: ["#fbf9f5", "#2f6b5a", "#9a6c17"], hint: "Paper & pine" },
 ];
 
 export const DEFAULT_THEME: ThemeId = "aurora";

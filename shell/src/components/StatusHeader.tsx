@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import Aura from "./Aura";
 import { fetchGpuInfo, type GpuInfo, type LiveState, type Status } from "../api";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -84,9 +83,7 @@ export default function StatusHeader({ status, live }: StatusHeaderProps) {
   return (
     <>
       <div className="top-bar">
-        <Aura size="mark" state="idle" />
         <span className="top-bar-name">{name}</span>
-        <span className="top-bar-divider" aria-hidden />
 
         {/* Mode badge */}
         <span
