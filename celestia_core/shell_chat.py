@@ -196,15 +196,18 @@ def _full_chat(state: dict[str, Any]) -> list[dict[str, Any]]:
     return list(state.get("archive") or []) + list(state.get("history") or [])
 
 
-def _ui_messages(history: list[dict[str, Any]] | None) -> list[dict[str, str]]:
+def _ui_messages(history: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
     if not history:
         return []
-    out: list[dict[str, str]] = []
+    out: list[dict[str, Any]] = []
     for msg in history:
         role = msg.get("role")
         content = (msg.get("content") or "").strip()
         if role in ("user", "assistant") and content:
-            out.append({"role": role, "content": content})
+            item: dict[str, Any] = {"role": role, "content": content}
+            if isinstance(msg.get("ts"), (int, float)):
+                item["ts"] = msg["ts"]
+            out.append(item)
     return out
 
 
@@ -277,7 +280,10 @@ def _record_turn(state: dict[str, Any], new_history: list[dict[str, Any]]) -> No
         for i, m in enumerate(old[_head_len(old):][:dropped]):
             content = m.get("content")
             if m.get("role") in ("user", "assistant") and isinstance(content, str) and content.strip():
-                archive.append({"role": m["role"], "content": content, "seq": base + i})
+                item = {"role": m["role"], "content": content, "seq": base + i}
+                if isinstance(m.get("ts"), (int, float)):
+                    item["ts"] = m["ts"]
+                archive.append(item)
         cap = int(get("chat.archive_max_messages", 2000))
         state["archive"] = archive[-cap:] if cap > 0 else []
     state["seq_base"] = base + dropped
@@ -429,6 +435,29 @@ def _checkpoint_reason(state: dict[str, Any]) -> str | None:
     if minutes > 0 and since and time.time() - float(since) >= minutes * 60:
         return "time"
     return None
+
+
+def _stamp_turn(history: list[dict[str, Any]] | None, turn_start: float) -> None:
+    """Stamp this turn's messages with ``ts`` (epoch seconds), in place.
+
+    The turn starts at the last user message that has no ``ts`` yet: that user
+    line gets the time it was sent, everything after it (tool calls, the reply)
+    the time it finished. Messages from before timestamps existed stay unstamped.
+    """
+    if not history:
+        return
+    start = None
+    for i in range(len(history) - 1, -1, -1):
+        if history[i].get("role") == "user" and "ts" not in history[i]:
+            start = i
+            break
+    if start is None:
+        return
+    now = round(time.time(), 3)
+    history[start]["ts"] = round(turn_start, 3)
+    for msg in history[start + 1:]:
+        if msg.get("role") != "system":
+            msg.setdefault("ts", now)
 
 
 def _should_consolidate_now(state: dict[str, Any], *, end: bool = False) -> bool:
@@ -898,7 +927,7 @@ def get_notes(session_id: str | None = None) -> dict[str, Any]:
     }
 
 
-def get_history(session_id: str | None = None) -> list[dict[str, str]]:
+def get_history(session_id: str | None = None) -> list[dict[str, Any]]:
     with _store_lock():
         sid = session_id or _resolve_active()
         assert sid is not None
@@ -919,6 +948,7 @@ def send_message(
         return {"error": "message required"}
 
     _last_turn_time = time.time()
+    turn_start = _last_turn_time
     load_config()
     use_session = get("chat.session_enabled", True)
     speak = get("voice.always_speak", False)
@@ -957,6 +987,7 @@ def send_message(
         # (the memory cursor) is preserved rather than clobbered.
         state = _read_session(sid) or _new_session_state()
         if use_session:
+            _stamp_turn(new_history, turn_start)
             _record_turn(state, new_history)
             # Check whether to consolidate — do it in a background thread so it
             # does not block the response being returned to the user (CC-94).
@@ -1009,6 +1040,7 @@ def send_message_stream(
         return
 
     _last_turn_time = time.time()
+    turn_start = _last_turn_time
     load_config()
     use_session = get("chat.session_enabled", True)
 
@@ -1073,6 +1105,7 @@ def send_message_stream(
         # (the memory cursor) is preserved rather than clobbered.
         state = _read_session(sid) or _new_session_state()
         if use_session and new_history:
+            _stamp_turn(new_history, turn_start)
             _record_turn(state, new_history)
             if _should_consolidate_now(state) and _claim_pass(sid):
                 run_consolidation_bg = True
@@ -1121,8 +1154,9 @@ def append_raw_turn(
         assert sid is not None
         state = _read_session(sid) or _new_session_state()
         history = list(state.get("history") or [])
-        history.append({"role": "user", "content": user_text})
-        history.append({"role": "assistant", "content": assistant_text})
+        now = round(time.time(), 3)
+        history.append({"role": "user", "content": user_text, "ts": now})
+        history.append({"role": "assistant", "content": assistant_text, "ts": now})
         state["history"] = history
         state["updated_at"] = time.time()
         if state.get("title") in (None, "", "New chat"):

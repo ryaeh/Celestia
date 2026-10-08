@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { Star, Sparkles, ShieldAlert } from "lucide-react";
+import { Star, Eraser, ShieldAlert } from "lucide-react";
 import { originLabel } from "@/lib/memoryOrigin";
 
 const KINDS: MemoryKind[] = ["instruction", "fact", "summary", "task"];
@@ -196,7 +196,7 @@ export default function Memory() {
             className="shrink-0 gap-1.5"
             title="Preview which never-recalled, low-importance memories would be cleaned up"
           >
-            <Sparkles size={14} /> Clean up
+            <Eraser size={14} /> Clean up
           </Button>
         </div>
       </header>

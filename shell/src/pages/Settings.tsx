@@ -33,7 +33,7 @@ import {
   AlertTriangle,
   Camera,
   Palette,
-  Sparkles,
+  PenLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme, THEMES } from "../theme";
@@ -384,7 +384,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
               >
                 <span
                   className="theme-swatch"
-                  style={{ background: `linear-gradient(135deg, ${t.swatch[1]}, ${t.swatch[2]})` }}
+                  style={{ background: `linear-gradient(90deg, ${t.swatch[0]} 50%, ${t.swatch[1]} 50%)` }}
                 />
                 <span className="theme-meta">
                   <span className="theme-name">{t.label}</span>
@@ -417,12 +417,11 @@ export default function Settings({ onNavigate }: SettingsProps) {
               <Button
                 key={m.value}
                 type="button"
-                variant={modeValue === m.value ? "default" : "outline"}
+                variant="outline"
                 size="sm"
                 className={cn("mode-btn flex-1 flex-col h-auto py-2 gap-0.5", modeValue === m.value && `mode-active-${m.value}`)}
                 disabled={busy}
                 onClick={() => onMode(m.value)}
-                style={modeValue === m.value ? { background: m.color, borderColor: m.color } : undefined}
               >
                 <span>{m.label}</span>
                 <span className="text-[0.65rem] opacity-70 font-normal">{m.desc}</span>
@@ -469,7 +468,7 @@ export default function Settings({ onNavigate }: SettingsProps) {
               {workspaces.map((ws) => (
                 <div key={ws} className="workspace-row flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 bg-[var(--bg-panel)] border border-[var(--border-light)]">
                   <span className="font-mono text-[0.75rem] text-[var(--text-muted)] truncate flex-1">{ws}</span>
-                  <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-[var(--text-muted)] hover:text-red-400 shrink-0" disabled={busy} onClick={() => onRemoveWorkspace(ws)}>
+                  <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-[var(--text-muted)] hover:text-[var(--armed)] shrink-0" disabled={busy} onClick={() => onRemoveWorkspace(ws)}>
                     <Trash2 size={12} />
                   </Button>
                 </div>
@@ -496,13 +495,13 @@ export default function Settings({ onNavigate }: SettingsProps) {
 
         {/* ── Personality ───────────────────────────────────────────────── */}
         <Section
-          icon={<Sparkles size={16} />}
+          icon={<PenLine size={16} />}
           title="Personality"
           subtitle="Tone, style and behaviour preset — edit personalities/ YAML to change"
           badge={
             status?.personality ? (
               <Badge variant="secondary" className="text-[var(--accent-bright)] border-[var(--accent-bright)]/30 bg-[var(--accent-glow)] text-[0.68rem]">
-                {status.personality.toUpperCase()}
+                {status.personality}
               </Badge>
             ) : undefined
           }

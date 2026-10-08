@@ -320,6 +320,21 @@ def test_trimmed_messages_move_to_the_archive(chat) -> None:
     assert state["seq_base"] == 3
 
 
+def test_archived_messages_keep_their_time(chat, monkeypatch) -> None:
+    """Message times (ts) survive trimming: the archive keeps them, so the chat
+    page still shows when each early message was sent."""
+    monkeypatch.setattr(sc, "_should_consolidate_now", lambda state, end=False: False)
+    sid = sc.create_session(finalize_active=False)
+    for i in range(8):                              # 16 messages through a 10-message window
+        sc.send_message(f"m{i}", session_id=sid)
+    with sc._store_lock():
+        state = sc._read_session(sid)
+    assert state["archive"] and all(isinstance(m.get("ts"), float) for m in state["archive"])
+    shown = sc.get_history(sid)
+    assert [m["content"] for m in shown if m["role"] == "user"] == [f"m{i}" for i in range(8)]
+    assert all("ts" in m for m in shown)
+
+
 def test_archive_cap(chat) -> None:
     CONFIG["chat.archive_max_messages"] = 3
     sys_ = {"role": "system", "content": "s"}

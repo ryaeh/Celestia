@@ -14,7 +14,6 @@ import { usePersistedState } from "../hooks/usePersistedState";
 import type { Route } from "../App";
 import Aura from "./Aura";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { Plus, Activity as ActivityIcon, Brain, ListTodo, Settings, ChevronLeft, ChevronRight, Trash2, Check, X, Eye, EyeOff, Search } from "lucide-react";
 
@@ -159,8 +158,6 @@ export default function Sidebar({
             <Plus size={16} /> New chat
           </button>
 
-          <Separator className="bg-[var(--border-light)] my-1" />
-
           {/* Conversation search (Feature 03 / #86) */}
           <div className="sidebar-search">
             <Search size={14} className="sidebar-search-icon" />
@@ -242,7 +239,7 @@ export default function Sidebar({
                             type="button"
                             title="Delete — keeps what Celestia learned"
                             aria-label={`Confirm delete: ${item.title}`}
-                            className="grid h-6 w-6 place-items-center rounded text-red-400 hover:bg-[var(--bg-input)]"
+                            className="grid h-6 w-6 place-items-center rounded text-[var(--armed)] hover:bg-[var(--bg-input)]"
                             onClick={(e) => {
                               e.stopPropagation();
                               confirmDelete(item);
@@ -268,7 +265,7 @@ export default function Sidebar({
                           type="button"
                           title="Delete chat — keeps what Celestia learned"
                           aria-label={`Delete chat: ${item.title}`}
-                          className="absolute right-1 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-[var(--text-muted)] opacity-0 transition-opacity hover:bg-[var(--bg-input)] hover:text-red-400 focus:opacity-100 group-hover:opacity-100"
+                          className="absolute right-1 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-[var(--text-muted)] opacity-0 transition-opacity hover:bg-[var(--bg-input)] hover:text-[var(--armed)] focus:opacity-100 group-hover:opacity-100"
                           onClick={(e) => {
                             e.stopPropagation();
                             setPendingDelete(item.id);
@@ -283,8 +280,6 @@ export default function Sidebar({
               </ul>
             </ScrollArea>
           </div>
-
-          <Separator className="bg-[var(--border-light)] my-1" />
 
           {/* Footer nav */}
           <div className="sidebar-footer">

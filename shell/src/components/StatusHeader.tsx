@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import Aura from "./Aura";
 import {
   fetchChatNotes,
   fetchGpuInfo,
@@ -8,7 +7,6 @@ import {
   type LiveState,
   type Status,
 } from "../api";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp, PictureInPicture2 } from "lucide-react";
@@ -37,11 +35,14 @@ type StatusHeaderProps = {
   live?: LiveState;
 };
 
+// Status is always a dot plus a word (never colour alone); the full backend
+// label ("scoped (allowlist), tray max …") stays available as the tooltip.
 const MODE_STYLE: Record<string, string> = {
-  armed:  "bg-[var(--armed)]/15  text-[var(--armed)]  border-[var(--armed)]/40",
-  scoped: "bg-[var(--scoped)]/15 text-[var(--scoped)] border-[var(--scoped)]/40",
-  safe:   "bg-[var(--safe)]/15   text-[var(--safe)]   border-[var(--safe)]/40",
+  armed:  "status-pill-armed",
+  scoped: "status-pill-scoped",
+  safe:   "status-pill-safe",
 };
+const MODE_WORD: Record<string, string> = { armed: "Armed", scoped: "Scoped", safe: "Safe" };
 
 const CHECK_LABELS = ["Context", "Memory", "Tools", "Models"];
 
@@ -110,27 +111,19 @@ export default function StatusHeader({ status, live }: StatusHeaderProps) {
   return (
     <>
       <div className="top-bar">
-        <Aura size="mark" state="idle" />
         <span className="top-bar-name">{name}</span>
-        <span className="top-bar-divider" aria-hidden />
 
         {/* Mode badge */}
-        <Badge
-          className={cn(
-            "text-[0.65rem] font-semibold tracking-wide px-1.5 py-0 h-5 border",
-            MODE_STYLE[mode] ?? MODE_STYLE.safe,
-          )}
+        <span
+          className={cn("status-pill", MODE_STYLE[mode] ?? MODE_STYLE.safe)}
+          title={modeLabel}
         >
-          {modeLabel}
-        </Badge>
+          {MODE_WORD[mode] ?? MODE_WORD.safe}
+        </span>
 
         {/* Personality badge */}
         {personality && (
-          <Badge
-            className="text-[0.65rem] font-semibold tracking-wide px-1.5 py-0 h-5 border bg-[var(--accent-glow)] text-[var(--accent-bright)] border-[var(--accent-bright)]/30"
-          >
-            {personality.toUpperCase()}
-          </Badge>
+          <span className="badge">{personality}</span>
         )}
 
         <span className="top-bar-spacer" />
@@ -154,14 +147,13 @@ export default function StatusHeader({ status, live }: StatusHeaderProps) {
         {/* Memory pass running (T15) — chat keeps working meanwhile. */}
         {memorySaving && (
           <span
-            className="gpu-pill"
+            className="status-pill status-pill-accent memory-saving-pill"
             title={
               memorySaving === "end"
                 ? "Saving what I learned from the last chat"
                 : "Saving memories from this long chat — you can keep talking"
             }
           >
-            <span className="gpu-pill-dot" aria-hidden />
             Saving memories…
           </span>
         )}
@@ -221,40 +213,38 @@ export default function StatusHeader({ status, live }: StatusHeaderProps) {
           {status?.tray_max_mode && (
             <div className="top-bar-card">
               <span className="top-bar-card-label">Tray cap</span>
-              <Badge className="text-[0.65rem] bg-[var(--accent-glow)] text-[var(--accent-bright)] border-[var(--accent-bright)]/30">
-                {status.tray_max_mode.toUpperCase()}
-              </Badge>
+              <span className="badge">{status.tray_max_mode}</span>
             </div>
           )}
 
           {/* Working memory of this chat (T15) */}
-          <div className="top-bar-card">
+          <div className="top-bar-card notes-card">
             <span className="top-bar-card-label">What I'm keeping in mind</span>
             {!notes || notes.empty ? (
               <p className="gpu-model-empty">
                 Nothing yet — notes start once this chat gets long.
               </p>
             ) : (
-              <div className="text-xs leading-relaxed space-y-1.5 max-h-64 overflow-y-auto">
+              <div className="notes-body">
                 {notes.notes.goal && (
-                  <p><span className="text-[var(--text-muted)]">About: </span>{notes.notes.goal}</p>
+                  <p><span className="notes-label">About</span>{notes.notes.goal}</p>
                 )}
                 {notes.notes.now && (
-                  <p><span className="text-[var(--text-muted)]">Right now: </span>{notes.notes.now}</p>
+                  <p><span className="notes-label">Right now</span>{notes.notes.now}</p>
                 )}
                 {NOTE_LISTS.map(([key, label]) => {
                   const items = notes.notes[key] as string[];
                   return items.length ? (
                     <div key={key}>
-                      <span className="text-[var(--text-muted)]">{label}</span>
-                      <ul className="list-disc pl-4">
+                      <span className="notes-label">{label}</span>
+                      <ul className="notes-list">
                         {items.map((it, i) => <li key={i}>{it}</li>)}
                       </ul>
                     </div>
                   ) : null;
                 })}
                 {(notes.archived > 0 || notes.untrusted) && (
-                  <p className="text-[var(--text-dim)]">
+                  <p className="notes-foot">
                     {notes.archived > 0 && `${notes.archived} older messages archived. `}
                     {notes.untrusted && "Built partly from untrusted content."}
                   </p>

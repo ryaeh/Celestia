@@ -23,6 +23,8 @@ chat:
                                     # the raw transcript is removed (false = hard delete)
   search_enabled: true              # expose the search_conversations tool + sidebar
                                     # search over past chats (Feature 03 / #86)
+  time_awareness: true              # tell the model the local date/time each turn (never stored)
+  time_gap_hours: 3                 # ...and, after this long idle, when the previous message was
 
 personality:
   active: default

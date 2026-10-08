@@ -1,10 +1,10 @@
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
-// Aura — Celestia's living presence.
-// A layered gradient orb that breathes when idle, quickens when thinking,
-// ripples when listening, and shimmers when speaking. Pure CSS/animation;
-// colors come from the active theme's --aura-* tokens so it adapts per theme.
+// Aura — Celestia's mark: a flat moon that changes phase with her state.
+// Idle is a still waxing crescent, thinking sweeps through phases, listening
+// is a full moon with a ripple, speaking is a full moon that breathes. Pure
+// CSS; the moon is drawn in the active theme's --accent-warm.
 // ---------------------------------------------------------------------------
 
 export type AuraState = "idle" | "thinking" | "listening" | "speaking";

@@ -119,7 +119,9 @@ export type LiveState = {
   memory_saving?: string | null;
 };
 
-export type ChatMessage = { role: "user" | "assistant"; content: string };
+/** One chat turn. `ts` (epoch seconds) is set by the server on every message
+ *  stored since timestamps were added; older transcripts don't have it. */
+export type ChatMessage = { role: "user" | "assistant"; content: string; ts?: number };
 
 /** A model resident in Ollama VRAM, from GET /gpu/models (UI V2 / F3). */
 export type GpuModel = { name: string; size_vram: number };
