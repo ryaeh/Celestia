@@ -138,6 +138,18 @@ Latest: [run 36768684847](https://github.com/ryaeh/Celestia/actions/runs/3676868
 | `qwen2.5:3b` | writer, think off | 9/20 | 0.465 | 3/9 | 0 | 0 | 1 | 4/6 | ~7 s |
 | `qwen2.5:3b` | legacy (today) | 2/20 | 0.242 | 0/9 | 5 | 0 | 2 | 2/6 | ~13 s |
 
+Re-run on the finished T15 branch (all of step 4 merged with `main`'s message times,
+`9afa16f`, [run 37845668342](https://github.com/ryaeh/Celestia/actions/runs/37845668342), Oct 8 2026):
+
+| model | pipeline | passed | f1 | corrections | duplicates | wrong target | forbidden | graph sync | negatives clean |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `qwen3.5:4b` | writer, think off | 17/20 | 0.857 | 9/9 | 0 | 2 | 0 | 1.0 | 6/6 |
+| `qwen3.5:4b` | legacy (today) | 7/20 | 0.333 | 0/9 | 3 | 0 | 1 | 0.333 | 3/6 |
+
+Same picture as Sep 30, within noise. The three writer misses are the known ones:
+Rust folded into the Celestia memory, the dog memory touched on a move, and the tea
+preference in `multi-01` not saved.
+
 - The writer beats today's pipeline on every column; `qwen3.5:4b` with thinking **off**
   is the pick for the memory pass. `qwen2.5:3b` is too weak for it.
 - Thinking on is ~10× slower and not better on CPU: its misses were the slowest cases,
@@ -211,6 +223,8 @@ as in production, and the **final** summary is scored:
 | prose (step-3 baseline) | 1/6 | 0.515 | 0.333 | 0.25 | 6/6 | 0 | 517 |
 | structured + fixes (`bc8b0fe`, [run 36835544674](https://github.com/ryaeh/Celestia/actions/runs/36835544674)) | 4/6 | **0.97** | **0.944** | 0.75 | 6/6 | **0** | 1119 |
 | + labelled-details prompt (`e664dfb`, [run 36841179651](https://github.com/ryaeh/Celestia/actions/runs/36841179651)) — reverted | 4/6 | 0.909 | 0.833 | 0.75 | 6/6 | 0 | 1157 |
+| finished T15 branch (`9afa16f`, [run 37845668342](https://github.com/ryaeh/Celestia/actions/runs/37845668342), Oct 8) | **5/6** | 0.97 | 0.944 | **0.875** | 6/6 | 0 | 1109 |
+| prose, same run | 1/6 | 0.545 | 0.389 | 0.25 | 6/6 | 0 | 468 |
 
 The structured notes keep more than twice as many early facts and exact details.
 The two failures in the first structured run led to these fixes (`bc8b0fe`):
@@ -230,6 +244,9 @@ without its date. Asking for labelled details ("flight out May 12") didn't help 
 unchanged, retention down), so that prompt change was reverted. With 6 cases, swings of
 about ±0.1 between runs are noise (the prose baseline moved 0.25 → 0.375 on exact with no
 change); more real-chat cases would make these numbers firmer.
+
+On the finished T15 branch (Oct 8) the only miss left is the same flight date: "May 12"
+in `trip-then-code`, while the rest of the Berlin trip survives the topic switch.
 
 ## Tool-call eval
 
