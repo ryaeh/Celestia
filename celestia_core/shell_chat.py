@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import queue
 import re
 import threading
 import time
@@ -583,6 +584,21 @@ def idle_sweep(now: float | None = None) -> list[str]:
         _release_pass(sid)
 
 
+def _chat_quiet() -> bool:
+    """No reply is streaming and the last turn is a couple of minutes old.
+
+    Background model work waits for this: the chat model and the memory model
+    often can't sit in VRAM together, and loading one evicts the other, which
+    would slow the next reply a lot (``memory.graph.backfill_quiet_seconds``).
+    """
+    from celestia_core import stream_cancel
+
+    if stream_cancel.any_active():
+        return False
+    quiet = float(get("memory.graph.backfill_quiet_seconds", 120) or 0)
+    return time.time() - _last_turn_time >= quiet
+
+
 _idle_thread: threading.Thread | None = None
 
 
@@ -603,7 +619,8 @@ def start_idle_daemon(interval: float = 60.0) -> None:
             try:
                 from skills.memory.graph_backfill import backfill_step
 
-                backfill_step(get("app.user_id", "atlas_user"))
+                if _chat_quiet():
+                    backfill_step(get("app.user_id", "atlas_user"))
             except Exception as e:
                 print(f"[memory] graph backfill failed: {e}")
 
@@ -1032,7 +1049,41 @@ def send_message_stream(
 
     Yields the same events as run_turn_stream(), plus the final done event
     includes "session_id" and the UI-ready "messages" list.
+
+    The turn runs on its own thread and this generator only relays its events.
+    If the client goes away mid-reply (page reload, closed window, sleep) the
+    generator is closed, but the turn still finishes and is saved to the
+    session, so the reply is waiting when the page comes back. (Saving used to
+    happen in this generator after the last token, so a dropped connection
+    lost the whole turn, including the user's message.)
     """
+    events: queue.Queue[Any] = queue.Queue()
+    finished = object()
+
+    def _run() -> None:
+        try:
+            for event in _stream_turn(message, session_id, source, voice_mode):
+                events.put(event)
+        except Exception as e:
+            events.put({"error": str(e)})
+        finally:
+            events.put(finished)
+
+    threading.Thread(target=_run, daemon=True, name="celestia-chat-stream").start()
+    while True:
+        event = events.get()
+        if event is finished:
+            return
+        yield event
+
+
+def _stream_turn(
+    message: str,
+    session_id: str | None,
+    source: str,
+    voice_mode: bool,
+) -> Generator[dict[str, Any], None, None]:
+    """The streaming turn itself (see ``send_message_stream``)."""
     global _last_turn_time
     text = message.strip()
     if not text:

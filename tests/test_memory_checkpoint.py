@@ -492,3 +492,92 @@ def test_get_notes(chat) -> None:
     assert notes["notes"]["goal"] == "Plan a trip" and notes["notes"]["details"] == ["Flight LH123"]
     assert not notes["empty"] and notes["in_use"] and notes["untrusted"]
     assert notes["archived"] == len(ARCHIVE)
+
+
+# ---------------------------------------------------------------------------
+# A dropped connection must not lose the turn
+# ---------------------------------------------------------------------------
+
+
+def _fake_slow_stream(release):
+    def fake_stream(msg, history=None, **kw):
+        yield {"token": "Here "}
+        release.wait(5)                      # the model is still working
+        yield {"token": "is a recipe."}
+        hist = list(history or []) + [{"role": "user", "content": msg},
+                                      {"role": "assistant", "content": "Here is a recipe."}]
+        yield {"done": True, "reply": "Here is a recipe.", "messages": hist}
+
+    return fake_stream
+
+
+def _wait_for_turn(chat, sid, timeout=5.0) -> list:
+    end = time.time() + timeout
+    while time.time() < end:
+        shown = chat.get_history(sid)
+        if shown:
+            return shown
+        time.sleep(0.02)
+    return []
+
+
+def test_dropped_connection_still_saves_the_turn(chat, monkeypatch) -> None:
+    """Page reload / closed window / sleep: the browser goes away mid-reply.
+    The reply is still finished and saved, so it is there when the page returns."""
+    import threading
+
+    release = threading.Event()
+    monkeypatch.setattr(sc, "run_turn_stream", _fake_slow_stream(release))
+    monkeypatch.setattr(sc, "_should_consolidate_now", lambda state, end=False: False)
+    sid = sc.create_session(finalize_active=False)
+
+    gen = sc.send_message_stream("find me a protein smoothie recipe", session_id=sid)
+    assert next(gen) == {"token": "Here "}
+    gen.close()                              # the connection drops
+    release.set()
+    shown = _wait_for_turn(chat, sid)
+    assert [(m["role"], m["content"]) for m in shown] == [
+        ("user", "find me a protein smoothie recipe"),
+        ("assistant", "Here is a recipe."),
+    ]
+
+
+def test_connected_stream_is_unchanged(chat, monkeypatch) -> None:
+    import threading
+
+    release = threading.Event()
+    release.set()
+    monkeypatch.setattr(sc, "run_turn_stream", _fake_slow_stream(release))
+    monkeypatch.setattr(sc, "_should_consolidate_now", lambda state, end=False: False)
+    sid = sc.create_session(finalize_active=False)
+    events = list(sc.send_message_stream("hi", session_id=sid))
+    assert [e.get("token") for e in events[:-1]] == ["Here ", "is a recipe."]
+    done = events[-1]
+    assert done["done"] and done["reply"] == "Here is a recipe." and done["session_id"] == sid
+    assert [m["role"] for m in done["messages"]] == ["user", "assistant"]
+
+
+def test_stream_error_is_still_reported(chat, monkeypatch) -> None:
+    def boom(msg, history=None, **kw):
+        yield {"error": "LLM error: model not found"}
+
+    monkeypatch.setattr(sc, "run_turn_stream", boom)
+    sid = sc.create_session(finalize_active=False)
+    assert list(sc.send_message_stream("hi", session_id=sid)) == [{"error": "LLM error: model not found"}]
+
+
+def test_background_linking_waits_for_a_quiet_chat(chat, monkeypatch) -> None:
+    from celestia_core import stream_cancel
+
+    monkeypatch.setattr(sc, "_last_turn_time", time.time() - 10)
+    assert not sc._chat_quiet()                          # replied 10 s ago
+    monkeypatch.setattr(sc, "_last_turn_time", time.time() - 300)
+    assert sc._chat_quiet()
+    stream_cancel.begin("busy-sid")
+    try:
+        assert not sc._chat_quiet()                      # a reply is streaming right now
+    finally:
+        stream_cancel.end("busy-sid")
+    CONFIG["memory.graph.backfill_quiet_seconds"] = 0
+    monkeypatch.setattr(sc, "_last_turn_time", time.time())
+    assert sc._chat_quiet()

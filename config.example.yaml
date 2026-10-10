@@ -132,6 +132,7 @@ memory:
     enabled: true                # T15: memories and their graph facts are written together
     backfill: true               # link memories saved before T15 to the graph, ~10/min while idle
     backfill_batch: 10
+    backfill_quiet_seconds: 120  # only while chat has been quiet this long (avoids model swaps mid-chat)
     active_graph: default        # named graphs live in data/memory/graph/<name>.db
     walk_hops: 2                 # graph-walk depth during recall
     retain_history: true         # never delete; versioned supersede
