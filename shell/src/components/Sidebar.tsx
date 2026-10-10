@@ -14,7 +14,6 @@ import { usePersistedState } from "../hooks/usePersistedState";
 import type { Route } from "../App";
 import Aura from "./Aura";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { Plus, Activity as ActivityIcon, Brain, ListTodo, Settings, ChevronLeft, ChevronRight, Trash2, Check, X, Eye, EyeOff, Search } from "lucide-react";
 
@@ -159,8 +158,6 @@ export default function Sidebar({
             <Plus size={16} /> New chat
           </button>
 
-          <Separator className="bg-[var(--border)] my-1" />
-
           {/* Conversation search (Feature 03 / #86) */}
           <div className="sidebar-search">
             <Search size={14} className="sidebar-search-icon" />
@@ -283,8 +280,6 @@ export default function Sidebar({
               </ul>
             </ScrollArea>
           </div>
-
-          <Separator className="bg-[var(--border)] my-1" />
 
           {/* Footer nav */}
           <div className="sidebar-footer">

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import {
   fetchChatHistory,
   fetchPttStatus,
@@ -27,6 +27,7 @@ import VisionPreview from "../components/VisionPreview";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { clockTime, dayKey, dayLabel, fullStamp, nowTs } from "@/lib/time";
 
 const STARTER_CHIPS = [
   "What can you do?",
@@ -34,6 +35,34 @@ const STARTER_CHIPS = [
   "Help me focus today",
   "Remember something for me",
 ];
+
+/** Name + time over a turn. Older transcripts have no `ts`, so no time. */
+function Who({ name, ts }: { name: string; ts?: number }) {
+  return (
+    <div className="msg-who">
+      <span>{name}</span>
+      {ts !== undefined && (
+        <time className="msg-time" dateTime={new Date(ts * 1000).toISOString()} title={fullStamp(ts)}>
+          {clockTime(ts)}
+        </time>
+      )}
+    </div>
+  );
+}
+
+/** Index → day label for each message that starts a new calendar day. The first
+ *  stamped message only gets one when it isn't from today. */
+function dayDividers(messages: ChatMessage[]): Map<number, string> {
+  const out = new Map<number, string>();
+  let prev: number | null = null;
+  messages.forEach((m, i) => {
+    if (m.ts === undefined) return;
+    const day = dayKey(m.ts);
+    if (prev === null ? day !== dayKey(nowTs()) : day !== prev) out.set(i, dayLabel(m.ts));
+    prev = day;
+  });
+  return out;
+}
 
 type HomeProps = {
   sessionId: string;
@@ -206,7 +235,7 @@ export default function Home({ sessionId, onSidebarRefresh, live }: HomeProps) {
     streamingRef.current = false;
     setError(null);
     setLastProvenance([]);
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
+    setMessages((prev) => [...prev, { role: "user", content: text, ts: nowTs() }]);
 
     try {
       for await (const event of streamChatMessage(text, sessionId)) {
@@ -214,7 +243,7 @@ export default function Home({ sessionId, onSidebarRefresh, live }: HomeProps) {
           if (!streamingRef.current) {
             streamingRef.current = true;
             setStreamingTokens(true);
-            setMessages((prev) => [...prev, { role: "assistant" as const, content: event.token }]);
+            setMessages((prev) => [...prev, { role: "assistant" as const, content: event.token, ts: nowTs() }]);
           } else {
             setMessages((prev) => {
               const msgs = [...prev];
@@ -264,6 +293,7 @@ export default function Home({ sessionId, onSidebarRefresh, live }: HomeProps) {
   const visionEnabled = status?.vision_enabled ?? false;
   const showWelcome = messages.length === 0 && !chatBusy && !sessionLoading && !pttListening && !visionPending;
   const lastIdx = messages.length - 1;
+  const dividers = dayDividers(messages);
 
   return (
     <div className="home-view flex flex-col h-full overflow-hidden">
@@ -317,34 +347,42 @@ export default function Home({ sessionId, onSidebarRefresh, live }: HomeProps) {
             </div>
           ) : (
             <div className="chat-thread chat-thread-enter" key={threadAnim}>
-              {messages.map((msg, i) =>
-                msg.role === "user" ? (
-                  <div key={`${i}-user-${msg.content.slice(0, 24)}`} className="msg msg-user">
+              {messages.map((msg, i) => (
+                <Fragment key={`${i}-${msg.role}-${msg.content.slice(0, 24)}`}>
+                {dividers.has(i) && (
+                  <div className="msg-day" role="separator">{dividers.get(i)}</div>
+                )}
+                {msg.role === "user" ? (
+                  <div className="msg msg-user">
                     <div className="msg-user-body">
+                      <Who name="You" ts={msg.ts} />
                       <p>{msg.content}</p>
                     </div>
                   </div>
                 ) : (
-                  <div key={`${i}-asst-${msg.content.slice(0, 24)}`} className="msg msg-assistant">
+                  <div className="msg msg-assistant">
                     <Aura
                       className="msg-aura"
                       size="chat"
                       state={i === lastIdx && streamingTokens ? "speaking" : "idle"}
                     />
                     <div className="msg-assistant-body">
+                      <Who name={name} ts={msg.ts} />
                       <MessageBody content={msg.content} />
                       {i === lastIdx && !streamingTokens && (
                         <MemoryProvenance entries={lastProvenance} />
                       )}
                     </div>
                   </div>
-                ),
-              )}
+                )}
+                </Fragment>
+              ))}
 
               {pttListening && (
                 <div className="msg msg-assistant msg-listening">
                   <Aura className="msg-aura" size="chat" state="listening" />
                   <div className="msg-assistant-body">
+                    <Who name={name} />
                     <p>Listening… click the mic again to send.</p>
                   </div>
                 </div>
@@ -366,6 +404,7 @@ export default function Home({ sessionId, onSidebarRefresh, live }: HomeProps) {
                 <div className="msg msg-assistant">
                   <Aura className="msg-aura" size="chat" state="thinking" />
                   <div className="msg-assistant-body">
+                    <Who name={name} />
                     <div className="thinking-dots">
                       <span /><span /><span />
                     </div>

@@ -325,3 +325,50 @@ def test_get_history_after_messages(chat_tmp, stub_run_turn) -> None:
     hist = sc.get_history(session_id=sid)
     assert any(m["role"] == "user" for m in hist)
     assert any(m["role"] == "assistant" for m in hist)
+
+
+# ---------------------------------------------------------------------------
+# Message timestamps
+# ---------------------------------------------------------------------------
+
+
+def test_send_message_stamps_turn(chat_tmp, stub_run_turn) -> None:
+    sid = sc.create_session(finalize_active=False)
+    before = time.time()
+    msgs = sc.send_message("hello", session_id=sid)["messages"]
+    assert [m["role"] for m in msgs] == ["user", "assistant"]
+    assert all(before - 1 <= m["ts"] <= time.time() + 1 for m in msgs)
+    assert msgs[0]["ts"] <= msgs[1]["ts"]
+    assert sc.get_history(sid) == msgs
+
+
+def test_stamp_turn_leaves_legacy_and_earlier_messages_alone() -> None:
+    history = [
+        {"role": "system", "content": "prompt"},
+        {"role": "user", "content": "old, pre-timestamp"},
+        {"role": "assistant", "content": "old reply"},
+        {"role": "user", "content": "stamped", "ts": 5.0},
+        {"role": "assistant", "content": "stamped reply", "ts": 6.0},
+        {"role": "user", "content": "new"},
+        {"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "x"}}]},
+        {"role": "tool", "content": "result", "name": "x"},
+        {"role": "assistant", "content": "new reply"},
+    ]
+    sc._stamp_turn(history, turn_start=100.0)
+    assert [m.get("ts") for m in history[:5]] == [None, None, None, 5.0, 6.0]
+    assert history[5]["ts"] == 100.0
+    assert all(m["ts"] >= 100.0 for m in history[6:])
+
+
+def test_ui_messages_pass_ts_through_when_present() -> None:
+    out = sc._ui_messages([
+        {"role": "user", "content": "a", "ts": 1.0},
+        {"role": "assistant", "content": "b"},
+    ])
+    assert out == [{"role": "user", "content": "a", "ts": 1.0}, {"role": "assistant", "content": "b"}]
+
+
+def test_append_raw_turn_stamps_both(chat_tmp) -> None:
+    sid = sc.create_session(finalize_active=False)
+    msgs = sc.append_raw_turn("what's on screen?", "a terminal", session_id=sid)["messages"]
+    assert all(isinstance(m["ts"], float) for m in msgs)

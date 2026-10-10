@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Mic, MicOff, ArrowUp, Square, Camera, ScanEye, Monitor, Crop, AppWindow } from "lucide-react";
+import { Mic, MicOff, Square, Camera, ScanEye, Monitor, Crop, AppWindow } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type CaptureMode = "fullscreen" | "region" | "active_window";
@@ -104,6 +104,9 @@ export default function ChatInput({
             }
           }}
         />
+        <span className="chat-hint" aria-hidden>
+          <kbd>⇧</kbd><kbd>↵</kbd> new line
+        </span>
         {pttEnabled && (
           <Button
             type="button"
@@ -206,16 +209,11 @@ export default function ChatInput({
             disabled={locked || pttListening}
             aria-label="Send"
           >
-            {busy ? <span className="text-xs">…</span> : <ArrowUp size={16} />}
+            {busy ? "…" : <>Send <kbd aria-hidden>↵</kbd></>}
           </Button>
         )}
       </form>
-      <p className="chat-disclaimer">
-        Click <span className="chat-ptt-hint">mic</span> to start, click again to send.
-        {visionEnabled && <> · <span className="chat-ptt-hint">Camera</span> to capture screen.</>}
-        {readScreenEnabled && <> · <span className="chat-ptt-hint">Eye</span> to read active window.</>}
-        {" "}Celestia may make mistakes.
-      </p>
+      <p className="chat-disclaimer">Celestia runs on this PC and can make mistakes.</p>
     </div>
   );
 }
