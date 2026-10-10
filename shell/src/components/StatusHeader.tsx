@@ -37,7 +37,8 @@ const MODE_STYLE: Record<string, string> = {
 };
 const MODE_WORD: Record<string, string> = { armed: "Armed", scoped: "Scoped", safe: "Safe" };
 
-const CHECK_LABELS = ["Context", "Memory", "Tools", "Models"];
+// Order matches build_status(): Ollama · Memory · Security · Voice.
+const CHECK_LABELS = ["Ollama", "Memory", "Security", "Voice"];
 
 export default function StatusHeader({ status, live }: StatusHeaderProps) {
   const [expanded, setExpanded] = useState(false);

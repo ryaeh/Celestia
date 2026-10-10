@@ -12,7 +12,7 @@ Celestia is a local AI desktop companion (primarily Windows-targeted) built in P
 |---------|---------|---------------|
 | **Ollama** | LLM inference (chat + embeddings) | `ollama serve` (background) |
 
-Ollama must be running before any Celestia commands. Pull the models named in `config.example.yaml` (`llm.chat_model` — `qwen2.5:3b`; `memory.session_consolidate_model` — `qwen3.5:4b`; `nomic-embed-text`; `qwen2.5vl:7b` for vision). Current work plan: `docs/project/landscape-2026-09.md`.
+Ollama must be running for chat and memory. If it isn't, the shell shows a start / run-without / quit dialog (and a banner after that), terminal modes prompt, and `celestia_core/ollama_service.py` does the starting — it can also pull missing models. Pull the models named in `config.example.yaml` (`llm.chat_model` — `qwen2.5:3b`; `memory.session_consolidate_model` — `qwen3.5:4b`; `nomic-embed-text`; `qwen2.5vl:7b` for vision). Current work plan: `docs/project/landscape-2026-09.md`.
 
 ### Running the application
 

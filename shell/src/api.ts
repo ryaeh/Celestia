@@ -97,9 +97,83 @@ export type Status = {
   tray_max_mode: string | null;
   personality: string;
   ollama_ok: boolean;
+  ollama_state?: OllamaState;
   vision_enabled?: boolean;
   checks: { ok: boolean; message: string }[];
 };
+
+// ---------------------------------------------------------------------------
+// Ollama launch gate — mirrors celestia_core/ollama_service.status()
+// ---------------------------------------------------------------------------
+
+export type OllamaState = "running" | "missing_models" | "starting" | "down" | "not_installed";
+
+/** What to do at launch when Ollama is off (remembered choice, stored as a pref). */
+export type OllamaOnLaunch = "ask" | "start" | "skip";
+
+export type OllamaPull = {
+  active: boolean;
+  models: string[];
+  current: string | null;
+  index: number;
+  status: string;
+  completed: number;
+  total: number;
+  /** 0–100 for the model being pulled; null until the first byte count arrives. */
+  percent: number | null;
+  error: string | null;
+  finished: boolean;
+  cancelled: boolean;
+};
+
+export type OllamaStatus = {
+  state: OllamaState;
+  reachable: boolean;
+  host: string;
+  /** llm.host points at this PC — the only case Celestia may start Ollama. */
+  local: boolean;
+  can_start: boolean;
+  required: string[];
+  missing: string[];
+  /** The chat model is installed, so a turn can run. */
+  chat_ready: boolean;
+  message: string;
+  error: string | null;
+  start_error: string | null;
+  pull: OllamaPull;
+  on_launch: OllamaOnLaunch;
+  download_url: string;
+};
+
+async function ollamaCall(path: string, init?: RequestInit): Promise<OllamaStatus> {
+  const r = await apiFetch(path, init);
+  if (!r.ok) {
+    let detail = `${path} ${r.status}`;
+    try {
+      const body = (await r.json()) as { error?: string };
+      if (body.error) detail = body.error;
+    } catch {
+      /* keep the status-code message */
+    }
+    throw new Error(detail);
+  }
+  return r.json();
+}
+
+export const fetchOllamaStatus = () => ollamaCall("/ollama/status");
+
+/** Launch `ollama serve` (detached). Returns at once; poll fetchOllamaStatus. */
+export const startOllama = () => ollamaCall("/ollama/start", { method: "POST" });
+
+/** Download the missing required models in the background. */
+export const pullOllamaModels = (models?: string[]) =>
+  ollamaCall("/ollama/pull", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ models: models ?? null }),
+  });
+
+export const cancelOllamaPull = () => ollamaCall("/ollama/pull/cancel", { method: "POST" });
 
 /** Live, slow-changing state pushed over /ws/state (UI V2 / F3). Each frame may
  *  carry only the keys that changed, so every field is optional — merge into the
@@ -495,7 +569,8 @@ export type ChatStreamDone = {
   messages: ChatMessage[];
   provenance?: ProvenanceEntry[];
 };
-export type ChatStreamError = { error: string };
+/** `code` marks failures the shell can act on: Ollama is off, or a model is missing. */
+export type ChatStreamError = { error: string; code?: "ollama_down" | "model_missing" };
 export type ChatStreamEvent = ChatStreamToken | ChatStreamDone | ChatStreamError;
 
 /**

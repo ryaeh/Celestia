@@ -34,15 +34,33 @@ import {
   Camera,
   Palette,
   PenLine,
+  Server,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme, THEMES } from "../theme";
+import { openDownload, PullProgress } from "../components/OllamaParts";
+import { useOllama } from "../hooks/useOllama";
 
 const MODES = [
   { label: "Safe",   value: "safe",   color: "var(--safe)",   desc: "Read-only tools only" },
   { label: "Scoped", value: "scoped", color: "var(--scoped)", desc: "Files in workspaces" },
   { label: "Armed",  value: "armed",  color: "var(--armed)",  desc: "Full PC access" },
 ] as const;
+
+const ON_LAUNCH_OPTIONS = [
+  { value: "ask", label: "Ask me" },
+  { value: "start", label: "Start Ollama automatically" },
+  { value: "skip", label: "Open without Ollama" },
+] as const;
+
+// Word + tone for the Ollama badge (tones reuse the safe / scoped / armed pills).
+const OLLAMA_BADGE: Record<string, { word: string; tone: "safe" | "scoped" | "armed" }> = {
+  running: { word: "Running", tone: "safe" },
+  starting: { word: "Starting", tone: "scoped" },
+  missing_models: { word: "Models missing", tone: "scoped" },
+  down: { word: "Off", tone: "armed" },
+  not_installed: { word: "Not installed", tone: "armed" },
+};
 
 const STT_MODELS = ["tiny.en", "base.en", "small.en", "medium.en", "large-v3", "large-v3-turbo"];
 const STT_DEVICES = ["cpu", "cuda"];
@@ -259,6 +277,10 @@ export default function Settings({ onNavigate }: SettingsProps) {
   const [wsInput, setWsInput] = useState("");
   const [wsMsg, setWsMsg] = useState<string | null>(null);
   const wsInputRef = useRef<HTMLInputElement>(null);
+  const ollama = useOllama();
+  const ostat = ollama.status;
+  const oBadge = ostat ? OLLAMA_BADGE[ostat.state] : undefined;
+  const oFailure = ostat?.pull.error ?? ostat?.start_error ?? ollama.error;
 
   const toggle = (s: string) => setOpenSection((p) => (p === s ? null : s));
 
@@ -478,6 +500,69 @@ export default function Settings({ onNavigate }: SettingsProps) {
           <p className="text-[0.72rem] text-[var(--text-muted)] mt-3 opacity-70">
             Permanent workspaces go in <code>security.policy.yaml</code>. Runtime paths are stored in <code>data/scope_workspaces.json</code>.
           </p>
+        </Section>
+
+        {/* ── Ollama ────────────────────────────────────────────────────── */}
+        <Section
+          icon={<Server size={16} />}
+          title="Ollama"
+          subtitle="The local model server chat and memory run on"
+          expanded={openSection === "ollama"}
+          onToggle={() => toggle("ollama")}
+          badge={
+            oBadge ? (
+              <span className={`status-pill status-pill-${oBadge.tone}`}>{oBadge.word}</span>
+            ) : undefined
+          }
+        >
+          <p className="setting-msg text-[var(--text-muted)]">{ostat?.message ?? "Checking…"}</p>
+          {oFailure && !ostat?.pull.active && <p className="setting-msg error">{oFailure}</p>}
+
+          {ostat?.pull.active && (
+            <PullProgress pull={ostat.pull} onCancel={() => void ollama.cancelPull()} />
+          )}
+
+          <div className="flex flex-wrap gap-2 mt-3">
+            {ostat?.can_start && (
+              <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => void ollama.start()}>
+                Start Ollama
+              </Button>
+            )}
+            {ostat?.state === "not_installed" && (
+              <Button type="button" size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={() => openDownload(ostat.download_url)}>
+                <ExternalLink size={12} /> Download Ollama
+              </Button>
+            )}
+            {ostat?.state === "missing_models" && !ostat.pull.active && (
+              <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => void ollama.pull()}>
+                Pull missing models
+              </Button>
+            )}
+            <Button type="button" size="sm" variant="ghost" className="h-8 gap-1 text-xs" onClick={() => void ollama.refresh()}>
+              <RefreshCw size={12} /> Check again
+            </Button>
+          </div>
+
+          <div className="pref-grid mt-4">
+            <div className="pref-row">
+              <span className="pref-label">When Ollama is off at launch</span>
+              <div className="flex flex-col gap-1">
+                <select
+                  className="pref-select"
+                  value={ostat?.on_launch ?? "ask"}
+                  onChange={(e) => void ollama.setOnLaunch(e.target.value as (typeof ON_LAUNCH_OPTIONS)[number]["value"])}
+                  aria-label="When Ollama is off at launch"
+                >
+                  {ON_LAUNCH_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                <span className="pref-hint">
+                  Ask shows the start / run-without / quit dialog. Starting Ollama here leaves it running when you close Celestia.
+                </span>
+              </div>
+            </div>
+          </div>
         </Section>
 
         {/* ── Memory ────────────────────────────────────────────────────── */}

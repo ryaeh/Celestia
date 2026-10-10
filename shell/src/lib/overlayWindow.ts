@@ -83,6 +83,13 @@ export async function installMainCloseHandler(): Promise<() => void> {
   return unlisten;
 }
 
+/** Quit from the main window (the launch dialog's "Quit"). Goes through the close
+ *  handler above, so a visible bubble keeps Celestia alive and a hidden one quits. */
+export async function closeMainWindow(): Promise<void> {
+  if (!inTauri()) return;
+  await getCurrentWindow().close();
+}
+
 // ── From the overlay window ─────────────────────────────────────────────────
 
 export async function showMainWindow(): Promise<void> {

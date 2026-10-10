@@ -124,6 +124,37 @@ def test_run_turn_handles_llm_error(monkeypatch, mock_ollama):
     assert isinstance(history, list)
 
 
+def test_run_turn_says_so_when_ollama_is_not_running(mock_ollama):
+    """A refused connection becomes a plain instruction, not a raw httpx dump."""
+    mock_ollama.chat.side_effect = ConnectionError("Failed to connect to Ollama.")
+    text, _ = run_turn("Hello")
+    assert text.startswith("LLM error:")
+    assert "Ollama isn't running" in text
+    assert "Failed to connect" not in text
+
+
+def test_run_turn_points_at_pull_when_the_model_is_missing(mock_ollama):
+    import ollama
+
+    mock_ollama.chat.side_effect = ollama.ResponseError("model 'qwen2.5:3b' not found", 404)
+    text, _ = run_turn("Hello")
+    assert text.startswith("LLM error:")
+    assert "not found" in text
+    assert "pull" in text
+
+
+def test_llm_error_carries_a_machine_code():
+    import ollama
+
+    from celestia_core.agent import _error_event, _llm_error
+
+    assert _llm_error(ConnectionError("x")).code == "ollama_down"
+    assert _llm_error(ollama.ResponseError("nope", 404)).code == "model_missing"
+    assert _llm_error(ValueError("boom")).code is None
+    assert _error_event(_llm_error(ConnectionError("x")))["code"] == "ollama_down"
+    assert "code" not in _error_event(_llm_error(ValueError("boom")))
+
+
 # ---------------------------------------------------------------------------
 # Tool-call path
 # ---------------------------------------------------------------------------

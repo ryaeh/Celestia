@@ -50,6 +50,6 @@ if %errorlevel% neq 0 (
     echo Common fixes:
     echo   - Run: pip install -r requirements.txt
     echo   - Run: cd shell ^&^& npm install
-    echo   - Make sure Ollama is running: ollama serve
+    echo   - Install Ollama from https://ollama.com/download ^(Celestia can start it for you once installed^)
     pause
 )

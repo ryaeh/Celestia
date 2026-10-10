@@ -64,7 +64,7 @@ Every tool call is logged to `logs/tool_audit.jsonl`. Results from files, web pa
 
 ## Quick start
 
-**Requirements:** Python 3.11+, [Ollama](https://ollama.com) running (`ollama serve`), an NVIDIA GPU for Orpheus TTS (Edge TTS works without one).
+**Requirements:** Python 3.11+, [Ollama](https://ollama.com) installed (if it's off at launch, Celestia offers to start it — and to pull any missing models), an NVIDIA GPU for Orpheus TTS (Edge TTS works without one).
 
 ```powershell
 # 1. Clone and set up

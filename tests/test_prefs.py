@@ -51,6 +51,20 @@ def test_get_all_prefs_empty(prefs_path):
     assert get_all_prefs() == {}
 
 
+@pytest.mark.parametrize("choice", ["ask", "start", "skip"])
+def test_ollama_on_launch_accepts_each_choice(prefs_path, choice):
+    from celestia_core.config import get, set_pref
+    assert set_pref("llm.ollama_on_launch", choice) == "ok"
+    assert get("llm.ollama_on_launch") == choice
+
+
+@pytest.mark.parametrize("bad", ["always", "", None, 1, ["start"]])
+def test_ollama_on_launch_rejects_values_outside_the_choices(prefs_path, bad):
+    from celestia_core.config import set_pref
+    assert set_pref("llm.ollama_on_launch", bad).startswith("not allowed")
+    assert not prefs_path.exists()
+
+
 def test_prefs_update_existing_key(prefs_path):
     from celestia_core.config import set_pref
     set_pref("voice.stt.model", "base.en")

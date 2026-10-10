@@ -14,6 +14,7 @@ import {
   type ChatMessage,
 } from "../api";
 import { useLiveState } from "../hooks/useLiveState";
+import { chatLockReason, useOllama } from "../hooks/useOllama";
 import {
   expandFromBubble,
   hideOverlaySelf,
@@ -52,6 +53,7 @@ export default function Overlay() {
   const press = useRef<{ x: number; y: number; dragging: boolean } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const { state: live } = useLiveState();
+  const { status: ollama, chatReady, start: startOllama, refresh: refreshOllama } = useOllama();
 
   // ── Window lifecycle ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -163,8 +165,10 @@ export default function Overlay() {
     try {
       for await (const ev of streamChatMessage(text, sessionId || undefined)) {
         if ("token" in ev) setStreaming((s) => s + ev.token);
-        else if ("error" in ev) setError(ev.error);
-        else if ("done" in ev) {
+        else if ("error" in ev) {
+          setError(ev.error);
+          if (ev.code) void refreshOllama();
+        } else if ("done" in ev) {
           setMessages(ev.messages);
           if (ev.session_id) setSessionId(ev.session_id);
         }
@@ -273,7 +277,21 @@ export default function Overlay() {
         </header>
 
         <div className="overlay-messages" ref={listRef}>
-          {recent.length === 0 && !streaming && (
+          {!chatReady && ollama && (
+            <div className="overlay-notice" role="status">
+              <span>{chatLockReason(ollama)}</span>
+              {ollama.state === "down" && ollama.can_start ? (
+                <button type="button" className="ollama-link" onClick={() => void startOllama()}>
+                  Start Ollama
+                </button>
+              ) : ollama.state === "not_installed" || ollama.state === "missing_models" ? (
+                <button type="button" className="ollama-link" onClick={() => void showMainWindow()}>
+                  Open full window
+                </button>
+              ) : null}
+            </div>
+          )}
+          {chatReady && recent.length === 0 && !streaming && (
             <p className="overlay-empty">Tap the mic or type — I'm right here.</p>
           )}
           {recent.map((m, i) => (
@@ -306,7 +324,7 @@ export default function Overlay() {
               e.preventDefault();
               if (pttListening) void onPttUp(true); // right-click = discard
             }}
-            disabled={busy && !pttListening}
+            disabled={(busy && !pttListening) || !chatReady}
           >
             <Mic size={15} />
           </button>
@@ -317,7 +335,8 @@ export default function Overlay() {
             onKeyDown={(e) => {
               if (e.key === "Escape") void collapse();
             }}
-            placeholder="Message Celestia…"
+            placeholder={chatLockReason(ollama) ?? "Message Celestia…"}
+            disabled={!chatReady}
             autoFocus
           />
           {busy ? (
@@ -325,7 +344,7 @@ export default function Overlay() {
               <Square size={14} />
             </button>
           ) : (
-            <button type="submit" className="overlay-icon" title="Send" disabled={!input.trim()}>
+            <button type="submit" className="overlay-icon" title="Send" disabled={!input.trim() || !chatReady}>
               <Send size={14} />
             </button>
           )}

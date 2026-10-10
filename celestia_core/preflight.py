@@ -7,23 +7,15 @@ from pathlib import Path
 
 
 def check_ollama() -> tuple[bool, str]:
-    host = get("llm.host", "http://127.0.0.1:11434").rstrip("/")
-    model = get("llm.chat_model", "llama3.2:3b")
-    embed = get("llm.embed_model", "nomic-embed-text")
-    try:
-        r = requests.get(f"{host}/api/tags", timeout=5)
-        r.raise_for_status()
-        names = [m.get("name", "") for m in r.json().get("models", [])]
-        missing = []
-        for want in (model, embed):
-            base = want.split(":")[0]
-            if not any(base in n for n in names):
-                missing.append(want)
-        if missing:
-            return False, f"Ollama OK but missing: {', '.join(missing)} — ollama pull ..."
-        return True, f"Ollama OK — {model}, {embed}"
-    except requests.RequestException as e:
-        return False, f"Ollama not reachable at {host} — {e}"
+    from celestia_core import ollama_service
+
+    st = ollama_service.status()
+    if not st["reachable"]:
+        return False, f"Ollama not reachable at {st['host']} — {st['message']}"
+    if st["missing"]:
+        pulls = "; ".join(f"ollama pull {m}" for m in st["missing"])
+        return False, f"Ollama OK but missing: {', '.join(st['missing'])} — {pulls}"
+    return True, f"Ollama OK — {', '.join(st['required'])}"
 
 
 def check_memory() -> tuple[bool, str]:

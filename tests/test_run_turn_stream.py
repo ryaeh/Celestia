@@ -125,6 +125,32 @@ def test_stream_error_event_contains_message(monkeypatch) -> None:
     error_events = [e for e in events if "error" in e]
     assert len(error_events) == 1
     assert "timeout" in error_events[0]["error"]
+    assert "code" not in error_events[0]  # unknown failures carry no code
+
+
+def test_stream_error_event_flags_ollama_down(monkeypatch) -> None:
+    """The shell keys off ``code`` to raise the Ollama banner immediately."""
+    client = MagicMock()
+    client.chat.side_effect = ConnectionError("Failed to connect to Ollama.")
+    monkeypatch.setattr("celestia_core.agent._ollama_client", lambda: client)
+    events = list(run_turn_stream("Hello"))
+    (event,) = [e for e in events if "error" in e]
+    assert event["code"] == "ollama_down"
+    assert "Ollama isn't running" in event["error"]
+
+
+def test_stream_tool_round_failure_keeps_the_code(monkeypatch) -> None:
+    """Ollama dying between tool rounds must also surface as ollama_down."""
+    first = _stream_chunks(
+        [""], tool_calls=[{"function": {"name": "noop", "arguments": {}}}]
+    )
+    client = MagicMock()
+    client.chat.side_effect = [iter(first), ConnectionError("gone")]
+    monkeypatch.setattr("celestia_core.agent._ollama_client", lambda: client)
+    monkeypatch.setattr(agent_mod, "execute_tool", lambda *a, **k: "ok")
+    events = list(run_turn_stream("Hello"))
+    (event,) = [e for e in events if "error" in e]
+    assert event["code"] == "ollama_down"
 
 
 # ---------------------------------------------------------------------------
