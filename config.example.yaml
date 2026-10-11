@@ -32,6 +32,11 @@ llm:
   embed_model: nomic-embed-text
   request_timeout_seconds: 60   # seconds before an Ollama call is aborted (CC-92)
   max_tokens: 1024              # max tokens per LLM reply (num_predict)
+  # "Start Ollama" (launch dialog / banner / Settings → Ollama) only works when host is this PC.
+  ollama_path: ""               # full path to ollama.exe if it isn't on PATH or in the default install folder
+  ollama_start_timeout_seconds: 25   # how long "Start Ollama" waits for the server to answer
+  # What to do when Ollama is off at launch (ask | start | skip) is a UI pref, not config:
+  # it's saved to data/ui_prefs.json by the launch dialog's "Remember my choice" or Settings → Ollama.
 
 memory:
   enabled: true

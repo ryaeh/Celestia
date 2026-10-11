@@ -27,8 +27,14 @@ MUTABLE_PREF_KEYS: frozenset[str] = frozenset(
         "voice.tts.provider",
         "voice.reply_cap_voice",
         "ui.shell_ptt_max_seconds",
+        "llm.ollama_on_launch",  # ask | start | skip — see ollama_service.on_launch()
     }
 )
+
+# Pref keys that only accept a fixed set of values.
+_PREF_CHOICES: dict[str, tuple[str, ...]] = {
+    "llm.ollama_on_launch": ("ask", "start", "skip"),
+}
 
 
 def _load_ui_prefs() -> dict[str, Any]:
@@ -48,6 +54,9 @@ def set_pref(key: str, value: Any) -> str:
     """Write a single mutable pref to data/ui_prefs.json."""
     if key not in MUTABLE_PREF_KEYS:
         return f"not allowed: {key}"
+    choices = _PREF_CHOICES.get(key)
+    if choices is not None and value not in choices:
+        return f"not allowed: {key} must be one of {', '.join(choices)}"
     prefs = _load_ui_prefs()
     prefs[key] = value
     _UI_PREFS_PATH.parent.mkdir(parents=True, exist_ok=True)

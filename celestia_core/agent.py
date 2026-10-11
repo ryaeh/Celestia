@@ -7,13 +7,43 @@ from typing import Any, Callable, Generator
 
 import ollama
 
-from celestia_core import untrusted
+from celestia_core import ollama_service, untrusted
 from celestia_core.config import get
 from celestia_core.personality import build_system_prompt
 from skills.registry import execute_tool, tool_schemas
 
 # Cached Ollama client — rebuilt if the host or timeout config changes.
 _ollama_client_cache: dict[str, ollama.Client] = {}
+
+
+class LLMError(RuntimeError):
+    """A failed Ollama call. ``code`` lets the shell react (``ollama_down`` /
+    ``model_missing``) instead of just printing the text."""
+
+    def __init__(self, message: str, code: str | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+def _llm_error(e: Exception) -> LLMError:
+    """Friendly, still ``LLM error:``-prefixed message for a failed ollama call."""
+    if ollama_service.is_connection_error(e):
+        return LLMError(f"LLM error: {ollama_service.DOWN_MESSAGE}", "ollama_down")
+    if isinstance(e, ollama.ResponseError) and getattr(e, "status_code", None) == 404:
+        return LLMError(
+            f"LLM error: {e} — pull it from the banner in the app (or run `ollama pull <model>`).",
+            "model_missing",
+        )
+    return LLMError(f"LLM error: {e}")
+
+
+def _error_event(e: RuntimeError) -> dict[str, Any]:
+    """Stream ``{"error": …}`` event, plus ``code`` when the failure has a known cause."""
+    event: dict[str, Any] = {"error": str(e)}
+    code = getattr(e, "code", None)
+    if code:
+        event["code"] = code
+    return event
 
 
 def _ollama_client() -> ollama.Client:
@@ -344,7 +374,7 @@ def _sync_tool_rounds(
                 options={"num_predict": int(get("llm.max_tokens", 1024))},
             )
         except Exception as e:
-            raise RuntimeError(f"LLM error: {e}") from e
+            raise _llm_error(e) from e
 
         msg = _message_to_dict(response["message"])
         messages.append(msg)
@@ -451,7 +481,7 @@ def _stream_tool_rounds(
                 options={"num_predict": int(get("llm.max_tokens", 1024))},
             )
         except Exception as e:
-            raise RuntimeError(f"LLM error: {e}") from e
+            raise _llm_error(e) from e
 
         msg = _message_to_dict(response["message"])
         messages.append(msg)
@@ -544,7 +574,7 @@ def run_turn_stream(
             stream=True,
         )
     except Exception as e:
-        yield {"error": f"LLM error: {e}"}
+        yield _error_event(_llm_error(e))
         return
 
     full_content = ""
@@ -624,4 +654,4 @@ def run_turn_stream(
         )
         yield {"done": True, "reply": text, "messages": final_messages}
     except RuntimeError as e:
-        yield {"error": str(e)}
+        yield _error_event(e)

@@ -20,6 +20,7 @@ import {
 } from "../api";
 import StatusHeader from "../components/StatusHeader";
 import ChatInput from "../components/ChatInput";
+import { chatLockReason, useOllama } from "../hooks/useOllama";
 import Aura from "../components/Aura";
 import MessageBody from "../components/MessageBody";
 import MemoryProvenance from "../components/MemoryProvenance";
@@ -72,6 +73,7 @@ type HomeProps = {
 
 export default function Home({ sessionId, onSidebarRefresh, live }: HomeProps) {
   const [status, setStatus] = useState<Status | null>(null);
+  const { status: ollama, chatReady, refresh: refreshOllama } = useOllama();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // Provenance for the most recent reply only (cleared on send / session change).
   const [lastProvenance, setLastProvenance] = useState<ProvenanceEntry[]>([]);
@@ -258,6 +260,7 @@ export default function Home({ sessionId, onSidebarRefresh, live }: HomeProps) {
           onSidebarRefresh?.();
         } else if ("error" in event) {
           setError(event.error);
+          if (event.code) void refreshOllama(); // Ollama died mid-turn — show the banner now
           setMessages((prev) => {
             const msgs = [...prev];
             if (streamingRef.current) msgs.pop();
@@ -338,6 +341,7 @@ export default function Home({ sessionId, onSidebarRefresh, live }: HomeProps) {
                     key={chip}
                     type="button"
                     className="welcome-chip"
+                    disabled={!chatReady}
                     onClick={() => onSend(chip)}
                   >
                     {chip}
@@ -421,7 +425,8 @@ export default function Home({ sessionId, onSidebarRefresh, live }: HomeProps) {
       <ChatInput
         onSend={onSend}
         onStop={onStop}
-        disabled={(!!error && messages.length === 0 && !sessionLoading) || !!visionPending}
+        disabled={(!!error && messages.length === 0 && !sessionLoading) || !!visionPending || !chatReady}
+        lockedReason={chatLockReason(ollama)}
         busy={chatBusy}
         pttListening={pttListening}
         onPttStart={onPttStart}

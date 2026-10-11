@@ -557,6 +557,23 @@ def main() -> int:
     if args.mcp:
         return _run_mcp()
 
+    # Every mode below talks to Ollama. The shell has its own in-app dialog; for
+    # the terminal modes, offer to start it (or carry on without) up front.
+    needs_ollama = (
+        args.screen is not None
+        or args.tray_chat
+        or args.tray
+        or args.voice_loop
+        or args.listen
+        or args.interactive
+        or bool(args.message)
+    )
+    if needs_ollama:
+        from celestia_core.ollama_service import cli_gate
+
+        if not cli_gate():
+            return 1
+
     if args.screen is not None:
         return _run_screen(args)
 

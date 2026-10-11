@@ -100,6 +100,32 @@ async def require_token(request: Request, call_next):
     return await call_next(request)
 
 
+def _connection_error_response(request: Request, exc: Exception):
+    """Any endpoint that bubbles a "can't connect" error while Ollama is down gets a
+    friendly 503 the shell understands, instead of a bare 500 with a stack trace.
+    (Sync on purpose: Starlette runs sync handlers in a threadpool, and the status
+    probe blocks.)"""
+    from celestia_core import ollama_service
+
+    if ollama_service.is_connection_error(exc) and not ollama_service.status()["reachable"]:
+        return JSONResponse(
+            status_code=503,
+            content={"error": ollama_service.DOWN_MESSAGE, "code": "ollama_down"},
+        )
+    return JSONResponse(status_code=502, content={"error": str(exc)})
+
+
+def _register_connection_handlers() -> None:
+    import httpx
+    import requests
+
+    for exc_type in (ConnectionError, requests.ConnectionError, httpx.ConnectError):
+        app.add_exception_handler(exc_type, _connection_error_response)
+
+
+_register_connection_handlers()
+
+
 # ---------------------------------------------------------------------------
 # Bootstrap: write token, expose via /token
 # ---------------------------------------------------------------------------
@@ -184,6 +210,10 @@ class ReadScreenBody(BaseModel):
     session_id: str | None = None
 
 
+class OllamaPullBody(BaseModel):
+    models: list[str] | None = None  # default: every missing required model
+
+
 # ---------------------------------------------------------------------------
 # Shared helpers (unchanged from original)
 # ---------------------------------------------------------------------------
@@ -222,7 +252,7 @@ def tail_audit(n: int = 20) -> list[dict[str, Any]]:
 
 
 def build_status() -> dict[str, Any]:
-    from celestia_core import security
+    from celestia_core import ollama_service, security
     from celestia_core.preflight import (
         check_memory,
         check_ollama,
@@ -236,11 +266,8 @@ def build_status() -> dict[str, Any]:
     if get("vision.enabled", False):
         check_fns.append(check_vision)
     checks = [fn() for fn in check_fns]
-    ollama_ok = True
-    for ok, msg in checks:
-        if "ollama" in msg.lower():
-            ollama_ok = ok
-            break
+    # check_ollama above already probed; this reuses that (cached) probe.
+    ollama_state = ollama_service.status()["state"]
 
     return {
         "display_name": get("app.display_name", "Celestia"),
@@ -248,7 +275,8 @@ def build_status() -> dict[str, Any]:
         "mode_label": security.armed_status_label(),
         "tray_max_mode": security.get_tray_max_mode(),
         "personality": get("personality.active", "default"),
-        "ollama_ok": ollama_ok,
+        "ollama_ok": ollama_state == "running",
+        "ollama_state": ollama_state,
         "vision_enabled": bool(get("vision.enabled", False)),
         "checks": [{"ok": ok, "message": msg} for ok, msg in checks],
     }
@@ -301,6 +329,14 @@ def get_status():
     data = build_status()
     _status_cache = (now, data)
     return data
+
+
+@app.get("/ollama/status")
+def get_ollama_status():
+    """Launch-gate state: running / down / starting / not_installed / missing_models."""
+    from celestia_core import ollama_service
+
+    return ollama_service.status()
 
 
 @app.get("/prefs")
@@ -657,6 +693,43 @@ def post_incognito(body: IncognitoBody):
     from celestia_core import incognito
     incognito.set_on(body.on)
     return {"on": incognito.is_on(), "label": incognito.status_label()}
+
+
+def _ollama_action(fn, *args):
+    """Run an ollama_service start/pull call; refusals come back as a 400 body."""
+    global _status_cache
+    from celestia_core import ollama_service
+
+    try:
+        result = fn(*args)
+    except ollama_service.OllamaError as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+    _status_cache = None  # /status reads the same probe — don't serve it stale
+    return result
+
+
+@app.post("/ollama/start")
+def post_ollama_start():
+    """Launch ``ollama serve`` (detached) when it isn't answering. User-only — this
+    is deliberately not an LLM tool. Returns the status; poll /ollama/status."""
+    from celestia_core import ollama_service
+
+    return _ollama_action(ollama_service.start)
+
+
+@app.post("/ollama/pull")
+def post_ollama_pull(body: OllamaPullBody):
+    """Download the missing required models (chat + embedding) in the background."""
+    from celestia_core import ollama_service
+
+    return _ollama_action(ollama_service.start_pull, body.models)
+
+
+@app.post("/ollama/pull/cancel")
+def post_ollama_pull_cancel():
+    from celestia_core import ollama_service
+
+    return _ollama_action(ollama_service.cancel_pull)
 
 
 @app.post("/mode")

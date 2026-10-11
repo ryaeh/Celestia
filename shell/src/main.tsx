@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import "@fontsource-variable/geist";
 import App from "./App";
 import Overlay from "./pages/Overlay";
+import { OllamaProvider } from "./hooks/useOllama";
 import { isOverlayView } from "./lib/overlayWindow";
 import { initTheme } from "./theme";
 
@@ -16,6 +17,6 @@ if (overlay) document.documentElement.classList.add("overlay-view");
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    {overlay ? <Overlay /> : <App />}
+    <OllamaProvider>{overlay ? <Overlay /> : <App />}</OllamaProvider>
   </React.StrictMode>,
 );

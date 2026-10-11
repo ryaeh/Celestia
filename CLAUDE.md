@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Celestia is a local Windows AI companion — chat, memory, voice, screen reading, and PC control. It runs entirely on-device via Ollama (no cloud LLM). The main entry point is `run_celestia.py`.
 
-Required service: **Ollama must be running** (`ollama serve`) before any Celestia commands work.
+Required service: **Ollama** must be running for chat and memory (`ollama serve`). If it isn't, the shell asks (start / run without / quit) and terminal modes prompt — see the Ollama launch gate pattern below; the pytest suite never needs it.
 
 ## Commands
 
@@ -63,6 +63,7 @@ celestia_core/
   scope.py                # Workspace path allowlist, protected path checks
   config.py               # Reads config.yaml; get(key, default) accessor — always use this, never read config directly
   open_dispatch.py        # Routes "open X" text to open_path or open_url
+  ollama_service.py       # Ollama lifecycle: status() probe (running/down/starting/not_installed/missing_models), start() detached `ollama serve`, start_pull()/cancel_pull(), cli_gate() terminal prompt; user-only, never an LLM tool
   incognito.py            # Pause-learning toggle: shared mtime-cached state (data/incognito_state.json); is_on() gates consolidation/graph/activity
   untrusted.py            # Prompt-injection defense: wrap_tool_result() delimits external content (file/web/clipboard) as untrusted data
 skills/
@@ -86,6 +87,8 @@ shell/                    # Tauri v2 + React 19 + Vite + Tailwind + shadcn/ui de
   src/pages/Todos.tsx     # To-do page — add/complete/edit/delete; talks to /todos API
   src/pages/Overlay.tsx   # Companion bubble (Tauri window "overlay", ?view=overlay): Aura orb → mini chat + PTT
   src/lib/overlayWindow.ts # All Tauri window calls for the bubble (show/hide/position/expand); no-op outside Tauri
+  src/hooks/useOllama.tsx # OllamaProvider (one poller per window) + useOllama(): status, chatReady, start/pull/cancelPull, setOnLaunch
+  src/components/OllamaGate.tsx # Launch dialog (Start Ollama and Run / Run Without Ollama / Quit) + the banner shown afterwards or when Ollama drops
   src/api.ts              # All fetch calls to shell_server.py; reads token from /token endpoint
 personalities/*.yaml      # Personality packs — name, traits, extra prompt lines
 tests/                    # pytest; all heavy deps (Ollama, Chroma, mem0, Whisper) are mocked
@@ -115,6 +118,8 @@ evals/                    # Gate A eval harness — extraction + tool-call gold-
 **Memory origin + quarantine** (T04, `skills/memory/types.py` `trust_policy`): every `store.add()` takes an `origin` (`user`/`assistant`/`consolidation`/`screen`/`tool:<name>`) and `untrusted=`; untrusted writes are stored as quarantined facts (`requested_kind` kept) and are excluded from `search()`, `format_list()`, cached instructions and `build_context` until approved (`update_entry(approve=True)`, `POST /memory/{id}/approve`). `agent.py` passes `untrusted.turn_tainted(messages)` into `execute_tool(untrusted_context=...)`: in a tainted turn `memory_add` is quarantined and `memory_edit`/`memory_delete` are refused. Consolidation keeps an item live in a tainted window only if `untrusted.supported_by(item, user_text)`; graph relations are grounded the same way.
 
 **Message time** (`shell_chat._stamp_turn` + `agent._time_note`): shell sessions stamp every stored message with `ts` (epoch seconds; older transcripts have none). `_message_to_dict` keeps `ts`, `_model_messages()` strips it before every `ollama.chat`. Each turn adds a `[Time] It is …` system note (local time, plus "previous message was N ago" after `chat.time_gap_hours` idle) right before the user message; `_strip_ephemeral` always drops it, so it is never stored. The shell shows a name + time over each turn and day dividers.
+
+**Ollama launch gate** (`celestia_core/ollama_service.py` + `shell/src/components/OllamaGate.tsx`): `status()` is the one probe everything shares (`/ollama/status`, `/status`'s `ollama_state`, `preflight.check_ollama`). Model names match exactly, tag included (bare name = `:latest`), so `qwen2.5:7b` doesn't satisfy `qwen2.5:3b`. `start()` spawns a **detached** `ollama serve` (no window, outlives Celestia, `OLLAMA_HOST` from `llm.host`) on a worker thread and is idempotent; it refuses unless `llm.host` is local. `start_pull()` only pulls the configured chat/embed models, with aggregated progress and `cancel_pull()`. These are user actions on token-guarded `POST /ollama/{start,pull,pull/cancel}` — **never register them as LLM tools**. The remembered launch choice (`llm.ollama_on_launch`: `ask`/`start`/`skip`) is a UI pref in `data/ui_prefs.json`, so it needs no `--trust-config`. Chat failures carry `code` (`ollama_down`/`model_missing`) on the stream error event so the shell raises the banner at once; `shell_server` turns stray connection errors into a friendly 503 only when Ollama really is down. On Windows a refused localhost connect hangs for the whole connect timeout, so the probe uses a short connect + generous read timeout — keep it that way, and don't add a second prober while a start is in flight.
 
 **Privacy & untrusted input** (Gate B / prompt-injection): `incognito.is_on()` pauses *all* recording (consolidation, graph extraction, activity feed) at the single `should_run_consolidation()` choke point while chat keeps working — toggled from tray, shell sidebar, or `POST /incognito`. Separately, `untrusted.wrap_tool_result()` delimits any external text (`file_read`/`clipboard_read`/`fetch_page`/`web_search`) as `⟦UNTRUSTED DATA … ⟧` before it re-enters the model context; the system prompt (`personality._BASE`) carries the matching "data, not instructions" clause. Keep the two halves in sync.
 

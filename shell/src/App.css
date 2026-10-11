@@ -575,6 +575,48 @@ html.overlay-view #root { min-height: 0; height: 100vh; }
 .overlay-input-row { display: flex; align-items: center; gap: 6px; padding: 8px; border-top: 1px solid var(--border); }
 .overlay-input { flex: 1; min-width: 0; height: 32px; padding: 0 10px; border-radius: var(--radius-md); border: 1px solid var(--border-light); background: var(--bg-input); color: var(--text); font: inherit; font-size: 13px; outline: none; }
 .overlay-input:focus { border-color: var(--accent-bright); }
+.overlay-notice { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: auto 0; padding: 0 8px; text-align: center; font-size: 12.5px; color: var(--text-muted); }
+
+/* ── Ollama launch gate (dialog + banner) ───────────────────────────────── */
+.welcome-chip:disabled { opacity: 0.5; cursor: not-allowed; }
+.welcome-chip:disabled:hover { background: var(--bg-panel); border-color: var(--border); }
+
+.ollama-scrim { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; background: rgba(8, 10, 12, 0.62); }
+.ollama-dialog { width: min(460px, 100%); max-height: 100%; overflow-y: auto; padding: 22px 22px 18px; border: 1px solid var(--border-light); border-radius: var(--radius-xl); background: var(--bg-panel); color: var(--text); box-shadow: var(--shadow-overlay); }
+.ollama-dialog h2 { margin: 0 0 8px; font-size: 17px; font-weight: 600; }
+.ollama-dialog p { margin: 0 0 10px; font-size: 13.5px; line-height: 1.5; color: var(--text-muted); }
+.ollama-dialog strong { color: var(--text); font-weight: 600; }
+.ollama-dialog code, .ollama-banner code { font-size: 12px; }
+.ollama-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+/* The global `button {}` rule is unlayered, so it beats Tailwind's variant classes —
+   the primary action needs its own accent fill (same recipe as .chat-send). */
+.ollama-primary { justify-content: center; border-color: var(--accent-bright); background: var(--accent-bright); color: var(--on-accent); font-weight: 600; }
+.ollama-primary:hover:not(:disabled) { background: color-mix(in oklab, var(--accent-bright) 88%, var(--text)); }
+.ollama-actions button { justify-content: center; }
+.ollama-remember { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; font-size: 13px; color: var(--text); cursor: pointer; }
+.ollama-remember input { margin-top: 3px; accent-color: var(--accent-bright); }
+.ollama-remember small { display: block; margin-top: 1px; font-size: 12px; color: var(--text-muted); }
+.ollama-error { color: var(--armed); }
+.ollama-link { all: unset; font-size: 12px; color: var(--accent-bright); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.ollama-link:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
+
+.ollama-banner { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: 0 0 8px; padding: 8px 12px; border: 1px solid var(--scoped); border-radius: var(--radius); background: var(--bg-panel); color: var(--text); font-size: 13px; }
+.ollama-banner-icon { flex-shrink: 0; color: var(--scoped); }
+.ollama-banner-text { flex: 1; min-width: 180px; }
+.ollama-banner-progress { flex: 1 1 100%; }
+
+.ollama-progress { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 2px; font-size: 12.5px; color: var(--text-muted); }
+.ollama-progress-head, .ollama-progress-foot { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.ollama-progress-head { color: var(--text); }
+.ollama-bar { height: 6px; overflow: hidden; border-radius: var(--radius-pill); background: var(--bg-hover); }
+.ollama-bar-fill { height: 100%; border-radius: inherit; background: var(--accent-bright); transition: width 0.3s var(--ease); }
+.ollama-bar-indeterminate { width: 30%; animation: ollama-slide 1.3s var(--ease) infinite; }
+@keyframes ollama-slide { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+.ollama-spin { animation: ollama-rotate 1s linear infinite; }
+@keyframes ollama-rotate { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .ollama-bar-indeterminate { animation: none; width: 100%; opacity: 0.45; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }

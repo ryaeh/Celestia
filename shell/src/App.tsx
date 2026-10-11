@@ -3,6 +3,7 @@ import { Toaster } from "sonner";
 import { fetchChatSessions, initialRoute } from "./api";
 import { installMainCloseHandler } from "./lib/overlayWindow";
 import { useLiveState } from "./hooks/useLiveState";
+import OllamaGate from "./components/OllamaGate";
 import Sidebar from "./components/Sidebar";
 import Activity from "./pages/Activity";
 import Home from "./pages/Home";
@@ -120,6 +121,7 @@ export default function App() {
       />
 
       <div className="main-column">
+        <OllamaGate />
         {route === "home" && activeSessionId ? (
           <Home
             sessionId={activeSessionId}

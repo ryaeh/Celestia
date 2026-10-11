@@ -10,15 +10,25 @@ Common failures and how to recover from them. Run `--check` first — it catches
 
 ## Ollama not running or unreachable
 
-**Symptom:** `--check` says Ollama is down. Chat returns an error immediately. Shell status shows `ollama_ok: false`.
+**Symptom:** `--check` says Ollama is down. Chat says "Ollama isn't running". Shell status shows `ollama_ok: false`, the composer is greyed out, and an amber banner sits above the chat.
 
-**Fix:**
+**Fix (shell):** at launch Celestia asks what to do when Ollama is off — **Start Ollama and Run**, **Run Without Ollama**, or **Quit**. Tick *Remember my choice* to skip the question next time. Later, the banner's **Start Ollama** button does the same, and **Settings → Ollama** shows the state and changes the remembered choice (ask / start automatically / open without Ollama).
+
+**Fix (terminal modes — `-i`, `--voice-loop`, one-shot messages):** you get a `[S]tart Ollama / [C]ontinue without / [Q]uit` prompt. It only appears on a real terminal, so scripts are never blocked.
+
+**Fix (by hand):**
 
 ```powershell
 ollama serve
 ```
 
-Leave it running in a background terminal. Celestia does not start Ollama for you.
+Ollama started by Celestia runs detached — it keeps running after Celestia closes, like any other Ollama. Celestia will only start Ollama when `llm.host` points at this PC; for a remote host, start it there. If Ollama is installed somewhere unusual, set `llm.ollama_path` in `config.yaml` (then run `--trust-config`).
+
+**"Ollama isn't installed":** get it from <https://ollama.com/download>. The dialog/banner notices on its own once it's installed.
+
+**"Models needed" / "Chat needs …":** Ollama is up but a model from `llm.chat_model` / `llm.embed_model` isn't pulled. Use **Pull Missing Models Now** (dialog, banner, or Settings → Ollama) — it shows live progress and can be cancelled (Ollama keeps the partial download). Or by hand: `ollama pull <model>`. Model names are matched exactly, tag included: having `qwen2.5:7b` does not satisfy `qwen2.5:3b`.
+
+**Start didn't work:** if Ollama doesn't answer within `llm.ollama_start_timeout_seconds` (default 25), the dialog says so — run `ollama serve` in a terminal to see the real error.
 
 **If Ollama is running but still failing:**
 

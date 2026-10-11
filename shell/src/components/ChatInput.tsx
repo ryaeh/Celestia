@@ -15,6 +15,9 @@ type ChatInputProps = {
   onSend: (message: string) => void;
   onStop?: () => void;
   disabled?: boolean;
+  /** Shown as the placeholder while the composer is locked from outside
+   *  (e.g. "Ollama is off — start it to chat"). */
+  lockedReason?: string;
   busy?: boolean;
   pttEnabled?: boolean;
   pttListening?: boolean;
@@ -31,6 +34,7 @@ export default function ChatInput({
   onSend,
   onStop,
   disabled,
+  lockedReason,
   busy,
   pttEnabled = true,
   pttListening = false,
@@ -87,7 +91,11 @@ export default function ChatInput({
           rows={1}
           className={cn("chat-input", "text-[var(--text)] placeholder:text-[var(--text-dim)]")}
           placeholder={
-            pttListening ? "Listening… click mic to send" : busy ? "Thinking…" : "Ask Celestia anything…"
+            pttListening
+              ? "Listening… click mic to send"
+              : busy
+                ? "Thinking…"
+                : lockedReason ?? "Ask Celestia anything…"
           }
           disabled={locked || pttListening}
           aria-label="Message Celestia"
