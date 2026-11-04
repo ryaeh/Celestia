@@ -7,6 +7,8 @@ One page: where Celestia is, what's being built next (in order), and what alread
 - **Idea pool** → [ideas-backlog.md](ideas-backlog.md)
 - **Perf/GPU backlog** → [perf-and-qol-backlog.md](perf-and-qol-backlog.md)
 - **UI V2 plan** → [ui-v2-plan.md](ui-v2-plan.md) (foundations + phased surfaces)
+- **Shell redesign** → [shell-redesign-plan.md](shell-redesign-plan.md) (Console now, Orbit later)
+- **Proposed re-plan (Nov 2026, pending approval)** → [replan-2026-11.md](replan-2026-11.md)
 - **Day-to-day tracking** → [GitHub Issues](https://github.com/ryaeh/Celestia/issues)
 
 ---
@@ -20,9 +22,9 @@ lifecycle v1, GPU-idle tidy with entity resolution) + privacy basics (incognito,
 scrubbing, untrusted-content wrapping, provenance) + a Tauri shell (Aura, themes, UI V2
 foundations) + GPU residency management.
 
-**Gate A exists.** The extraction eval is on `main`; the tool-calling eval, the real-model
-CI workflow, an MCP client and the companion overlay bubble are in review in
-[PR #117](https://github.com/ryaeh/Celestia/pull/117).
+**Gate A exists.** The extraction and tool-calling evals, the real-model CI workflow, an MCP
+client and the companion overlay bubble are on `main`
+([PR #117](https://github.com/ryaeh/Celestia/pull/117), merged Sep 30).
 
 **The plan changed (Sep 2026).** A landscape review turned into a scoped task list:
 [`landscape-2026-09.md`](landscape-2026-09.md) (task IDs **T01–T14**, decisions **D1–D9**).
@@ -46,7 +48,7 @@ Feature briefs keep their numbers (`01`–`12`); tasks are `T01`–`T14`.
 
 | Order | What | Tasks | Status |
 |-------|------|-------|--------|
-| 1 | **Security & model sprint** — evals on `main`, model re-baseline, prompt-injection eval, memory-poisoning defense, no silent cloud voice | T01 → T02, T03, T04, T05 | T01 done (PR #117); T02 PR #132, T04 PR #133 in review; T03, T05 open |
+| 1 | **Security & model sprint** — evals on `main`, model re-baseline, prompt-injection eval, memory-poisoning defense, no silent cloud voice | T01 → T02, T03, T04, T05 | T01 done (PR #117); T04 done (PR #133); T02 model split chosen (PR #132), GPU runs of 8–9B pending; T03, T05 open |
 | 2 | **Finish 10 — graph** — transaction-time (`invalidated_at`, as-of queries) | T07 | Open. Store/extract/hybrid recall/tidy already shipped. |
 | 3 | **02 — Time machine** on the privacy design (event-driven, encrypted, exclusion-aware; **no timer screenshots**, D7) + **03** semantic RAG on the same index | T09 | Open. 03 v1 (keyword conversation search, #86) shipped. |
 | 4 | **11 — Operating modes, reduced** — smaller if T02 yields one chat+vision model | — | Residency substrate (`gpu.py`) shipped |
@@ -59,6 +61,11 @@ bubble follow-ups (click-through, speaking state).
 
 **UI V2** stays the cohesive polish pass ([ui-v2-plan.md](ui-v2-plan.md)); its foundations
 shipped Jun 2026 and the rest interleaves with the work above.
+
+**Shell redesign** ([shell-redesign-plan.md](shell-redesign-plan.md), Nov 2026): build
+**B · Console** (B0–B4) as the UI V2 target look, then **A · Orbit**, the voice-first stage
+(A1–A3). B0–B2 are frontend-only and can start now. B3, the approval card, waits on **T08**
+(per-command confirmation); A3 waits on **T06**.
 
 ---
 
@@ -137,7 +144,9 @@ Kept as the growth record, condensed. Details: [`CHANGELOG.md`](../../CHANGELOG.
 | Jun 2026 (mid) | **Privacy + trust basics (Gate B)** — incognito / pause-learning, secrets scrubbing before storage, untrusted-content wrapping for tool results, "why did you say that?" provenance, policy-file integrity, conversation search (03 v1) |
 | Jun 2026 (mid) | **UI V2 foundations** — markdown rendering, toasts, cancel/stop, `/ws/state` live-state channel, GPU HUD |
 | Jul 2026 | **Gate A (extraction) + GPU-idle tidy** — extraction gold set + scoring runner; idle daemon with graph entity resolution (Phase 2) |
-| Sep 2026 *(in review, PR #117)* | **Tool-calling eval + real-model CI**, **MCP client** (gated, off by default), **companion overlay bubble**; landscape plan T01–T14 adopted |
+| Sep 2026 | **Tool-calling eval + real-model CI**, **MCP client** (gated, off by default), **companion overlay bubble**; landscape plan T01–T14 adopted ([PR #117](https://github.com/ryaeh/Celestia/pull/117)) |
+| Sep–Oct 2026 | **T02 model split** (chat `qwen2.5:3b`, background `qwen3.5:4b`, PR #132) and **T04 memory-poisoning defense** — origin, quarantine, review list (PR #133) |
+| Oct 2026 | **Shell "workbench & companion" redesign** with message times (the model is told the time too); **Ollama launch gate** — start Ollama, run without it, or pull missing models *(PR #137 in review)* |
 
 Earlier planning eras (phase numbers 0–5, Linear CC-epics, the M0–M4 companion track) are
 preserved in [`../archive/`](../archive/) — their unfinished items were absorbed into the
