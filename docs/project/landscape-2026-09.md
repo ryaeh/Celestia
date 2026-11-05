@@ -82,13 +82,22 @@ well, it's out of scope (same rule as `docs/planned-features/README.md`).
 | T05 | [#122](https://github.com/ryaeh/Celestia/issues/122) | Fully local voice (no silent cloud fallback) | P0 | Open |
 | T06 | [#123](https://github.com/ryaeh/Celestia/issues/123) | Voice barge-in | P1 | Open |
 | T07 | [#124](https://github.com/ryaeh/Celestia/issues/124) | Graph transaction-time gap | P1 | Open |
-| T08 | [#125](https://github.com/ryaeh/Celestia/issues/125) | Harden armed mode | P1 | Open |
+| T08 | [#125](https://github.com/ryaeh/Celestia/issues/125) | Harden armed mode | **P0** (raised Nov 2026) | Open — widened by [`replan-2026-11.md`](replan-2026-11.md): + Rule-of-Two gate and an approval channel |
 | T09 | [#126](https://github.com/ryaeh/Celestia/issues/126) | Time machine capture (02) | P1 | Open |
 | T10 | [#127](https://github.com/ryaeh/Celestia/issues/127) | UI Automation first | P1 | Open |
 | T11 | [#128](https://github.com/ryaeh/Celestia/issues/128) | MCP client, gated | P1 | Partly done in PR #117 — hash pinning + T03 fixture open |
 | T12 | [#129](https://github.com/ryaeh/Celestia/issues/129) | Plan preview + undo journal (04 v1) | P1 | Open |
 | T13 | [#130](https://github.com/ryaeh/Celestia/issues/130) | n8n stays optional | P2 | Standing rule |
-| T14 | [#131](https://github.com/ryaeh/Celestia/issues/131) | Companion safety basics | P2 | Open |
+| T14 | [#131](https://github.com/ryaeh/Celestia/issues/131) | Companion safety basics | **P1** (raised Nov 2026: distributable, D10) | Open |
+| T15 | [#134](https://github.com/ryaeh/Celestia/issues/134) | Three-layer memory (one reasoning writer) | P1 | In flight — large branch; T16 is its acceptance |
+| T16 | [#143](https://github.com/ryaeh/Celestia/issues/143) | Memory recall eval | P1 | Open |
+| T17 | [#144](https://github.com/ryaeh/Celestia/issues/144) | Reminders + local Daily Brief | P1 | Open |
+| T18 | [#145](https://github.com/ryaeh/Celestia/issues/145) | First-run wizard + hardware-aware model picker | **P0** (distributable, D10) | Open — builds on [#136](https://github.com/ryaeh/Celestia/issues/136) / PR #137 |
+| T19 | [#146](https://github.com/ryaeh/Celestia/issues/146) | MCP 2026-07-28 compatibility | P1 | Open |
+| T20 | [#147](https://github.com/ryaeh/Celestia/issues/147) | Celestia memory as a read-only MCP server | P2 | Open — phase 1 of [#135](https://github.com/ryaeh/Celestia/issues/135) |
+| T21 | [#148](https://github.com/ryaeh/Celestia/issues/148) | `SKILL.md` compatibility spike | P2 | Open |
+
+T15–T21 and the changed priorities come from [`replan-2026-11.md`](replan-2026-11.md).
 
 Size: **S** ≤ 1 week · **M** 2–4 weeks · **L** 1–2+ months.
 Priority: **P0** now (blocks the rest) · **P1** next · **P2** later.
@@ -144,7 +153,8 @@ Priority: **P0** now (blocks the rest) · **P1** next · **P2** later.
 - **Steps:** add nullable `invalidated_at REAL` to `edges` (idempotent migration in `graph_store.py`). Set it on supersede. Add `edges_as_of(t_world, t_known=None)`.
 - **Acceptance:** tests for supersede + as-of queries. The `--graph` CLI can show as-of.
 
-### T08: Harden armed mode · P1 · S
+### T08: Harden armed mode · P0 · M (widened Nov 2026)
+- **Nov 2026:** also adds a Rule-of-Two gate for tainted turns (3) and a pending-approval channel with token-guarded `POST /approvals/{id}`, audited (4). Allow once / Deny only — no rule store ("always allow") for now. See [`replan-2026-11.md` §4](replan-2026-11.md#4-tasks).
 - **Files:** `celestia_core/security.py`, `celestia_core/ui/tray.py`, `shell/src/components/StatusHeader.tsx` (or wherever the mode pill lives), `skills/pc_control/tools.py`, `config.example.yaml` (`security.*`).
 - **Steps:**
   1. `security.armed_ttl_minutes` (default 15). `get_mode()` reverts to `scoped` (or `security.default_mode`) after expiry. Store `armed_at` in the state file. Show a countdown in the tray and shell.
@@ -188,8 +198,8 @@ Priority: **P0** now (blocks the rest) · **P1** next · **P2** later.
 ### T13: n8n stays optional · P2 · S
 - No new n8n features. If automation grows, expose n8n as one MCP server under T11 rules. Macros (05) stay native.
 
-### T14: Companion safety basics · P2 · S
-- Add a non-human disclosure line + crisis-resource response to `personality._BASE` (applies to all packs in `personalities/`). Keep personality packs free of dependency/romance-optimization mechanics. Cheap insurance if packs are ever distributed (CA SB 243 in force since Jan 1 2026; NY companion law since Nov 5 2025).
+### T14: Companion safety basics · P1 · S
+- Add a non-human disclosure line + crisis-resource response to `personality._BASE` (applies to all packs in `personalities/`). Keep personality packs free of dependency/romance-optimization mechanics. Insurance for distribution, which is now the plan (D10; CA SB 243 in force since Jan 1 2026; NY companion law since Nov 5 2025).
 
 ### Later (P2, unscheduled)
 - **Desktop-pet Aura overlay** (transparent, click-through, always-on-top Tauri window). Inspired by AIRI / Open-LLM-VTuber / Desktop Mate. **v1 built in PR #117** (not click-through yet); remaining: click-through when idle, a *speaking* state from TTS, Windows verification.
@@ -213,6 +223,9 @@ Priority: **P0** now (blocks the rest) · **P1** next · **P2** later.
 ---
 
 ## 5. Revised build order
+
+> **Superseded (Nov 2026)** by [`replan-2026-11.md` §5](replan-2026-11.md#5-build-order). Kept for
+> history; the roadmap follows the newer order.
 
 Replaces the order in `docs/project/roadmap.md` once the owner approves.
 

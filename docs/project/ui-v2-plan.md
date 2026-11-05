@@ -160,6 +160,8 @@ Graph viewer ──────────────────────�
   durations and an aria-live region (sonner handles most of this).
 
 ## Cross-refs
+- Target look for the remaining surfaces: [`shell-redesign-plan.md`](shell-redesign-plan.md)
+  (Console first, then the Orbit voice stage).
 - Item source of truth: [`perf-and-qol-backlog.md`](perf-and-qol-backlog.md) (QoL → UI V2 track)
   and [`ideas-backlog.md`](ideas-backlog.md) (*Frontend* additions).
 - Feeds: Feature 11 (mode HUD, model/VRAM presets), Feature 10 (graph viewer), Feature 12
