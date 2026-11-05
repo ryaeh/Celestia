@@ -1,8 +1,9 @@
 # Shell redesign — Console first, Orbit later
 
-Status: **proposed, Nov 2026.** Four directions were explored as full chat screens; the owner
+Status: **approved, 2026-11-05.** Four directions were explored as full chat screens; the owner
 picked **B · Console** to build now and **A · Orbit** to add later. C · Margin and D · Midday are
-kept as reference only.
+kept as reference only. Open questions are decided (see "Decisions" below); B0–B4 have issues
+[#138](https://github.com/ryaeh/Celestia/issues/138)–[#142](https://github.com/ryaeh/Celestia/issues/142).
 
 - **Design canvas** (private, owner's account): <https://claude.ai/artifact/XJNCP1jqrVi9aFE4AY1TQU>
   — four 1280×840 artboards with accent tweaks. The sample conversation, memory entries and
@@ -25,8 +26,8 @@ step on screen instead of behind Settings. Most of it is data the shell already 
   them (`@fontsource-variable/*`, as Geist is today). No network fetch for fonts.
 - **Themes keep working.** B is a layout + type + token pass on the existing theme engine
   (`App.css` variables). All six themes stay selectable; text meets WCAG AA (4.5:1) on every
-  surface of every theme. Whether to add a seventh theme ("Graphite": graphite + amber) and make
-  it the default is an open question below.
+  surface of every theme. A seventh theme, **Graphite** (graphite + amber), is added and becomes
+  the default (decided; see below).
 - **Accessibility.** Real `<button>`/`<input>` + labels, `aria-label` on icon-only buttons,
   never colour alone for status (every status dot has a word).
 
@@ -51,11 +52,11 @@ step on screen instead of behind Settings. Most of it is data the shell already 
 
 | Phase | Scope | Depends on |
 |---|---|---|
-| **B0 Foundations** | Bundle Instrument Sans + JetBrains Mono; type scale and the `--font-mono` token; three-column app frame (sidebar, chat, rail) behind the current theme variables; check all six themes for contrast | — |
-| **B1 Console shell** | Grouped sidebar, timestamp-gutter log, status bar, right rail with Mode, Model/VRAM and Memory in use, using data the shell already has. Rail collapses under ~1100 px | B0 |
-| **B2 Tool trail** | Inline tool lines and the **This turn** timeline from SSE tool events; blocked calls rendered with their reason and a "switch mode" action | B1 |
-| **B3 Approvals** | Pending-approval backend and the card UI; audit every decision | **T08**, and B2 |
-| **B4 Reach** | Command palette, slash commands, composer buttons | UI V2 Phase 3 |
+| **B0 Foundations** ([#138](https://github.com/ryaeh/Celestia/issues/138)) | Bundle Instrument Sans + JetBrains Mono; type scale and the `--font-mono` token; three-column app frame (sidebar, chat, rail) behind the current theme variables; add the Graphite theme as the default; check all seven themes for contrast | — |
+| **B1 Console shell** ([#139](https://github.com/ryaeh/Celestia/issues/139)) | Grouped sidebar, timestamp-gutter log, status bar, right rail with Mode, Model/VRAM and Memory in use, using data the shell already has. Rail collapses under ~1100 px | B0 |
+| **B2 Tool trail** ([#140](https://github.com/ryaeh/Celestia/issues/140)) | Inline tool lines (persisted in the transcript) and the **This turn** timeline from SSE tool events; blocked calls rendered with their reason and a "switch mode" action | B1 |
+| **B3 Approvals** ([#141](https://github.com/ryaeh/Celestia/issues/141)) | The approval card UI (Allow once / Deny); the backend channel is T08 | **T08** ([#125](https://github.com/ryaeh/Celestia/issues/125)), and B2 |
+| **B4 Reach** ([#142](https://github.com/ryaeh/Celestia/issues/142)) | Command palette, slash commands, composer buttons | UI V2 Phase 3 |
 
 Each phase ends with something visible in the shell. A phase is done when `npm run build`
 passes, the manual checklist in `docs/testing/checklist.md` is updated, and any backend piece
@@ -73,12 +74,12 @@ listening full moon with ripples, speaking). Build after B2.
 | **A2 Live voice feedback** | Partial transcript while PTT is held; speaking state from TTS (also a pending follow-up for the companion bubble) | UI V2 Phase 3 "live voice feedback" |
 | **A3 Barge-in** | Speaking over her stops playback | **T06**, which depends on **T05** |
 
-## Open questions for the owner
+## Decisions (2026-11-05)
 
-1. Add a "Graphite" theme (graphite + amber) and make it the default, or keep Aurora as default and let B apply to all themes?
-2. Should tool lines persist in the stored transcript, or stay live-only like provenance?
-3. "Always allow `git push` here" — worth a rule store at all, or only Allow once / Deny?
-4. Task IDs: this needs issue numbers and T-IDs before B0 starts (one task per branch/PR).
+1. **Graphite theme:** add it (graphite + amber) and make it the default. The six existing themes stay selectable; all seven must pass the AA contrast check (B0).
+2. **Tool lines persist** in the stored transcript, not live-only. Store only tool name, label and ok — never raw arguments or results; scrub the label with the existing secrets scrubbing; strip the field in `_model_messages()` before every model call (B2).
+3. **No "always allow".** The approval card is Allow once / Deny only; no rule store. Revisit after T08 ships and the real prompt rate is known (B3).
+4. **Task IDs:** B0–B4 are issues #138–#142. Orbit A1–A3 get issues when they are scheduled.
 
 ## Parked ideas from the other directions
 
