@@ -11,6 +11,14 @@ pytest tests/ -v
 
 Failing tests mean something is broken before you open the app. Fix those first.
 
+Shell frontend (after any change under `shell/src`):
+
+```powershell
+cd shell
+npm run build            # tsc + vite build
+npm run check:contrast   # WCAG AA for every theme; also checks theme.ts and App.css agree
+```
+
 ---
 
 ## Manual sanity pass
@@ -108,6 +116,18 @@ In `-i` (scoped):
 - [ ] Shell window opens.
 - [ ] Status bar shows mode (Safe / Scoped / Armed) and Ollama status.
 - [ ] Sidebar shows session history (or "No chats yet" cleanly).
+
+---
+
+## Shell UI — Console look (B0)
+
+- [ ] Fresh profile (clear `celestia.shell.theme` in local storage): the shell opens in **Graphite** (neutral graphite, amber accent).
+- [ ] **Settings → Theme**: all seven themes (Graphite, Aurora, Twilight, Ember, Slate, Moss, Daylight) are listed, switch instantly, and the choice survives a restart.
+- [ ] Layout is flat: sidebar | conversation, split by hairlines, with no rounded inset panel.
+- [ ] Text is Instrument Sans; times, key hints (`Enter`), code and paths are JetBrains Mono. Turn the network off and restart: fonts are unchanged (nothing is fetched).
+- [ ] Sidebar collapse/expand still works and the conversation fills the width either way.
+- [ ] Skim every theme for unreadable text or invisible borders, including a code block in a reply and the Settings page.
+- [ ] The companion bubble (overlay) still renders in the active theme.
 
 ---
 

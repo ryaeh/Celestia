@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 // ---------------------------------------------------------------------------
 
 export type ThemeId =
+  | "graphite"
   | "aurora"
   | "twilight"
   | "ember"
@@ -25,7 +26,8 @@ export type ThemeMeta = {
 };
 
 export const THEMES: ThemeMeta[] = [
-  { id: "aurora",   label: "Aurora",   tone: "dark",  swatch: ["#151a1e", "#7fd1b9", "#f0d78c"], hint: "Night sky & aurora" },
+  { id: "graphite", label: "Graphite", tone: "dark",  swatch: ["#17191c", "#f2a93b", "#f2a93b"], hint: "Graphite & amber" },
+  { id: "aurora",  label: "Aurora",   tone: "dark",  swatch: ["#151a1e", "#7fd1b9", "#f0d78c"], hint: "Night sky & aurora" },
   { id: "twilight", label: "Twilight", tone: "dark",  swatch: ["#17161f", "#a9b8f5", "#f0d9a0"], hint: "Dusk blue & starlight" },
   { id: "ember",    label: "Ember",    tone: "dark",  swatch: ["#1c1512", "#f0a868", "#f3d59c"], hint: "Hearth & amber" },
   { id: "slate",    label: "Slate",    tone: "dark",  swatch: ["#181b1f", "#9fbad8", "#d6ccb6"], hint: "Graphite & steel" },
@@ -33,7 +35,7 @@ export const THEMES: ThemeMeta[] = [
   { id: "daylight", label: "Daylight", tone: "light", swatch: ["#fbf9f5", "#2f6b5a", "#9a6c17"], hint: "Paper & pine" },
 ];
 
-export const DEFAULT_THEME: ThemeId = "aurora";
+export const DEFAULT_THEME: ThemeId = "graphite";
 
 const STORAGE_KEY = "celestia.shell.theme";
 
