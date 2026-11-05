@@ -3,6 +3,7 @@ import { Toaster } from "sonner";
 import { fetchChatSessions, initialRoute } from "./api";
 import { installMainCloseHandler } from "./lib/overlayWindow";
 import { useLiveState } from "./hooks/useLiveState";
+import AppFrame from "./components/AppFrame";
 import Sidebar from "./components/Sidebar";
 import Activity from "./pages/Activity";
 import Home from "./pages/Home";
@@ -96,30 +97,32 @@ export default function App() {
   }, []);
 
   return (
-    <div className="app-shell">
+    <>
       <Toaster
         position="bottom-right"
         theme="dark"
         toastOptions={{ className: "celestia-toast" }}
         gap={8}
       />
-      <Sidebar
-        route={route}
-        activeSessionId={activeSessionId}
-        onNavigate={navigate}
-        onNewChat={(id) => {
-          setActiveSessionId(id);
-          bumpHistory();
-        }}
-        onSelectSession={(id) => {
-          setActiveSessionId(id);
-        }}
-        refreshToken={historyRefresh}
-        displayName={displayName}
-        liveIncognito={live.incognito}
-      />
-
-      <div className="main-column">
+      <AppFrame
+        sidebar={
+          <Sidebar
+            route={route}
+            activeSessionId={activeSessionId}
+            onNavigate={navigate}
+            onNewChat={(id) => {
+              setActiveSessionId(id);
+              bumpHistory();
+            }}
+            onSelectSession={(id) => {
+              setActiveSessionId(id);
+            }}
+            refreshToken={historyRefresh}
+            displayName={displayName}
+            liveIncognito={live.incognito}
+          />
+        }
+      >
         {route === "home" && activeSessionId ? (
           <Home
             sessionId={activeSessionId}
@@ -142,7 +145,7 @@ export default function App() {
             <SecondaryPage route={route} onNavigate={navigate} />
           </main>
         )}
-      </div>
-    </div>
+      </AppFrame>
+    </>
   );
 }

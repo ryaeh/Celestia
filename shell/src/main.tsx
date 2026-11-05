@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import "@fontsource-variable/geist";
+import "@fontsource-variable/instrument-sans";
+import "@fontsource-variable/jetbrains-mono";
 import App from "./App";
 import Overlay from "./pages/Overlay";
 import { isOverlayView } from "./lib/overlayWindow";
